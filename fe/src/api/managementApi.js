@@ -1,15 +1,32 @@
+import { clearSession, readSession } from '../auth/session';
+
+let onUnauthorized = () => {};
+
+export function setUnauthorizedHandler(handler) {
+  onUnauthorized = handler;
+}
+
 async function request(path, options = {}) {
+  const { anonymous = false, headers, ...rest } = options;
+  const token = anonymous ? '' : readSession()?.token;
   let response;
   try {
     response = await fetch(`/api${path}`, {
-      ...options,
+      ...rest,
       headers: {
         'Content-Type': 'application/json',
-        ...(options.headers || {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(headers || {}),
       },
     });
   } catch {
     throw new Error('Không kết nối được máy chủ quản lý. Hãy chạy API tại http://localhost:5080.');
+  }
+
+  if (response.status === 401 && !anonymous) {
+    clearSession();
+    onUnauthorized();
+    throw new Error('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.');
   }
 
   if (!response.ok) {
@@ -25,6 +42,14 @@ async function request(path, options = {}) {
 
   if (response.status === 204) return null;
   return response.json();
+}
+
+export function login(email, password) {
+  return request('/auth/login', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, password }),
+  });
 }
 
 export function getDashboard() {

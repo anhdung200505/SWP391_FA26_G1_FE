@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import logoImg from '../../assets/logo.png';
-import { CURRENT_MANAGER, getRole } from '../../data/accountManagement';
+import { useAuth } from '../../context/AuthContext';
 
 const links = [
   { to: '/quan-ly', label: 'Bảng điều khiển', end: true },
@@ -17,9 +17,15 @@ function navClass(isActive) {
 
 export default function ManagementShell({ breadcrumb = [], children }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPath, setMenuPath] = useState(location.pathname);
-  const managerRole = getRole(CURRENT_MANAGER.roleId);
+
+  const signOut = () => {
+    logout();
+    navigate('/dang-nhap', { replace: true });
+  };
 
   if (menuPath !== location.pathname) {
     setMenuPath(location.pathname);
@@ -33,7 +39,7 @@ export default function ManagementShell({ breadcrumb = [], children }) {
   return (
     <div className="min-h-screen bg-[#f4f5f7] text-gray-900">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-[#12141d] text-white lg:flex">
-        <SidebarContent managerRole={managerRole} />
+        <SidebarContent user={user} onLogout={signOut} />
       </aside>
 
       {menuOpen && (
@@ -50,7 +56,7 @@ export default function ManagementShell({ breadcrumb = [], children }) {
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <SidebarContent managerRole={managerRole} />
+        <SidebarContent user={user} onLogout={signOut} />
       </aside>
 
       <div className="lg:pl-64">
@@ -91,7 +97,7 @@ export default function ManagementShell({ breadcrumb = [], children }) {
   );
 }
 
-function SidebarContent({ managerRole }) {
+function SidebarContent({ user, onLogout }) {
   return (
     <div className="flex h-full flex-col">
       <Link to="/quan-ly" className="flex items-center gap-3 px-5 py-5">
@@ -122,9 +128,16 @@ function SidebarContent({ managerRole }) {
 
       <div className="mt-auto border-t border-white/10 p-4">
         <div className="rounded-2xl bg-white/5 px-3 py-3">
-          <p className="text-sm font-bold">{CURRENT_MANAGER.name}</p>
-          <p className="text-xs text-white/55">{managerRole?.label}</p>
-          <p className="mt-1 truncate text-xs text-white/40">{CURRENT_MANAGER.email}</p>
+          <p className="text-sm font-bold">{user?.fullName}</p>
+          <p className="text-xs text-white/55">{user?.roleName}</p>
+          <p className="mt-1 truncate text-xs text-white/40">{user?.email}</p>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="mt-3 w-full rounded-xl border border-white/15 px-3 py-2 text-sm font-bold text-white hover:bg-white/10"
+          >
+            Đăng xuất
+          </button>
         </div>
       </div>
     </div>

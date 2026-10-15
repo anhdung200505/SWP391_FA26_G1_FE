@@ -1,11 +1,4 @@
-﻿export const CURRENT_MANAGER = {
-  id: '1',
-  name: 'Quản trị AnhDuy',
-  email: 'admin@anhduysport.vn',
-  roleId: 'ADMIN',
-};
-
-export const ROLES = [
+﻿export const ROLES = [
   {
     id: 'ADMIN',
     label: 'Quản trị',
