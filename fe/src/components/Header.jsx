@@ -21,6 +21,7 @@ const navItems = [
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
   { name: 'TUYỂN SINH', path: '#' },
+  { name: 'QUẢN LÝ', path: '/quan-ly' },
 ];
 
 export default function Header({ forceWhite = false }) {
