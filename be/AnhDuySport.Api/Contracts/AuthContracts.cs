@@ -1,6 +1,6 @@
 namespace AnhDuySport.Api.Contracts;
 
-public sealed record LoginRequest(string Email, string Password);
+public sealed record LoginRequest(string Email, string Password, string Portal);
 
 public sealed record RegisterRequest(string FullName, string Email, string? Phone, string Password);
 
