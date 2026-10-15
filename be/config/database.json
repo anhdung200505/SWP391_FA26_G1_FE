@@ -1,0 +1,11 @@
+{
+  "driver": "sqlserver",
+  "server": "(localdb)\\MSSQLLocalDB",
+  "database": "AnhDuySport",
+  "options": {
+    "trustedConnection": true,
+    "trustServerCertificate": true,
+    "encrypt": true
+  },
+  "connectionString": "Server=(localdb)\\MSSQLLocalDB;Database=AnhDuySport;Trusted_Connection=True;TrustServerCertificate=True;"
+}
