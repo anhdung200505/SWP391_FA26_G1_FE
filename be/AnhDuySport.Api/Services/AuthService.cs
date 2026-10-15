@@ -56,12 +56,82 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new UnauthorizedAccessException("Tài khoản đã ngưng hoạt động.");
         }
 
-        if (user.Role?.RoleCode != RoleCatalog.AdminCode)
+        return new LoginResponse(CreateToken(user), ToDto(user));
+    }
+
+    public async Task RegisterAsync(RegisterRequest request)
+    {
+        var fullName = request.FullName?.Trim() ?? "";
+        var email = request.Email?.Trim() ?? "";
+        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        var password = request.Password ?? "";
+
+        if (fullName.Length is 0 or > 200)
         {
-            throw new UnauthorizedAccessException("Tài khoản này không có quyền vào khu vực quản lý.");
+            throw new InvalidOperationException("Họ tên không được để trống và không quá 200 ký tự.");
         }
 
-        return new LoginResponse(CreateToken(user), ToDto(user));
+        if (!IsEmail(email) || email.Length > 200)
+        {
+            throw new InvalidOperationException("Email không hợp lệ.");
+        }
+
+        if (phone is { Length: > 20 })
+        {
+            throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
+        }
+
+        if (password.Length is < 6 or > 100)
+        {
+            throw new InvalidOperationException("Mật khẩu cần từ 6 đến 100 ký tự.");
+        }
+
+        if (!password.Any(character => character is '@' or '#' or '!'))
+        {
+            throw new InvalidOperationException("Mật khẩu phải có ít nhất một ký tự đặc biệt như @, # hoặc !.");
+        }
+
+        var emailTaken = await db.UserAccounts.AnyAsync(account => account.Email != null && account.Email.ToLower() == email.ToLower());
+        if (emailTaken)
+        {
+            throw new InvalidOperationException("Email này đã được đăng ký.");
+        }
+
+        var memberRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == "MEMBER")
+            ?? throw new InvalidOperationException("Chưa có vai trò học viên.");
+
+        db.UserAccounts.Add(new UserAccount
+        {
+            RoleId = memberRole.RoleId,
+            FullName = fullName,
+            Email = email,
+            Phone = phone,
+            PasswordHash = passwords.Hash(password),
+            Status = "active",
+            CreatedAt = DateTime.Now,
+        });
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            throw new InvalidOperationException("Email này đã được đăng ký.");
+        }
+    }
+
+    private static bool IsEmail(string email)
+    {
+        try
+        {
+            var address = new System.Net.Mail.MailAddress(email);
+            return address.Address == email;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private string CreateToken(UserAccount user)
