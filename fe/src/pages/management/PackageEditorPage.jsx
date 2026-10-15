@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption, FlowTrail } from '../../components/management/ManagementBits';
 import { useAccountManagement } from '../../context/AccountManagementContext';
-import { CURRENT_MANAGER, formatFee } from '../../data/accountManagement';
+import { formatFee } from '../../data/accountManagement';
 
 const PACKAGE_FLOW = ['Bảng điều khiển', 'Danh sách gói', 'Tạo hoặc sửa gói', 'Hệ thống ghi nhận'];
 
@@ -102,7 +102,7 @@ export default function PackageEditorPage({ mode }) {
             lane: 'Hệ thống',
             diagram: 'Record Log',
             title: 'Ghi nhật ký',
-            detail: `${CURRENT_MANAGER.name} đã ${isCreate ? 'tạo' : 'cập nhật'} gói. ${log.summary}.`,
+            detail: `${log.actor} đã ${isCreate ? 'tạo' : 'cập nhật'} gói. ${log.summary}.`,
           },
         ],
         log.id,

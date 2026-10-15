@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
 
-public class UserAccountFlowService(AppDbContext db, EmailNotificationService emailNotifications)
+public class UserAccountFlowService(AppDbContext db, EmailNotificationService emailNotifications, CurrentActor actor)
 {
     public async Task<IReadOnlyList<UserAccountDto>> AccessUserAccountListAsync(string? search, string? roleId, string? status)
     {
@@ -65,7 +65,6 @@ public class UserAccountFlowService(AppDbContext db, EmailNotificationService em
         user.Role = nextRole;
         var actor = await ActorNameAsync();
         var log = AddLog(
-            actor,
             $"Đổi vai trò của {user.FullName}",
             "user",
             user.UserId,
@@ -103,7 +102,6 @@ public class UserAccountFlowService(AppDbContext db, EmailNotificationService em
         var verb = nextStatus == "active" ? "Kích hoạt" : "Vô hiệu hóa";
         var actor = await ActorNameAsync();
         var log = AddLog(
-            actor,
             $"{verb} tài khoản {user.FullName}",
             "user",
             user.UserId,
@@ -133,18 +131,14 @@ public class UserAccountFlowService(AppDbContext db, EmailNotificationService em
 
     private async Task<string> ActorNameAsync()
     {
-        var name = await db.UserAccounts
-            .Where(user => user.UserId == RoleCatalog.ActorUserId)
-            .Select(user => user.FullName)
-            .FirstOrDefaultAsync();
-        return string.IsNullOrWhiteSpace(name) ? "Quản trị AnhDuy" : name;
+        return await actor.NameAsync();
     }
 
-    private ActivityLog AddLog(string actor, string action, string entityName, int entityId, string detail, DateTime? at = null)
+    private ActivityLog AddLog(string action, string entityName, int entityId, string detail, DateTime? at = null)
     {
         var log = new ActivityLog
         {
-            ActorUserId = RoleCatalog.ActorUserId,
+            ActorUserId = actor.UserId == 0 ? null : actor.UserId,
             Action = Trim(action, 100),
             EntityName = entityName,
             EntityId = entityId,

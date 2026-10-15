@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
 
-public class MembershipPackageFlowService(AppDbContext db)
+public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
 {
     public async Task<IReadOnlyList<PackageDto>> AccessPackageListAsync()
     {
@@ -56,7 +56,7 @@ public class MembershipPackageFlowService(AppDbContext db)
         await db.SaveChangesAsync();
         var actor = await ActorNameAsync();
         var detail = $"Phí {Money(package.Fee)}, thời hạn {package.ValidityMonths} tháng, {benefits.Count} quyền lợi.";
-        var log = AddLog(actor, $"Tạo gói {package.PackageName}", package.MembershipPackageId, detail, now);
+        var log = AddLog($"Tạo gói {package.PackageName}", package.MembershipPackageId, detail, now);
         await db.SaveChangesAsync();
         return new PackageMutationResponse(
             AccountFlowMapper.ToDto(package),
@@ -92,7 +92,7 @@ public class MembershipPackageFlowService(AppDbContext db)
         package.UpdatedAt = DateTime.Now;
         var actor = await ActorNameAsync();
         var detail = $"Phí {Money(previousFee)} → {Money(package.Fee)}. Thời hạn {previousMonths} tháng → {package.ValidityMonths} tháng. {benefits.Count} quyền lợi.";
-        var log = AddLog(actor, Trim($"Sửa thiết lập gói {package.PackageName}", 100), package.MembershipPackageId, detail, package.UpdatedAt.Value);
+        var log = AddLog(Trim($"Sửa thiết lập gói {package.PackageName}", 100), package.MembershipPackageId, detail, package.UpdatedAt.Value);
         await db.SaveChangesAsync();
         return new PackageMutationResponse(AccountFlowMapper.ToDto(package), ToLogDto(log, actor, package.PackageName));
     }
@@ -122,20 +122,13 @@ public class MembershipPackageFlowService(AppDbContext db)
         }
     }
 
-    private async Task<string> ActorNameAsync()
-    {
-        var name = await db.UserAccounts
-            .Where(user => user.UserId == RoleCatalog.ActorUserId)
-            .Select(user => user.FullName)
-            .FirstOrDefaultAsync();
-        return string.IsNullOrWhiteSpace(name) ? "Quản trị AnhDuy" : name;
-    }
+    private Task<string> ActorNameAsync() => actor.NameAsync();
 
-    private ActivityLog AddLog(string actor, string action, int entityId, string detail, DateTime at)
+    private ActivityLog AddLog(string action, int entityId, string detail, DateTime at)
     {
         var log = new ActivityLog
         {
-            ActorUserId = RoleCatalog.ActorUserId,
+            ActorUserId = actor.UserId == 0 ? null : actor.UserId,
             Action = Trim(action, 100),
             EntityName = "membership_package",
             EntityId = entityId,

@@ -1,9 +1,11 @@
 using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AnhDuySport.Api.Controllers;
 
+[Authorize(Roles = "ADMIN")]
 [ApiController]
 [Route("api/roles")]
 public class RolesController(ManagementDashboardService dashboard) : ControllerBase

@@ -4,7 +4,6 @@ import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption, FlowTrail, RoleBadge, StatusBadge } from '../../components/management/ManagementBits';
 import { useAccountManagement } from '../../context/AccountManagementContext';
 import {
-  CURRENT_MANAGER,
   ROLES,
   formatDate,
   formatPhone,
@@ -117,7 +116,7 @@ export default function UserAccountPage() {
           lane: 'Hệ thống',
           diagram: 'Record Log',
           title: 'Ghi nhật ký',
-          detail: `${CURRENT_MANAGER.name} đã đổi vai trò của ${user.fullName}: ${role.label} → ${nextRole.label}.`,
+          detail: `${log.actor} đã đổi vai trò của ${user.fullName}: ${role.label} → ${nextRole.label}.`,
         },
       ],
       log.id,
@@ -175,7 +174,7 @@ export default function UserAccountPage() {
           lane: 'Hệ thống',
           diagram: 'Record Log',
           title: 'Ghi nhật ký',
-          detail: `${CURRENT_MANAGER.name} đã ${verb} tài khoản ${user.fullName}.`,
+          detail: `${log.actor} đã ${verb} tài khoản ${user.fullName}.`,
         },
       ],
       log.id,
