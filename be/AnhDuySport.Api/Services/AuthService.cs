@@ -56,101 +56,12 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new UnauthorizedAccessException("Tài khoản đã ngưng hoạt động.");
         }
 
-        EnsurePortal(request.Portal, user.Role?.RoleCode ?? "");
+        if (user.Role?.RoleCode != RoleCatalog.AdminCode)
+        {
+            throw new UnauthorizedAccessException("Chỉ tài khoản quản trị trung tâm mới vào được khu vực quản lý.");
+        }
+
         return new LoginResponse(CreateToken(user), ToDto(user));
-    }
-
-    private static void EnsurePortal(string? portal, string roleCode)
-    {
-        var gate = portal?.Trim().ToLowerInvariant() ?? "";
-        if (gate == "member")
-        {
-            if (roleCode != "MEMBER")
-            {
-                throw new UnauthorizedAccessException("Cửa này chỉ dành cho học viên. Lễ tân và huấn luyện viên hãy đăng nhập ở cửa nhân sự.");
-            }
-
-            return;
-        }
-
-        if (gate == "staff")
-        {
-            if (roleCode is not ("RECEPTIONIST" or "COACH" or "ADMIN"))
-            {
-                throw new UnauthorizedAccessException("Cửa này dành cho lễ tân, huấn luyện viên và quản trị trung tâm. Học viên hãy đăng nhập ở cửa học viên.");
-            }
-
-            return;
-        }
-
-        throw new UnauthorizedAccessException("Cửa đăng nhập không hợp lệ.");
-    }
-
-    public async Task RegisterAsync(RegisterRequest request)
-    {
-        var fullName = request.FullName?.Trim() ?? "";
-        var email = request.Email?.Trim() ?? "";
-        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
-        var password = request.Password ?? "";
-
-        if (fullName.Length is 0 or > 200)
-        {
-            throw new InvalidOperationException("Họ tên không được để trống và không quá 200 ký tự.");
-        }
-
-        if (!IsEmail(email) || email.Length > 200)
-        {
-            throw new InvalidOperationException("Email không hợp lệ.");
-        }
-
-        if (phone is { Length: > 20 })
-        {
-            throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
-        }
-
-        PasswordHasher.EnsureAcceptable(password);
-
-        var emailTaken = await db.UserAccounts.AnyAsync(account => account.Email != null && account.Email.ToLower() == email.ToLower());
-        if (emailTaken)
-        {
-            throw new InvalidOperationException("Email này đã được đăng ký.");
-        }
-
-        var memberRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == "MEMBER")
-            ?? throw new InvalidOperationException("Chưa có vai trò học viên.");
-
-        db.UserAccounts.Add(new UserAccount
-        {
-            RoleId = memberRole.RoleId,
-            FullName = fullName,
-            Email = email,
-            Phone = phone,
-            PasswordHash = passwords.Hash(password),
-            Status = "active",
-            CreatedAt = DateTime.Now,
-        });
-
-        try
-        {
-            await db.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            throw new InvalidOperationException("Email này đã được đăng ký.");
-        }
-    }
-
-    private static bool IsEmail(string email)
-    {
-        try
-        {
-            var address = new System.Net.Mail.MailAddress(email);
-            return address.Address == email;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
     }
 
     private string CreateToken(UserAccount user)
