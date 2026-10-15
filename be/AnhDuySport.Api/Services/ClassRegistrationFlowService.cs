@@ -141,4 +141,82 @@ public class ClassRegistrationFlowService(AppDbContext db)
                         item.NextSlot.Title ?? "")))
             .ToList();
     }
+
+    public async Task<ClassDetailDto> SelectClassAsync(string classId)
+    {
+        if (!int.TryParse(classId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        }
+
+        var item = await db.Classes
+            .AsNoTracking()
+            .Where(current => current.ClassId == id)
+            .Select(current => new
+            {
+                current.ClassId,
+                current.ClassName,
+                current.Status,
+                current.StartDate,
+                current.EndDate,
+                current.Course!.SportId,
+                current.Course.Sport!.SportName,
+                current.Course.CourseName,
+                current.Course.LevelName,
+                current.Course.AgeRange,
+                current.Course.Description,
+                CourseStatus = current.Course.Status,
+                Tuition = current.Course.Price,
+                CenterId = current.Room != null ? (int?)current.Room.CenterId : null,
+                CenterName = current.Room != null ? current.Room.Center!.CenterName : "",
+                RoomName = current.Room != null ? current.Room.RoomName : "",
+                CoachName = current.Coach!.FullName,
+                current.Capacity,
+                EnrolledCount = current.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
+                Slots = current.Slots
+                    .OrderBy(slot => slot.SlotDate)
+                    .ThenBy(slot => slot.StartTime)
+                    .Select(slot => new { slot.SlotId, slot.SlotDate, slot.StartTime, slot.EndTime, slot.Title })
+                    .ToList(),
+            })
+            .FirstOrDefaultAsync()
+            ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        int? availableSeats = item.Capacity is int capacity ? Math.Max(capacity - item.EnrolledCount, 0) : null;
+        var isOpen = (item.Status is "open" or "ongoing")
+            && (item.EndDate is null || item.EndDate >= today)
+            && item.CourseStatus == "active"
+            && (availableSeats is null || availableSeats > 0);
+
+        return new ClassDetailDto(
+            item.ClassId.ToString(),
+            item.ClassName,
+            item.Status,
+            item.StartDate,
+            item.EndDate,
+            item.SportId.ToString(),
+            item.SportName,
+            item.CourseName,
+            item.LevelName ?? "",
+            item.AgeRange ?? "",
+            item.Description ?? "",
+            item.CenterId?.ToString() ?? "",
+            item.CenterName,
+            item.RoomName,
+            item.CoachName,
+            item.Capacity,
+            item.EnrolledCount,
+            availableSeats,
+            item.Tuition,
+            isOpen,
+            item.Slots
+                .Select(slot => new ClassSlotDto(
+                    slot.SlotId.ToString(),
+                    slot.SlotDate,
+                    slot.StartTime,
+                    slot.EndTime,
+                    slot.Title ?? ""))
+                .ToList());
+    }
 }
