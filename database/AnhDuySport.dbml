@@ -174,7 +174,7 @@ Table payment {
   payment_id int [pk, increment]
   invoice_id int [not null, ref: > invoice.invoice_id]
   user_id int [not null, ref: > "user".user_id]
-  course_id int [ref: > course.course_id]
+  class_id int [ref: > class.class_id]
   amount decimal [not null]
   payment_method nvarchar [not null]
   paid_at datetime
