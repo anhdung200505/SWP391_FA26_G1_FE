@@ -45,4 +45,17 @@ public class ClassCatalogController(ClassRegistrationFlowService registrations) 
             return BadRequest(new { message = exception.Message });
         }
     }
+
+    [HttpGet("classes/{classId}")]
+    public async Task<ActionResult<ClassDetailDto>> SelectClass(string classId)
+    {
+        try
+        {
+            return Ok(await registrations.SelectClassAsync(classId));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+    }
 }
