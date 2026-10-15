@@ -26,6 +26,7 @@ builder.Services.AddScoped<EmailNotificationService>();
 builder.Services.AddScoped<UserAccountFlowService>();
 builder.Services.AddScoped<MembershipPackageFlowService>();
 builder.Services.AddScoped<ManagementDashboardService>();
+builder.Services.AddScoped<ClassRegistrationFlowService>();
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
