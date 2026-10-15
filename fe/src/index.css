@@ -14,3 +14,18 @@
   width: max-content;
   animation: marquee 20s linear infinite;
 }
+
+@keyframes stepIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-step-in {
+  animation: stepIn 0.35s ease-out both;
+}
