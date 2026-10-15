@@ -5,7 +5,6 @@ import FacilitiesPage from './pages/FacilitiesPage';
 import CoachPage from './pages/CoachPage';
 import CoursesPage from './pages/CoursesPage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
 import UserAccountPage from './pages/management/UserAccountPage';
@@ -31,7 +30,6 @@ export default function App() {
             <Route path="/hlv" element={<CoachPage />} />
             <Route path="/khoa-hoc" element={<CoursesPage />} />
             <Route path="/dang-nhap" element={<LoginPage />} />
-            <Route path="/dang-ky" element={<RegisterPage />} />
             <Route path="/quan-ly" element={<Protected><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected><UserAccountListPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected><UserAccountPage /></Protected>} />

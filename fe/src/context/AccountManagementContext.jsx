@@ -15,7 +15,7 @@ const emptyState = { users: [], packages: [], logs: [], roles: [] };
 export function AccountManagementProvider({ children }) {
   const { user } = useAuth();
   const [state, setState] = useState(emptyState);
-  const [loading, setLoading] = useState(Boolean(user));
+  const [loading, setLoading] = useState(user?.roleId === 'ADMIN');
   const [error, setError] = useState('');
 
   const applyDashboard = (dashboard) => {
@@ -29,7 +29,7 @@ export function AccountManagementProvider({ children }) {
   };
 
   useEffect(() => {
-    if (!user) return undefined;
+    if (!user || user.roleId !== 'ADMIN') return undefined;
     let active = true;
     getDashboard()
       .then((dashboard) => {
