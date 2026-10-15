@@ -14,10 +14,8 @@ export default function LoginPage() {
   const [saving, setSaving] = useState(false);
 
   if (user) {
-    return <Navigate to={user.roleId === 'ADMIN' ? '/quan-ly' : '/home'} replace />;
+    return <Navigate to="/quan-ly" replace />;
   }
-
-  const registered = location.state?.registered === true;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -30,11 +28,9 @@ export default function LoginPage() {
 
     setSaving(true);
     try {
-      const signedIn = await login(email.trim(), password);
+      await login(email.trim(), password);
       const from = location.state?.from;
-      const next = signedIn.roleId === 'ADMIN'
-        ? (typeof from === 'string' && from.startsWith('/quan-ly') ? from : '/quan-ly')
-        : '/home';
+      const next = typeof from === 'string' && from.startsWith('/quan-ly') ? from : '/quan-ly';
       navigate(next, { replace: true });
     } catch (requestError) {
       setError(requestError.message);
@@ -51,10 +47,10 @@ export default function LoginPage() {
             AnhDuy <span className="text-[#e31b23]">Sport</span>
           </span>
         </Link>
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#e31b23]">Tài khoản</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#e31b23]">Khu vực quản lý</p>
         <h1 className="mt-2 text-2xl font-black text-gray-900">Đăng nhập</h1>
         <p className="mt-2 text-sm text-gray-500">
-          Tài khoản quản trị vào bảng điều khiển. Học viên đăng nhập để dùng trang trung tâm.
+          Dành cho quản trị trung tâm khi vào luồng quản lý tài khoản và gói hội viên.
         </p>
         <form className="mt-6 space-y-4" onSubmit={submit}>
           <label className="block">
@@ -73,11 +69,6 @@ export default function LoginPage() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
-          {registered && !error && (
-            <p className="rounded-xl bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
-              Đăng ký thành công. Hãy đăng nhập.
-            </p>
-          )}
           {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-[#e31b23]">{error}</p>}
           <button
             type="submit"
@@ -88,14 +79,8 @@ export default function LoginPage() {
           </button>
         </form>
         <Link
-          to="/dang-ky"
-          className="mt-4 flex w-full items-center justify-center rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-800 hover:border-[#e31b23] hover:text-[#e31b23]"
-        >
-          Chưa có tài khoản? Đăng ký
-        </Link>
-        <Link
           to="/home"
-          className="mt-3 flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold text-gray-500 hover:text-[#e31b23]"
+          className="mt-4 flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold text-gray-500 hover:text-[#e31b23]"
         >
           Quay về trang chủ
         </Link>
