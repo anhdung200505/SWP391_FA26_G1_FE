@@ -26,4 +26,23 @@ public class ClassCatalogController(ClassRegistrationFlowService registrations) 
             return NotFound(new { message = exception.Message });
         }
     }
+
+    [HttpGet("classes")]
+    public async Task<ActionResult<IReadOnlyList<ClassSummaryDto>>> AccessUpcomingClasses(
+        [FromQuery] string? centerId,
+        [FromQuery] string? sportId)
+    {
+        try
+        {
+            return Ok(await registrations.AccessUpcomingClassesAsync(centerId, sportId));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
 }
