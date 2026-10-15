@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { useAuth } from './AuthContext';
 import {
   createPackage as createPackageRequest,
   getDashboard,
@@ -12,8 +13,9 @@ const AccountManagementContext = createContext(null);
 const emptyState = { users: [], packages: [], logs: [], roles: [] };
 
 export function AccountManagementProvider({ children }) {
+  const { user } = useAuth();
   const [state, setState] = useState(emptyState);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(user));
   const [error, setError] = useState('');
 
   const applyDashboard = (dashboard) => {
@@ -27,6 +29,7 @@ export function AccountManagementProvider({ children }) {
   };
 
   useEffect(() => {
+    if (!user) return undefined;
     let active = true;
     getDashboard()
       .then((dashboard) => {
@@ -41,7 +44,7 @@ export function AccountManagementProvider({ children }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [user]);
 
   const updateUserRole = async (userId, roleId) => {
     const result = await updateUserRoleRequest(userId, roleId);
