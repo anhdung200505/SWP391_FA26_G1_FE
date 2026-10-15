@@ -6,7 +6,8 @@ import { useAccountManagement } from '../../context/AccountManagementContext';
 import { ROLES, formatPhone, initials } from '../../data/accountManagement';
 
 export default function UserAccountListPage() {
-  const { users } = useAccountManagement();
+  const { users, roles, loading, error } = useAccountManagement();
+  const catalog = roles.length > 0 ? roles : ROLES;
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -64,7 +65,7 @@ export default function UserAccountListPage() {
             className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2"
           >
             <option value="all">Tất cả</option>
-            {ROLES.filter((role) => role.id !== 'center-manager').map((role) => (
+            {catalog.filter((role) => role.id !== 'ADMIN').map((role) => (
               <option key={role.id} value={role.id}>
                 {role.label}
               </option>
@@ -85,7 +86,10 @@ export default function UserAccountListPage() {
         </label>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading && <p className="mt-5 text-sm font-semibold text-gray-500">Đang tải tài khoản từ máy chủ...</p>}
+      {error && <p className="mt-5 text-sm font-semibold text-[#b1131a]">{error}</p>}
+
+      {!loading && !error && filtered.length === 0 ? (
         <div className="mt-5 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center">
           <p className="font-bold">Không có tài khoản khớp bộ lọc</p>
           <button
@@ -100,7 +104,7 @@ export default function UserAccountListPage() {
             Xóa bộ lọc
           </button>
         </div>
-      ) : (
+      ) : !loading && !error ? (
         <>
           <div className="mt-5 space-y-3 md:hidden">
             {filtered.map((user) => (
@@ -114,7 +118,7 @@ export default function UserAccountListPage() {
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <RoleBadge roleId={user.roleId} />
+                  <RoleBadge roleId={user.roleId} label={user.unit} />
                   <StatusBadge status={user.status} />
                 </div>
                 <Link
@@ -157,7 +161,7 @@ export default function UserAccountListPage() {
                       <p className="text-xs text-gray-400">{formatPhone(user.phone)}</p>
                     </td>
                     <td className="px-5 py-4">
-                      <RoleBadge roleId={user.roleId} />
+                      <RoleBadge roleId={user.roleId} label={user.unit} />
                     </td>
                     <td className="px-5 py-4">
                       <StatusBadge status={user.status} />
@@ -176,7 +180,7 @@ export default function UserAccountListPage() {
             </table>
           </div>
         </>
-      )}
+      ) : null}
     </ManagementShell>
   );
 }
