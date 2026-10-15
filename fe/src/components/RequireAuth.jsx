@@ -9,5 +9,9 @@ export default function RequireAuth({ children }) {
     return <Navigate to="/dang-nhap" replace state={{ from: location.pathname }} />;
   }
 
+  if (user.roleId !== 'ADMIN') {
+    return <Navigate to="/home" replace />;
+  }
+
   return children;
 }

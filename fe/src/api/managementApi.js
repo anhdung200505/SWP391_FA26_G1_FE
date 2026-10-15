@@ -44,6 +44,14 @@ async function request(path, options = {}) {
   return response.json();
 }
 
+export function registerAccount(payload) {
+  return request('/auth/register', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify(payload),
+  });
+}
+
 export function login(email, password) {
   return request('/auth/login', {
     method: 'POST',
