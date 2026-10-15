@@ -52,11 +52,18 @@ export function registerAccount(payload) {
   });
 }
 
-export function login(email, password) {
+export function login(email, password, portal) {
   return request('/auth/login', {
     method: 'POST',
     anonymous: true,
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, portal }),
+  });
+}
+
+export function createStaffAccount(payload) {
+  return request('/user-accounts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 

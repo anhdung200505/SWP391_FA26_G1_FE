@@ -44,7 +44,15 @@ export default function UserAccountListPage() {
             Chọn một tài khoản để đổi vai trò, quyền hạn hoặc trạng thái hoạt động.
           </p>
         </div>
-        <p className="text-sm font-bold text-gray-500">{filtered.length} tài khoản</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/quan-ly/tai-khoan/moi"
+            className="rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white"
+          >
+            Thêm lễ tân / huấn luyện viên
+          </Link>
+          <p className="text-sm font-bold text-gray-500">{filtered.length} tài khoản</p>
+        </div>
       </div>
 
       <div className="mt-5 grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 md:grid-cols-[1fr_180px_180px]">

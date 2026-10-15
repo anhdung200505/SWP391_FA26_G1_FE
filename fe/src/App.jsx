@@ -6,6 +6,8 @@ import CoachPage from './pages/CoachPage';
 import CoursesPage from './pages/CoursesPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import StaffHomePage from './pages/StaffHomePage';
+import CreateStaffPage from './pages/management/CreateStaffPage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
 import UserAccountPage from './pages/management/UserAccountPage';
@@ -32,8 +34,10 @@ export default function App() {
             <Route path="/khoa-hoc" element={<CoursesPage />} />
             <Route path="/dang-nhap" element={<LoginPage />} />
             <Route path="/dang-ky" element={<RegisterPage />} />
+            <Route path="/nhan-su" element={<StaffHomePage />} />
             <Route path="/quan-ly" element={<Protected><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected><UserAccountListPage /></Protected>} />
+            <Route path="/quan-ly/tai-khoan/moi" element={<Protected><CreateStaffPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected><UserAccountPage /></Protected>} />
             <Route path="/quan-ly/goi" element={<Protected><PackageListPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected><PackageEditorPage mode="create" /></Protected>} />
