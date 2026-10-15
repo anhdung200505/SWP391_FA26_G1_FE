@@ -1,0 +1,16 @@
+using AnhDuySport.Api.Contracts;
+using AnhDuySport.Api.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace AnhDuySport.Api.Controllers;
+
+[Authorize(Roles = "ADMIN")]
+[ApiController]
+[Route("api/roles")]
+public class RolesController(ManagementDashboardService dashboard) : ControllerBase
+{
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<RoleDto>>> List() =>
+        Ok(await dashboard.ListRolesAsync());
+}
