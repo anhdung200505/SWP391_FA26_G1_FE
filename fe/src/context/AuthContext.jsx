@@ -14,8 +14,8 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const login = async (email, password, portal) => {
-    const result = await loginRequest(email, password, portal);
+  const login = async (email, password) => {
+    const result = await loginRequest(email, password);
     const next = { token: result.token, user: result.user };
     writeSession(next);
     setSession(next);
