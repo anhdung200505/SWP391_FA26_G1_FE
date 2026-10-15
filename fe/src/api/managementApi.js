@@ -44,26 +44,11 @@ async function request(path, options = {}) {
   return response.json();
 }
 
-export function registerAccount(payload) {
-  return request('/auth/register', {
-    method: 'POST',
-    anonymous: true,
-    body: JSON.stringify(payload),
-  });
-}
-
-export function login(email, password, portal) {
+export function login(email, password) {
   return request('/auth/login', {
     method: 'POST',
     anonymous: true,
-    body: JSON.stringify({ email, password, portal }),
-  });
-}
-
-export function createStaffAccount(payload) {
-  return request('/user-accounts', {
-    method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ email, password }),
   });
 }
 

@@ -15,19 +15,6 @@ public sealed class PasswordHasher
         return $"pbkdf2.{Iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
     }
 
-    public static void EnsureAcceptable(string password)
-    {
-        if (password.Length is < 6 or > 100)
-        {
-            throw new InvalidOperationException("Mật khẩu cần từ 6 đến 100 ký tự.");
-        }
-
-        if (!password.Any(character => character is '@' or '#' or '!'))
-        {
-            throw new InvalidOperationException("Mật khẩu phải có ít nhất một ký tự đặc biệt như @, # hoặc !.");
-        }
-    }
-
     public bool Verify(string password, string? stored)
     {
         if (string.IsNullOrWhiteSpace(stored))

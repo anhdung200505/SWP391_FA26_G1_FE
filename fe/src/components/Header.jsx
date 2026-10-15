@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
-import { pathForRole } from '../auth/destination';
 import { useAuth } from '../context/AuthContext';
 
 const courseCategories = [
@@ -118,7 +117,7 @@ export default function Header({ forceWhite = false }) {
         {/* MENU ĐIỀU HƯỚNG */}
         <nav className="hidden lg:flex items-center space-x-1 xl:space-x-2">
           {navItems.map((item, index) => {
-            const path = item.name === 'ĐĂNG NHẬP' && user ? pathForRole(user.roleId) : item.path;
+            const path = item.name === 'ĐĂNG NHẬP' && user?.roleId === 'ADMIN' ? '/quan-ly' : item.path;
             const isActive = location.pathname === path;
 
             return (
