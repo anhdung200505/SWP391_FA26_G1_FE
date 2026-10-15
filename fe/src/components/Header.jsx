@@ -22,7 +22,7 @@ const navItems = [
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
   { name: 'TUYỂN SINH', path: '#' },
-  { name: 'QUẢN LÝ', path: '/quan-ly' },
+  { name: 'ĐĂNG NHẬP', path: '/dang-nhap' },
 ];
 
 export default function Header({ forceWhite = false }) {
@@ -117,7 +117,7 @@ export default function Header({ forceWhite = false }) {
         {/* MENU ĐIỀU HƯỚNG */}
         <nav className="hidden lg:flex items-center space-x-1 xl:space-x-2">
           {navItems.map((item, index) => {
-            const path = item.name === 'QUẢN LÝ' ? (user ? '/quan-ly' : '/dang-nhap') : item.path;
+            const path = item.name === 'ĐĂNG NHẬP' && user?.roleId === 'ADMIN' ? '/quan-ly' : item.path;
             const isActive = location.pathname === path;
 
             return (
