@@ -12,7 +12,12 @@ dist
 dist-ssr
 *.local
 
+# .NET
+bin/
+obj/
+
 # Editor directories and files
+.vs/
 .vscode/*
 !.vscode/extensions.json
 .idea
