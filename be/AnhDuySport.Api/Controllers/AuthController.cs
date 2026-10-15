@@ -22,19 +22,4 @@ public class AuthController(AuthService auth) : ControllerBase
             return Unauthorized(new { message = exception.Message });
         }
     }
-
-    [AllowAnonymous]
-    [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest request)
-    {
-        try
-        {
-            await auth.RegisterAsync(request);
-            return Ok(new { message = "Đăng ký thành công. Hãy đăng nhập." });
-        }
-        catch (InvalidOperationException exception)
-        {
-            return BadRequest(new { message = exception.Message });
-        }
-    }
 }
