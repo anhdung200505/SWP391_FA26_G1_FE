@@ -6,6 +6,7 @@ import { CURRENT_MANAGER, getRole } from '../../data/accountManagement';
 const links = [
   { to: '/quan-ly', label: 'Bảng điều khiển', end: true },
   { to: '/quan-ly/tai-khoan', label: 'Tài khoản người dùng', end: false },
+  { to: '/quan-ly/goi', label: 'Gói hội viên', end: false },
 ];
 
 function navClass(isActive) {
@@ -107,7 +108,7 @@ function SidebarContent({ managerRole }) {
 
       <div className="px-4">
         <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-white/35">
-          Nửa đầu luồng
+          Điều hướng
         </p>
         <nav className="space-y-1">
           {links.map((link) => (
@@ -116,15 +117,6 @@ function SidebarContent({ managerRole }) {
               {link.label}
             </NavLink>
           ))}
-          <div className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold text-white/35">
-            <span className="flex items-center gap-3">
-              <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
-              Gói hội viên
-            </span>
-            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide">
-              Nửa sau
-            </span>
-          </div>
         </nav>
       </div>
 

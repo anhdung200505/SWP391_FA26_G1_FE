@@ -13,20 +13,23 @@ import {
   initials,
 } from '../../data/accountManagement';
 
-const ASSIGNABLE_ROLES = ROLES.filter((role) => role.id !== 'center-manager');
-
 export default function UserAccountPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const { users, updateUserRole, updateAccountStatus } = useAccountManagement();
+  const { users, roles, loading, error, updateUserRole, updateAccountStatus } = useAccountManagement();
   const user = users.find((item) => item.id === userId);
+  const catalog = roles.length > 0 ? roles : ROLES;
+  const assignableRoles = catalog.filter((item) => item.id !== 'ADMIN');
+  const findRole = (roleId) => catalog.find((item) => item.id === roleId) ?? getRole(roleId);
 
   const [mode, setMode] = useState('choose');
-  const [draftRoleId, setDraftRoleId] = useState(user?.roleId ?? 'member');
+  const [draftRoleId, setDraftRoleId] = useState(user?.roleId ?? 'MEMBER');
   const [draftStatus, setDraftStatus] = useState(user?.status === 'active' ? 'inactive' : 'active');
   const [steps, setSteps] = useState([]);
   const [shown, setShown] = useState(0);
   const [logId, setLogId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     document.title = user ? `${user.fullName} · Tài khoản` : 'Tài khoản · AnhDuy Sport';
@@ -37,6 +40,20 @@ export default function UserAccountPage() {
     const timer = window.setTimeout(() => setShown((count) => count + 1), 700);
     return () => window.clearTimeout(timer);
   }, [mode, shown, steps.length]);
+
+  if (loading && !user) {
+    return (
+      <ManagementShell
+        breadcrumb={[
+          { label: 'Bảng điều khiển', to: '/quan-ly' },
+          { label: 'Tài khoản người dùng', to: '/quan-ly/tai-khoan' },
+          { label: 'Đang tải' },
+        ]}
+      >
+        <p className="text-sm font-semibold text-gray-500">{error || 'Đang tải tài khoản từ máy chủ...'}</p>
+      </ManagementShell>
+    );
+  }
 
   if (!user) {
     return (
@@ -56,7 +73,7 @@ export default function UserAccountPage() {
     );
   }
 
-  const role = getRole(user.roleId);
+  const role = findRole(user.roleId);
   const flowStep = mode === 'system' ? 4 : mode === 'choose' ? 2 : 3;
   const roleUnchanged = draftRoleId === user.roleId;
   const statusUnchanged = draftStatus === user.status;
@@ -78,10 +95,14 @@ export default function UserAccountPage() {
     setMode('system');
   };
 
-  const confirmRole = () => {
-    const nextRole = getRole(draftRoleId);
-    const log = updateUserRole(user.id, draftRoleId);
-    if (!log || !nextRole || !role) return;
+  const confirmRole = async () => {
+    const nextRole = findRole(draftRoleId);
+    if (!nextRole || !role || saving) return;
+    setSaving(true);
+    setActionError('');
+    try {
+      const log = await updateUserRole(user.id, draftRoleId);
+      if (!log) return;
     startSystem(
       [
         {
@@ -101,12 +122,28 @@ export default function UserAccountPage() {
       ],
       log.id,
     );
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const confirmStatus = () => {
+  const confirmStatus = async () => {
+    if (saving) return;
     const previous = getStatusMeta(user.status);
     const next = getStatusMeta(draftStatus);
-    const log = updateAccountStatus(user.id, draftStatus);
+    setSaving(true);
+    setActionError('');
+    let log;
+    try {
+      log = await updateAccountStatus(user.id, draftStatus);
+    } catch (requestError) {
+      setActionError(requestError.message);
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
     if (!log) return;
     const verb = draftStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa';
     startSystem(
@@ -167,7 +204,7 @@ export default function UserAccountPage() {
               {user.code} · {user.unit}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <RoleBadge roleId={user.roleId} />
+              <RoleBadge roleId={user.roleId} label={user.unit} />
               <StatusBadge status={user.status} />
             </div>
           </div>
@@ -226,7 +263,7 @@ export default function UserAccountPage() {
             <fieldset>
               <legend className="text-sm font-bold text-gray-700">Chọn vai trò mới</legend>
               <div className="mt-2 space-y-2">
-                {ASSIGNABLE_ROLES.map((item) => {
+                {assignableRoles.map((item) => {
                   const selected = draftRoleId === item.id;
                   return (
                     <label
@@ -252,9 +289,9 @@ export default function UserAccountPage() {
 
             <div className="rounded-2xl bg-[#f7f7f8] p-4">
               <p className="text-sm font-black">Quyền hạn đi kèm</p>
-              <p className="text-xs text-gray-500">{getRole(draftRoleId)?.label}</p>
+              <p className="text-xs text-gray-500">{findRole(draftRoleId)?.label}</p>
               <ul className="mt-3 space-y-2 text-sm text-gray-700">
-                {getRole(draftRoleId)?.permissions.map((permission) => (
+                {findRole(draftRoleId)?.permissions.map((permission) => (
                   <li key={permission} className="flex gap-2">
                     <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#e31b23]" />
                     <span>{permission}</span>
@@ -267,13 +304,14 @@ export default function UserAccountPage() {
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={roleUnchanged}
+              disabled={roleUnchanged || saving}
               onClick={confirmRole}
               className="rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
             >
-              Cập nhật vai trò
+              {saving ? 'Đang lưu...' : 'Cập nhật vai trò'}
             </button>
             {roleUnchanged && <p className="text-sm text-gray-500">Đây đang là vai trò hiện tại.</p>}
+            {actionError && mode === 'role' && <p className="text-sm font-semibold text-[#b1131a]">{actionError}</p>}
           </div>
         </section>
       )}
@@ -328,13 +366,14 @@ export default function UserAccountPage() {
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={statusUnchanged}
+              disabled={statusUnchanged || saving}
               onClick={confirmStatus}
               className="rounded-xl bg-[#12141d] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
             >
-              {draftStatus === 'inactive' ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt tài khoản'}
+              {saving ? 'Đang lưu...' : draftStatus === 'inactive' ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt tài khoản'}
             </button>
             {statusUnchanged && <p className="text-sm text-gray-500">Chọn trạng thái khác với hiện tại.</p>}
+            {actionError && mode === 'status' && <p className="text-sm font-semibold text-[#b1131a]">{actionError}</p>}
           </div>
         </section>
       )}

@@ -1,15 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption, StatusBadge } from '../../components/management/ManagementBits';
 import { useAccountManagement } from '../../context/AccountManagementContext';
-import { formatDateTime, getRole } from '../../data/accountManagement';
+import { formatDateTime, formatFee, getRole } from '../../data/accountManagement';
 
 export default function ManagementDashboard() {
-  const { users, logs, resetData } = useAccountManagement();
+  const { users, packages, logs, loading, error } = useAccountManagement();
   const location = useLocation();
-  const navigate = useNavigate();
-  const [confirmReset, setConfirmReset] = useState(false);
   const highlightId = location.state?.logId;
   const highlightedLog = logs.find((log) => log.id === highlightId);
 
@@ -26,12 +24,6 @@ export default function ManagementDashboard() {
 
   const activeCount = users.filter((user) => user.status === 'active').length;
   const inactiveCount = users.length - activeCount;
-
-  const handleReset = () => {
-    resetData();
-    setConfirmReset(false);
-    navigate('/quan-ly', { replace: true });
-  };
 
   return (
     <ManagementShell breadcrumb={[{ label: 'Bảng điều khiển' }]}>
@@ -50,8 +42,8 @@ export default function ManagementDashboard() {
             và hội viên
           </h1>
           <p className="mt-4 max-w-md text-sm leading-6 text-white/75 sm:text-base">
-            Nửa đầu luồng: chọn danh mục tài khoản, đổi vai trò hoặc bật tắt trạng thái.
-            Hệ thống cập nhật, gửi email khi đổi trạng thái, rồi ghi nhật ký tại đây.
+            Chọn tài khoản để đổi vai trò hoặc trạng thái, hoặc chọn gói hội viên để tạo mới và sửa phí,
+            thời hạn, quyền lợi. Máy chủ ghi nhật ký sau mỗi thay đổi.
           </p>
           <DiagramCaption>
             <span className="text-white/40">Access Management Dashboard</span>
@@ -99,27 +91,36 @@ export default function ManagementDashboard() {
             </p>
           </Link>
 
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">
-                Membership packages
-              </p>
-              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                Nửa sau
-              </span>
-            </div>
-            <h3 className="mt-2 text-xl font-black text-gray-500">Gói hội viên</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              Tạo gói mới hoặc sửa phí, thời hạn và quyền lợi. Nhánh này chưa nằm trong phần đang làm.
+          <Link
+            to="/quan-ly/goi"
+            className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#e31b23]/40 hover:shadow-md"
+          >
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#e31b23]">
+              Membership packages
             </p>
-          </div>
+            <h3 className="mt-2 text-xl font-black">Gói hội viên</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Tạo gói mới hoặc chọn gói đang có để sửa phí, thời hạn và quyền lợi.
+            </p>
+            <p className="mt-4 text-sm font-bold text-[#e31b23]">
+              Vào danh sách gói
+              <span className="ml-1 inline-block transition group-hover:translate-x-1">→</span>
+            </p>
+          </Link>
         </div>
       </section>
 
-      <section className="mt-6 grid gap-3 sm:grid-cols-3">
+      {(loading || error) && (
+        <p className={`mt-5 text-sm font-semibold ${error ? 'text-[#b1131a]' : 'text-gray-500'}`}>
+          {error || 'Đang tải dữ liệu từ máy chủ...'}
+        </p>
+      )}
+
+      <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Tổng tài khoản" value={users.length} />
         <Stat label="Đang hoạt động" value={activeCount} />
         <Stat label="Ngưng hoạt động" value={inactiveCount} />
+        <Stat label="Gói hội viên" value={packages.length} />
       </section>
 
       <section className="mt-6 rounded-2xl border border-gray-200 bg-white">
@@ -128,32 +129,6 @@ export default function ManagementDashboard() {
             <h2 className="text-lg font-black">Nhật ký hệ thống</h2>
             <DiagramCaption>Record Log</DiagramCaption>
           </div>
-          {confirmReset ? (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleReset}
-                className="rounded-lg bg-[#12141d] px-3 py-2 text-xs font-bold text-white"
-              >
-                Xác nhận khôi phục
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmReset(false)}
-                className="rounded-lg px-3 py-2 text-xs font-bold text-gray-500"
-              >
-                Hủy
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmReset(true)}
-              className="text-xs font-bold text-gray-500 hover:text-[#e31b23]"
-            >
-              Khôi phục dữ liệu mẫu
-            </button>
-          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -197,6 +172,24 @@ export default function ManagementDashboard() {
       </section>
 
       <section className="mt-6">
+        <h2 className="text-lg font-black">Gói hội viên</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          {packages.map((item) => (
+            <Link
+              key={item.id}
+              to={`/quan-ly/goi/${item.id}`}
+              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 hover:border-[#e31b23]/40"
+            >
+              <span className="block font-bold">{item.name}</span>
+              <span className="text-xs text-gray-500">
+                {formatFee(item.fee)} · {item.validityMonths} tháng
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-6">
         <h2 className="text-lg font-black">Tài khoản gần đây</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {users.slice(0, 4).map((user) => (
@@ -207,7 +200,7 @@ export default function ManagementDashboard() {
             >
               <span>
                 <span className="block font-bold">{user.fullName}</span>
-                <span className="text-xs text-gray-500">{getRole(user.roleId)?.label}</span>
+                <span className="text-xs text-gray-500">{user.unit || getRole(user.roleId)?.label}</span>
               </span>
               <StatusBadge status={user.status} />
             </Link>

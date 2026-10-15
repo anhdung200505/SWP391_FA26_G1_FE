@@ -1,18 +1,18 @@
 import { getRole } from '../../data/accountManagement';
 
 const ROLE_STYLES = {
-  'center-manager': 'bg-red-50 text-[#b1131a] ring-[#e31b23]/30',
-  receptionist: 'bg-sky-50 text-sky-800 ring-sky-200',
-  coach: 'bg-amber-50 text-amber-800 ring-amber-200',
-  member: 'bg-slate-100 text-slate-700 ring-slate-200',
+  ADMIN: 'bg-red-50 text-[#b1131a] ring-[#e31b23]/30',
+  RECEPTIONIST: 'bg-sky-50 text-sky-800 ring-sky-200',
+  COACH: 'bg-amber-50 text-amber-800 ring-amber-200',
+  MEMBER: 'bg-slate-100 text-slate-700 ring-slate-200',
 };
 
-export function RoleBadge({ roleId }) {
+export function RoleBadge({ roleId, label }) {
   const role = getRole(roleId);
-  const style = ROLE_STYLES[roleId] || ROLE_STYLES.member;
+  const style = ROLE_STYLES[roleId] || ROLE_STYLES.MEMBER;
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${style}`}>
-      {role?.label || 'Chưa gán'}
+      {label || role?.label || 'Chưa gán'}
     </span>
   );
 }
@@ -41,10 +41,10 @@ const FLOW_STEPS = [
   'Hệ thống ghi nhận',
 ];
 
-export function FlowTrail({ step }) {
+export function FlowTrail({ step, steps = FLOW_STEPS }) {
   return (
     <ol className="flex flex-wrap gap-2">
-      {FLOW_STEPS.map((label, index) => {
+      {steps.map((label, index) => {
         const done = index < step;
         const current = index === step;
         return (
