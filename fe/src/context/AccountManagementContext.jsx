@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import {
   createPackage as createPackageRequest,
+  createStaffAccount as createStaffAccountRequest,
   getDashboard,
   updateAccountStatus as updateAccountStatusRequest,
   updatePackageSetting as updatePackageSettingRequest,
@@ -15,7 +16,7 @@ const emptyState = { users: [], packages: [], logs: [], roles: [] };
 export function AccountManagementProvider({ children }) {
   const { user } = useAuth();
   const [state, setState] = useState(emptyState);
-  const [loading, setLoading] = useState(Boolean(user));
+  const [loading, setLoading] = useState(user?.roleId === 'ADMIN');
   const [error, setError] = useState('');
 
   const applyDashboard = (dashboard) => {
@@ -29,7 +30,7 @@ export function AccountManagementProvider({ children }) {
   };
 
   useEffect(() => {
-    if (!user) return undefined;
+    if (!user || user.roleId !== 'ADMIN') return undefined;
     let active = true;
     getDashboard()
       .then((dashboard) => {
@@ -45,6 +46,16 @@ export function AccountManagementProvider({ children }) {
       active = false;
     };
   }, [user]);
+
+  const createStaffAccount = async (payload) => {
+    const result = await createStaffAccountRequest(payload);
+    setState((current) => ({
+      ...current,
+      users: [...current.users, result.user].sort((left, right) => Number(left.id) - Number(right.id)),
+      logs: [result.log, ...current.logs],
+    }));
+    return result.user;
+  };
 
   const updateUserRole = async (userId, roleId) => {
     const result = await updateUserRoleRequest(userId, roleId);
@@ -95,6 +106,7 @@ export function AccountManagementProvider({ children }) {
         roles: state.roles,
         loading,
         error,
+        createStaffAccount,
         updateUserRole,
         updateAccountStatus,
         createPackage,

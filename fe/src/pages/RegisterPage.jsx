@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
 import PasswordField from '../components/PasswordField';
 import { registerAccount } from '../api/managementApi';
+import { pathForRole } from '../auth/destination';
 import { useAuth } from '../context/AuthContext';
 
 const specialCharacter = /[@#!]/;
@@ -19,7 +20,7 @@ export default function RegisterPage() {
   const [saving, setSaving] = useState(false);
 
   if (user) {
-    return <Navigate to={user.roleId === 'ADMIN' ? '/quan-ly' : '/home'} replace />;
+    return <Navigate to={pathForRole(user.roleId)} replace />;
   }
 
   const submit = async (event) => {
@@ -65,7 +66,9 @@ export default function RegisterPage() {
         </Link>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#e31b23]">Tài khoản mới</p>
         <h1 className="mt-2 text-2xl font-black text-gray-900">Đăng ký</h1>
-        <p className="mt-2 text-sm text-gray-500">Tạo tài khoản học viên để đăng nhập vào AnhDuy Sport.</p>
+        <p className="mt-2 text-sm text-gray-500">
+          Chỉ đăng ký được tài khoản học viên. Lễ tân và huấn luyện viên do quản trị trung tâm thêm.
+        </p>
         <form className="mt-6 space-y-4" onSubmit={submit}>
           <label className="block">
             <span className="text-sm font-bold text-gray-700">Họ tên</span>

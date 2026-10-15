@@ -56,7 +56,34 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new UnauthorizedAccessException("Tài khoản đã ngưng hoạt động.");
         }
 
+        EnsurePortal(request.Portal, user.Role?.RoleCode ?? "");
         return new LoginResponse(CreateToken(user), ToDto(user));
+    }
+
+    private static void EnsurePortal(string? portal, string roleCode)
+    {
+        var gate = portal?.Trim().ToLowerInvariant() ?? "";
+        if (gate == "member")
+        {
+            if (roleCode != "MEMBER")
+            {
+                throw new UnauthorizedAccessException("Cửa này chỉ dành cho học viên. Lễ tân và huấn luyện viên hãy đăng nhập ở cửa nhân sự.");
+            }
+
+            return;
+        }
+
+        if (gate == "staff")
+        {
+            if (roleCode is not ("RECEPTIONIST" or "COACH" or "ADMIN"))
+            {
+                throw new UnauthorizedAccessException("Cửa này dành cho lễ tân, huấn luyện viên và quản trị trung tâm. Học viên hãy đăng nhập ở cửa học viên.");
+            }
+
+            return;
+        }
+
+        throw new UnauthorizedAccessException("Cửa đăng nhập không hợp lệ.");
     }
 
     public async Task RegisterAsync(RegisterRequest request)
@@ -81,15 +108,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
         }
 
-        if (password.Length is < 6 or > 100)
-        {
-            throw new InvalidOperationException("Mật khẩu cần từ 6 đến 100 ký tự.");
-        }
-
-        if (!password.Any(character => character is '@' or '#' or '!'))
-        {
-            throw new InvalidOperationException("Mật khẩu phải có ít nhất một ký tự đặc biệt như @, # hoặc !.");
-        }
+        PasswordHasher.EnsureAcceptable(password);
 
         var emailTaken = await db.UserAccounts.AnyAsync(account => account.Email != null && account.Email.ToLower() == email.ToLower());
         if (emailTaken)
