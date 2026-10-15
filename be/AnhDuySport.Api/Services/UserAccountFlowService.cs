@@ -5,11 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
 
-public class UserAccountFlowService(
-    AppDbContext db,
-    EmailNotificationService emailNotifications,
-    CurrentActor actor,
-    PasswordHasher passwords)
+public class UserAccountFlowService(AppDbContext db, EmailNotificationService emailNotifications, CurrentActor actor)
 {
     public async Task<IReadOnlyList<UserAccountDto>> AccessUserAccountListAsync(string? search, string? roleId, string? status)
     {
@@ -41,75 +37,6 @@ public class UserAccountFlowService(
         }
 
         return users.Select(AccountFlowMapper.ToDto).ToList();
-    }
-
-    public async Task<UserMutationResponse> CreateStaffAccountAsync(CreateStaffRequest request)
-    {
-        var fullName = request.FullName?.Trim() ?? "";
-        var email = request.Email?.Trim() ?? "";
-        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
-        var password = request.Password ?? "";
-        var roleCode = request.RoleId?.Trim() ?? "";
-
-        if (fullName.Length is 0 or > 200)
-        {
-            throw new InvalidOperationException("Họ tên không được để trống và không quá 200 ký tự.");
-        }
-
-        if (email.Length is 0 or > 200 || !email.Contains('@'))
-        {
-            throw new InvalidOperationException("Email không hợp lệ.");
-        }
-
-        if (phone is { Length: > 20 })
-        {
-            throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
-        }
-
-        if (roleCode is not ("RECEPTIONIST" or "COACH"))
-        {
-            throw new InvalidOperationException("Chỉ thêm được lễ tân hoặc huấn luyện viên. Học viên tự đăng ký.");
-        }
-
-        PasswordHasher.EnsureAcceptable(password);
-
-        var emailTaken = await db.UserAccounts.AnyAsync(account => account.Email != null && account.Email.ToLower() == email.ToLower());
-        if (emailTaken)
-        {
-            throw new InvalidOperationException("Email này đã được đăng ký.");
-        }
-
-        var role = await db.Roles.FirstOrDefaultAsync(item => item.RoleCode == roleCode)
-            ?? throw new InvalidOperationException("Không tìm thấy vai trò.");
-        var user = new UserAccount
-        {
-            RoleId = role.RoleId,
-            Role = role,
-            FullName = fullName,
-            Email = email,
-            Phone = phone,
-            PasswordHash = passwords.Hash(password),
-            Status = "active",
-            CreatedAt = DateTime.Now,
-        };
-        db.UserAccounts.Add(user);
-        try
-        {
-            await db.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            throw new InvalidOperationException("Email này đã được đăng ký.");
-        }
-
-        var actorName = await ActorNameAsync();
-        var log = AddLog(
-            $"Thêm {role.RoleName} {user.FullName}",
-            "user",
-            user.UserId,
-            $"Quản trị trung tâm tạo tài khoản {role.RoleName}.");
-        await db.SaveChangesAsync();
-        return new UserMutationResponse(AccountFlowMapper.ToDto(user), ToLogDto(log, actorName, user.FullName, null));
     }
 
     public async Task<UserAccountDto?> SelectUserAccountAsync(string userId)
