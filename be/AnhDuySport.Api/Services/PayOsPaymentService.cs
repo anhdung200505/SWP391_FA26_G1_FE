@@ -13,6 +13,7 @@ namespace AnhDuySport.Api.Services;
 
 public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfiguration configuration)
 {
+    private const int CheckoutAmount = 10_000;
     public async Task<PayOsPaymentDto> CreateAsync(CreatePayOsPaymentRequest request)
     {
         var member = await FindActiveMemberAsync(request.MemberUserId);
@@ -36,6 +37,12 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             .Include(item => item.Invoice)
             .FirstOrDefaultAsync(item =>
                 item.UserId == member.UserId && item.ClassId == trainingClass.ClassId && item.Status == "pending");
+        if (pending is not null && pending.Amount != CheckoutAmount)
+        {
+            await RetirePendingAsync(pending);
+            pending = null;
+        }
+
         if (pending is not null)
         {
             if (string.IsNullOrWhiteSpace(pending.CheckoutUrl))
@@ -59,10 +66,14 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         }
 
         var payment = await db.Payments
-            .AsNoTracking()
             .Include(item => item.Invoice)
             .FirstOrDefaultAsync(item => item.PaymentId == id)
             ?? throw new KeyNotFoundException("Không tìm thấy thanh toán.");
+        if (payment.Status == "pending")
+        {
+            await TryConfirmFromPayOsAsync(payment);
+        }
+
         return ToDto(payment);
     }
 
@@ -101,6 +112,39 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             throw new InvalidOperationException("Số tiền webhook không khớp hóa đơn.");
         }
 
+        await MarkPaidAsync(payment);
+    }
+
+    private async Task TryConfirmFromPayOsAsync(Payment payment)
+    {
+        if (payment.PayosOrderCode is not long orderCode)
+        {
+            return;
+        }
+
+        PaymentLink link;
+        try
+        {
+            link = await payOs.PaymentRequests.GetAsync(orderCode);
+        }
+        catch (ApiException)
+        {
+            return;
+        }
+
+        var status = link.Status.ToString();
+        var paid = status.Equals("Paid", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("PAID", StringComparison.OrdinalIgnoreCase);
+        if (!paid)
+        {
+            return;
+        }
+
+        await MarkPaidAsync(payment);
+    }
+
+    private async Task MarkPaidAsync(Payment payment)
+    {
         payment.Status = "paid";
         payment.PaidAt = DateTime.Now;
         if (payment.Invoice is not null)
@@ -141,6 +185,28 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         await db.SaveChangesAsync();
     }
 
+    private async Task RetirePendingAsync(Payment payment)
+    {
+        if (payment.PayosOrderCode is long orderCode)
+        {
+            try
+            {
+                await payOs.PaymentRequests.CancelAsync(orderCode, "Đổi số tiền thử nghiệm");
+            }
+            catch (ApiException)
+            {
+            }
+        }
+
+        payment.Status = "failed";
+        if (payment.Invoice is not null)
+        {
+            payment.Invoice.Status = "cancelled";
+        }
+
+        await db.SaveChangesAsync();
+    }
+
     private async Task<Payment> CreatePendingPaymentAsync(UserAccount member, PayableClass trainingClass)
     {
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -149,14 +215,14 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             UserId = member.UserId,
             InvoiceCode = await NextInvoiceCodeAsync(),
             IssuedAt = DateTime.Now,
-            TotalAmount = trainingClass.Amount,
+            TotalAmount = CheckoutAmount,
             Status = "issued",
         };
         var payment = new Payment
         {
             UserId = member.UserId,
             ClassId = trainingClass.ClassId,
-            Amount = trainingClass.Amount,
+            Amount = CheckoutAmount,
             PaymentMethod = "payos",
             Status = "pending",
             Invoice = invoice,
