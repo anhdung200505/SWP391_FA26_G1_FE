@@ -174,11 +174,15 @@ Table payment {
   payment_id int [pk, increment]
   invoice_id int [not null, ref: > invoice.invoice_id]
   user_id int [not null, ref: > "user".user_id]
-  course_id int [ref: > course.course_id]
+  class_id int [ref: > class.class_id]
   amount decimal [not null]
   payment_method nvarchar [not null]
   paid_at datetime
   status nvarchar [not null]
+
+  indexes {
+    (user_id, class_id) [unique, name: "UX_payment_pending_per_class", note: "filtered: WHERE status = 'pending' AND class_id IS NOT NULL"]
+  }
 }
 
 Table membership {
@@ -211,6 +215,22 @@ Table consultation_request {
   interested_sports nvarchar
   status nvarchar [not null]
   created_at datetime [not null]
+}
+
+Table support_request {
+  support_request_id int [pk, increment]
+  member_user_id int [not null, ref: > "user".user_id]
+  title nvarchar [not null]
+  description nvarchar [not null]
+  system_category nvarchar [not null]
+  classification_reason nvarchar
+  receptionist_category nvarchar
+  status nvarchar [not null]
+  assigned_to_user_id int [ref: > "user".user_id]
+  decision nvarchar
+  resolution_note nvarchar
+  created_at datetime [not null]
+  resolved_at datetime
 }
 
 Table notification {
