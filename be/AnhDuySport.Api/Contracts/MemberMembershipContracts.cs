@@ -50,7 +50,6 @@ public sealed record MembershipRenewalResponse(
     MembershipDto Membership,
     DateOnly MembershipEndDate,
     string Message,
-    EmailDto Email,
     ActivityLogDto Log);
 
 // Need Consultation? = No → học viên tự chọn gói
