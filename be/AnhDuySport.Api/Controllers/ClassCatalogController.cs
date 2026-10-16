@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnhDuySport.Api.Controllers;
 
-[AllowAnonymous]
+[Authorize(Roles = "MEMBER,RECEPTIONIST,ADMIN")]
 [ApiController]
 [Route("api/catalog")]
 public class ClassCatalogController(ClassRegistrationFlowService registrations) : ControllerBase
