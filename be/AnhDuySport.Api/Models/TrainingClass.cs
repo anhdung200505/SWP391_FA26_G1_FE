@@ -68,6 +68,35 @@ public class ClassSlot
 
     [Column("title")]
     public string? Title { get; set; }
+
+    [Column("registration_limit")]
+    public int RegistrationLimit { get; set; }
+
+    public TrainingClass? Class { get; set; }
+    public List<SlotRegistration> Registrations { get; set; } = [];
+}
+
+[Table("slot_registration")]
+public class SlotRegistration
+{
+    [Key]
+    [Column("slot_registration_id")]
+    public int SlotRegistrationId { get; set; }
+
+    [Column("slot_id")]
+    public int SlotId { get; set; }
+
+    [Column("user_id")]
+    public int UserId { get; set; }
+
+    [Column("registered_at")]
+    public DateTime RegisteredAt { get; set; }
+
+    [Column("status")]
+    public string Status { get; set; } = "registered";
+
+    public ClassSlot? Slot { get; set; }
+    public UserAccount? Member { get; set; }
 }
 
 [Table("class_enrollment")]
