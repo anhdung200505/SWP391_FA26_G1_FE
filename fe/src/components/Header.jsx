@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
+import { useAuth } from '../context/AuthContext';
 
 const courseCategories = [
   { name: 'Tất cả', path: '/khoa-hoc' },
@@ -21,12 +22,14 @@ const navItems = [
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
   { name: 'TUYỂN SINH', path: '#' },
+  { name: 'ĐĂNG NHẬP', path: '/dang-nhap' },
 ];
 
 export default function Header({ forceWhite = false }) {
   const [isHeaderTransparent, setIsHeaderTransparent] = useState(!forceWhite);
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (forceWhite) {
@@ -114,13 +117,14 @@ export default function Header({ forceWhite = false }) {
         {/* MENU ĐIỀU HƯỚNG */}
         <nav className="hidden lg:flex items-center space-x-1 xl:space-x-2">
           {navItems.map((item, index) => {
-            const isActive = location.pathname === item.path;
+            const path = item.name === 'ĐĂNG NHẬP' && user?.roleId === 'ADMIN' ? '/quan-ly' : item.path;
+            const isActive = location.pathname === path;
 
             return (
               <div key={index} className="relative group">
                 <a
-                  href={item.path}
-                  onClick={(e) => handleNavClick(e, item.path)}
+                  href={path}
+                  onClick={(e) => handleNavClick(e, path)}
                   className={`relative overflow-hidden px-3.5 py-2 text-xs xl:text-sm font-bold tracking-wider transition-colors duration-300 whitespace-nowrap block cursor-pointer select-none ${
                     isActive
                       ? 'bg-[#e31b23] text-white shadow-md'
