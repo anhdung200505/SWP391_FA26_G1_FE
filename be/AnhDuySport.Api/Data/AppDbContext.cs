@@ -20,6 +20,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ClassEnrollment> ClassEnrollments => Set<ClassEnrollment>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -86,6 +87,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(payment => payment.ClassId);
             entity.Property(payment => payment.Amount).HasPrecision(18, 2);
+        });
+
+        modelBuilder.Entity<SupportRequest>(entity =>
+        {
+            entity.HasOne(item => item.Member)
+                .WithMany()
+                .HasForeignKey(item => item.MemberUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(item => item.Assignee)
+                .WithMany()
+                .HasForeignKey(item => item.AssignedToUserId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }

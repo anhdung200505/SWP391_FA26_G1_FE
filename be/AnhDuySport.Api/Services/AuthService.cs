@@ -56,9 +56,9 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new UnauthorizedAccessException("Tài khoản đã ngưng hoạt động.");
         }
 
-        if (user.Role?.RoleCode != RoleCatalog.AdminCode)
+        if (user.Role?.RoleCode is not (RoleCatalog.AdminCode or "RECEPTIONIST"))
         {
-            throw new UnauthorizedAccessException("Chỉ tài khoản quản trị trung tâm mới vào được khu vực quản lý.");
+            throw new UnauthorizedAccessException("Chỉ quản trị trung tâm và lễ tân đăng nhập được.");
         }
 
         return new LoginResponse(CreateToken(user), ToDto(user));
