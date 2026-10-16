@@ -29,7 +29,7 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
             var safeName = string.Concat(to.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
             var path = Path.Combine(folder, $"{DateTime.Now:yyyyMMddHHmmssfff}-{safeName}.eml");
             await File.WriteAllTextAsync(path, $"To: {to}{Environment.NewLine}Subject: {subject}{Environment.NewLine}{Environment.NewLine}{body}");
-            logger.LogWarning("SMTP chưa có tài khoản gửi. Thư OTP được lưu tại {Path}", path);
+            logger.LogWarning("SMTP chưa có tài khoản gửi. Thư được lưu tại {Path}", path);
             return;
         }
 
