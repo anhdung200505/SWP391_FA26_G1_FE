@@ -58,3 +58,22 @@ public sealed record ClassDetailDto(
     decimal Tuition,
     bool IsOpenForRegistration,
     IReadOnlyList<ClassSlotDto> Slots);
+
+public sealed class PayRegistrationRequest
+{
+    public string ClassId { get; set; } = "";
+    public string? SlotId { get; set; }
+    public bool GroupStudy { get; set; }
+    public string FullName { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public string PaymentMethod { get; set; } = "";
+}
+
+public sealed record RegistrationPaymentResponse(
+    bool Success,
+    string Message,
+    string? ThankYou,
+    string? Commitment,
+    string? InvoiceCode,
+    string? Token,
+    AuthUserDto? User);
