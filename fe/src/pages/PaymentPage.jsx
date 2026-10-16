@@ -63,7 +63,7 @@ export default function PaymentPage() {
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#e31b23]">payOS</p>
         <h1 className="mt-2 text-4xl font-black uppercase">Thanh toán học phí</h1>
         <p className="mt-3 max-w-2xl text-sm text-white/70">
-          Chọn học viên và lớp. Bấm thanh toán sẽ mở trang payOS. Quét mã là chuyển tiền thật vào tài khoản đã liên kết.
+          Mỗi lần bấm thanh toán chỉ chuyển 10.000đ để thử. Khi chuyển khoản thành công, payOS đưa bạn về trang kết quả của website.
         </p>
 
         <label className="mt-8 block text-sm font-bold">
@@ -99,7 +99,10 @@ export default function PaymentPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <p className="text-lg font-black">{formatVnd(item.tuition)}</p>
+                  <div>
+                    <p className="text-lg font-black">10.000đ</p>
+                    <p className="text-xs text-white/50">Học phí lớp {formatVnd(item.tuition)}</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => pay(item.id)}

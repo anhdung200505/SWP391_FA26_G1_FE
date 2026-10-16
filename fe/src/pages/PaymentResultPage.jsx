@@ -62,7 +62,7 @@ export default function PaymentResultPage() {
         )}
         {orderCode && payment?.status === 'pending' && (
           <p className="mt-4 text-sm text-white/60">
-            Trang payOS có thể đã nhận tiền, nhưng webhook chưa gọi được localhost nên hệ thống vẫn để pending.
+            Chưa thấy payOS xác nhận đơn này. Nếu vừa chuyển khoản, đợi vài giây rồi tải lại trang.
           </p>
         )}
         <Link to="/thanh-toan" className="mt-8 inline-block bg-[#e31b23] px-4 py-3 text-xs font-black uppercase tracking-wider">
