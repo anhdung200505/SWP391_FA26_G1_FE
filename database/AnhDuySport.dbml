@@ -179,6 +179,10 @@ Table payment {
   payment_method nvarchar [not null]
   paid_at datetime
   status nvarchar [not null]
+
+  indexes {
+    (user_id, class_id) [unique, name: "UX_payment_pending_per_class", note: "filtered: WHERE status = 'pending' AND class_id IS NOT NULL"]
+  }
 }
 
 Table membership {
