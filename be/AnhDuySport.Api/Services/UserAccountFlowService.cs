@@ -171,13 +171,13 @@ public class UserAccountFlowService(
         var previousLabel = RoleCatalog.StatusLabel(user.Status);
         var nextLabel = RoleCatalog.StatusLabel(nextStatus);
         user.Status = nextStatus;
-        var (subject, body) = emailNotifications.BuildAccountStatusEmail(user, nextStatus);
+        var email = await emailNotifications.SendAccountStatusEmailAsync(user, nextStatus);
         var now = DateTime.Now;
         db.Notifications.Add(new AccountNotification
         {
             UserId = user.UserId,
-            Title = subject,
-            Content = body,
+            Title = email.Subject,
+            Content = email.Body,
             IsRead = false,
             CreatedAt = now,
         });
@@ -190,7 +190,6 @@ public class UserAccountFlowService(
             $"{previousLabel} → {nextLabel}",
             now);
         await db.SaveChangesAsync();
-        var email = new EmailDto(user.Email ?? "", subject, body);
         return new UserMutationResponse(AccountFlowMapper.ToDto(user), ToLogDto(log, actor, user.FullName, email));
     }
 
