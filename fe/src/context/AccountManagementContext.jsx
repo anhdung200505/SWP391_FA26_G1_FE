@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useAuth } from './AuthContext';
 import {
   createPackage as createPackageRequest,
+  createStaffAccount as createStaffAccountRequest,
   getDashboard,
   updateAccountStatus as updateAccountStatusRequest,
   updatePackageSetting as updatePackageSettingRequest,
@@ -45,6 +47,18 @@ export function AccountManagementProvider({ children }) {
       active = false;
     };
   }, [user]);
+
+  const createStaffAccount = async (payload) => {
+    const result = await createStaffAccountRequest(payload);
+    flushSync(() => {
+      setState((current) => ({
+        ...current,
+        users: [...current.users, result.user].sort((left, right) => Number(left.id) - Number(right.id)),
+        logs: [result.log, ...current.logs],
+      }));
+    });
+    return result.user;
+  };
 
   const updateUserRole = async (userId, roleId) => {
     const result = await updateUserRoleRequest(userId, roleId);
@@ -95,6 +109,7 @@ export function AccountManagementProvider({ children }) {
         roles: state.roles,
         loading,
         error,
+        createStaffAccount,
         updateUserRole,
         updateAccountStatus,
         createPackage,

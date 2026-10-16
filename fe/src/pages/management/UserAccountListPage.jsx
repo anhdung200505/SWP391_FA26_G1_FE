@@ -41,10 +41,18 @@ export default function UserAccountListPage() {
           <h1 className="text-2xl font-black sm:text-3xl">Danh sách tài khoản</h1>
           <DiagramCaption>Access User Account List</DiagramCaption>
           <p className="mt-2 text-sm text-gray-600">
-            Chọn một tài khoản để đổi vai trò, quyền hạn hoặc trạng thái hoạt động.
+            Chỉ quản trị trung tâm tạo tài khoản lễ tân và huấn luyện viên. Học viên tự đăng ký.
           </p>
         </div>
-        <p className="text-sm font-bold text-gray-500">{filtered.length} tài khoản</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/quan-ly/tai-khoan/moi"
+            className="rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white"
+          >
+            Thêm lễ tân / huấn luyện viên
+          </Link>
+          <p className="text-sm font-bold text-gray-500">{filtered.length} tài khoản</p>
+        </div>
       </div>
 
       <div className="mt-5 grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 md:grid-cols-[1fr_180px_180px]">

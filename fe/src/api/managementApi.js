@@ -44,11 +44,50 @@ async function request(path, options = {}) {
   return response.json();
 }
 
-export function login(email, password) {
+export function login(email, password, portal = 'staff') {
   return request('/auth/login', {
     method: 'POST',
     anonymous: true,
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, portal }),
+  });
+}
+
+export function registerGuest(payload) {
+  return request('/auth/register', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getCenters() {
+  return request('/catalog/centers');
+}
+
+export function getSports(centerId) {
+  return request(`/catalog/centers/${centerId}/sports`);
+}
+
+export function getClasses(centerId, sportId) {
+  const query = new URLSearchParams({ centerId, sportId });
+  return request(`/catalog/classes?${query}`);
+}
+
+export function getClassDetail(classId) {
+  return request(`/catalog/classes/${classId}`);
+}
+
+export function payRegistration(payload) {
+  return request('/registrations/pay', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createStaffAccount(payload) {
+  return request('/user-accounts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 
