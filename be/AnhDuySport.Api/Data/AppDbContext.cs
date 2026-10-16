@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
+    public DbSet<Membership> Memberships => Set<Membership>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -99,6 +100,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(item => item.AssignedToUserId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<Membership>(entity =>
+        {
+            entity.HasOne(item => item.Package)
+                .WithMany()
+                .HasForeignKey(item => item.MembershipPackageId);
+            entity.HasOne(item => item.Payment)                  
+                .WithMany()
+                .HasForeignKey(item => item.PaymentId);   
         });
     }
 }
