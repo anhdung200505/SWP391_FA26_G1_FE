@@ -19,6 +19,7 @@ const navItems = [
   { name: 'TRANG CHỦ', path: '/home' },
   { name: 'VỀ CHÚNG TÔI', path: '#', hasDropdown: false },
   { name: 'KHÓA HỌC', path: '/khoa-hoc', hasDropdown: true },
+  { name: 'THANH TOÁN', path: '/thanh-toan' },
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
   { name: 'TUYỂN SINH', path: '#' },
