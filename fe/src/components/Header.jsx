@@ -3,16 +3,17 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 
+// Danh sách các khóa học kèm đường dẫn chi tiết chuẩn slug
 const courseCategories = [
   { name: 'Tất cả', path: '/khoa-hoc' },
-  { name: 'Bóng rổ', path: '/khoa-hoc' },
-  { name: 'Bơi lội', path: '/khoa-hoc' },
-  { name: 'Golf 3D', path: '/khoa-hoc' },
-  { name: 'Quần vợt', path: '/khoa-hoc' },
-  { name: 'Bóng bàn', path: '/khoa-hoc' },
-  { name: 'Cầu lông', path: '/khoa-hoc' },
-  { name: 'Taekwondo', path: '/khoa-hoc' },
-  { name: 'Bóng đá', path: '/khoa-hoc' },
+  { name: 'Bóng rổ', path: '/khoa-hoc/bong-ro' },
+  { name: 'Bơi lội', path: '/khoa-hoc/boi-loi' },
+  { name: 'Golf 3D', path: '/khoa-hoc/golf-3d' },
+  { name: 'Quần vợt', path: '/khoa-hoc/quan-vot' },
+  { name: 'Bóng bàn', path: '/khoa-hoc/bong-ban' },
+  { name: 'Cầu lông', path: '/khoa-hoc/cau-long' },
+  { name: 'Taekwondo', path: '/khoa-hoc/taekwondo' },
+  { name: 'Bóng đá', path: '/khoa-hoc/bong-da' },
 ];
 
 const navItems = [
@@ -59,22 +60,33 @@ export default function Header({ forceWhite = false }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [forceWhite]);
 
-  // Xử lý click điều hướng
+  // Xử lý click điều hướng (Ép reload cứng cả trang cho /hlv, /khoa-hoc, /co-so-vat-chat, /home)
   const handleNavClick = (e, path) => {
-    if (path === '/home' || path === '/co-so-vat-chat' || path === '/khoa-hoc') {
+    if (path === '#' || path === '') {
       e.preventDefault();
-      window.location.href = path; // Hard reload cho đường dẫn cố định
+      return;
+    }
+
+    e.preventDefault();
+
+    // Reload cứng cho các đường dẫn chính và trang chi tiết khóa học
+    if (
+      path === '/home' ||
+      path === '/co-so-vat-chat' ||
+      path === '/hlv' ||
+      path.startsWith('/khoa-hoc')
+    ) {
+      window.location.href = path; // Hard reload cả trang
     } else if (path.startsWith('#')) {
-      e.preventDefault();
       if (location.pathname !== '/home') {
         window.location.href = `/home${path}`;
       } else {
         const elem = document.querySelector(path);
         if (elem) elem.scrollIntoView({ behavior: 'smooth' });
       }
-    } else if (path.startsWith('/')) {
-      e.preventDefault();
+    } else {
       navigate(path);
+      window.scrollTo(0, 0);
     }
   };
 
@@ -118,7 +130,10 @@ export default function Header({ forceWhite = false }) {
         <nav className="hidden lg:flex items-center space-x-1 xl:space-x-2">
           {navItems.map((item, index) => {
             const path = item.name === 'ĐĂNG NHẬP' && user?.roleId === 'ADMIN' ? '/quan-ly' : item.path;
-            const isActive = location.pathname === path;
+            
+            const isActive = 
+              location.pathname === path || 
+              (path !== '/home' && path !== '#' && location.pathname.startsWith(path));
 
             return (
               <div key={index} className="relative group">
