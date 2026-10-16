@@ -58,3 +58,15 @@ public sealed record ClassDetailDto(
     decimal Tuition,
     bool IsOpenForRegistration,
     IReadOnlyList<ClassSlotDto> Slots);
+
+public sealed record CreateClassRegistrationRequest(string MemberUserId, string ClassId);
+
+public sealed record ClassRegistrationDto(
+    string PaymentId,
+    string InvoiceCode,
+    string ClassId,
+    string ClassName,
+    decimal Amount,
+    string Status,
+    string PaymentUrl,
+    bool IsExisting);

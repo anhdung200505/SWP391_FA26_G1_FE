@@ -1,5 +1,7 @@
 using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Data;
+using AnhDuySport.Api.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
@@ -184,10 +186,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
 
         var today = DateOnly.FromDateTime(DateTime.Now);
         int? availableSeats = item.Capacity is int capacity ? Math.Max(capacity - item.EnrolledCount, 0) : null;
-        var isOpen = (item.Status is "open" or "ongoing")
-            && (item.EndDate is null || item.EndDate >= today)
-            && item.CourseStatus == "active"
-            && (availableSeats is null || availableSeats > 0);
+        var isOpen = IsOpenForRegistration(item.Status, item.EndDate, item.CourseStatus, availableSeats, today);
 
         return new ClassDetailDto(
             item.ClassId.ToString(),
@@ -219,4 +218,173 @@ public class ClassRegistrationFlowService(AppDbContext db)
                     slot.Title ?? ""))
                 .ToList());
     }
+
+    public async Task<ClassRegistrationDto> SubmitRegistrationAsync(CreateClassRegistrationRequest request)
+    {
+        var member = await FindActiveMemberAsync(request.MemberUserId);
+        if (string.IsNullOrWhiteSpace(member.Phone))
+        {
+            throw new InvalidOperationException("Hồ sơ chưa có số điện thoại, cần bổ sung trước khi đăng ký.");
+        }
+
+        if (string.IsNullOrWhiteSpace(member.Email))
+        {
+            throw new InvalidOperationException("Hồ sơ chưa có email, cần bổ sung trước khi đăng ký.");
+        }
+
+        if (!int.TryParse(request.ClassId, out var classId))
+        {
+            throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        }
+
+        var item = await db.Classes
+            .AsNoTracking()
+            .Where(current => current.ClassId == classId)
+            .Select(current => new
+            {
+                current.ClassName,
+                current.Status,
+                current.EndDate,
+                CourseStatus = current.Course!.Status,
+                Tuition = current.Course.Price,
+                current.Capacity,
+                EnrolledCount = current.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
+            })
+            .FirstOrDefaultAsync()
+            ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        int? availableSeats = item.Capacity is int capacity ? Math.Max(capacity - item.EnrolledCount, 0) : null;
+        if (!IsOpenForRegistration(item.Status, item.EndDate, item.CourseStatus, availableSeats, today))
+        {
+            throw new InvalidOperationException("Lớp học không còn nhận đăng ký.");
+        }
+
+        if (await db.ClassEnrollments.AnyAsync(enrollment =>
+                enrollment.ClassId == classId && enrollment.UserId == member.UserId && enrollment.Status == "enrolled"))
+        {
+            throw new InvalidOperationException("Bạn đã đăng ký lớp học này.");
+        }
+
+        var pending = await FindPendingPaymentAsync(member.UserId, classId);
+        if (pending is not null)
+        {
+            return ToRegistrationDto(pending, item.ClassName, true);
+        }
+
+        try
+        {
+            var created = await CreatePendingPaymentAsync(member.UserId, classId, item.ClassName, item.Tuition);
+            return ToRegistrationDto(created, item.ClassName, false);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            // Một request khác vừa tạo đơn pending cho cùng học viên và lớp: trả lại đơn đó.
+            db.ChangeTracker.Clear();
+            var existing = await FindPendingPaymentAsync(member.UserId, classId);
+            if (existing is null)
+            {
+                throw;
+            }
+
+            return ToRegistrationDto(existing, item.ClassName, true);
+        }
+    }
+
+    private async Task<UserAccount> FindActiveMemberAsync(string memberUserId)
+    {
+        if (!int.TryParse(memberUserId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy học viên.");
+        }
+
+        var member = await db.UserAccounts
+            .Include(user => user.Role)
+            .FirstOrDefaultAsync(user => user.UserId == id);
+        if (member is null || member.Role?.RoleCode != "MEMBER")
+        {
+            throw new KeyNotFoundException("Không tìm thấy học viên.");
+        }
+
+        if (member.Status != "active")
+        {
+            throw new InvalidOperationException("Tài khoản học viên không hoạt động.");
+        }
+
+        return member;
+    }
+
+    private Task<Payment?> FindPendingPaymentAsync(int userId, int classId) =>
+        db.Payments
+            .AsNoTracking()
+            .Include(payment => payment.Invoice)
+            .FirstOrDefaultAsync(payment =>
+                payment.UserId == userId && payment.ClassId == classId && payment.Status == "pending");
+
+    private async Task<Payment> CreatePendingPaymentAsync(int userId, int classId, string className, decimal tuition)
+    {
+        // Số lấy từ SEQUENCE nên hai đơn tạo cùng lúc không bao giờ trùng mã.
+        // ToListAsync (không SingleAsync) để EF không bọc câu lệnh thành truy vấn con.
+        var number = (await db.Database
+            .SqlQuery<int>($"SELECT NEXT VALUE FOR dbo.invoice_code_seq AS [Value]")
+            .ToListAsync()).Single();
+        var now = DateTime.Now;
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var invoice = new Invoice
+        {
+            UserId = userId,
+            InvoiceCode = $"INV-{now.Year}-{number:D4}",
+            IssuedAt = now,
+            TotalAmount = tuition,
+            Status = "issued",
+        };
+        var payment = new Payment
+        {
+            Invoice = invoice,
+            UserId = userId,
+            ClassId = classId,
+            Amount = tuition,
+            PaymentMethod = "payos",
+            Status = "pending",
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync();
+
+        var action = $"Đăng ký lớp {className}";
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = userId,
+            Action = action.Length > 100 ? action[..100] : action,
+            EntityName = "payment",
+            EntityId = payment.PaymentId,
+            Detail = $"Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}",
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return payment;
+    }
+
+    private static ClassRegistrationDto ToRegistrationDto(Payment payment, string className, bool isExisting) =>
+        new(
+            payment.PaymentId.ToString(),
+            payment.Invoice!.InvoiceCode,
+            payment.ClassId.ToString()!,
+            className,
+            payment.Amount,
+            payment.Status,
+            "",
+            isExisting);
+
+    private static bool IsOpenForRegistration(
+        string classStatus,
+        DateOnly? endDate,
+        string courseStatus,
+        int? availableSeats,
+        DateOnly today) =>
+        (classStatus is "open" or "ongoing")
+        && (endDate is null || endDate >= today)
+        && courseStatus == "active"
+        && (availableSeats is null || availableSeats > 0);
 }
