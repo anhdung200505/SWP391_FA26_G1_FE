@@ -54,6 +54,15 @@ public class Payment
     [Column("status")]
     public string Status { get; set; } = "pending";
 
+    [Column("payos_order_code")]
+    public long? PayosOrderCode { get; set; }
+
+    [Column("checkout_url")]
+    public string? CheckoutUrl { get; set; }
+
+    [Column("payment_link_id")]
+    public string? PaymentLinkId { get; set; }
+
     public Invoice? Invoice { get; set; }
     public TrainingClass? Class { get; set; }
 }
