@@ -8,5 +8,11 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $sqlcmd -S '(localdb)\MSSQLLocalDB' -E -b -f 65001 -d AnhDuySport -i (Join-Path $root '02_seed.sql')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $sqlcmd -S '(localdb)\MSSQLLocalDB' -E -b -f 65001 -d AnhDuySport -i (Join-Path $root '03_payment_class_id.sql')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $sqlcmd -S '(localdb)\MSSQLLocalDB' -E -b -f 65001 -d AnhDuySport -i (Join-Path $root '04_support_request.sql')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $sqlcmd -S '(localdb)\MSSQLLocalDB' -E -b -f 65001 -d AnhDuySport -i (Join-Path $root '05_payment_pending_unique.sql')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Output 'AnhDuySport is ready on (localdb)\MSSQLLocalDB'
