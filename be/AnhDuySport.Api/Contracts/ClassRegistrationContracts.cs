@@ -70,3 +70,14 @@ public sealed record ClassRegistrationDto(
     string Status,
     string PaymentUrl,
     bool IsExisting);
+
+public sealed record RegistrationStatusDto(
+    string PaymentId,
+    string InvoiceCode,
+    string ClassId,
+    string ClassName,
+    decimal Amount,
+    string PaymentStatus,
+    string InvoiceStatus,
+    string? EnrollmentStatus,
+    string Message);
