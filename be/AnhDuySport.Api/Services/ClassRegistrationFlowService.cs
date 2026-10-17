@@ -291,6 +291,165 @@ public class ClassRegistrationFlowService(AppDbContext db)
         }
     }
 
+    // #7: học viên xem trạng thái đơn của mình. Sai chủ đơn và không có đơn cùng trả 404 để không lộ id nào có thật.
+    public async Task<RegistrationStatusDto> SelectRegistrationStatusAsync(string paymentId, string memberUserId)
+    {
+        if (!int.TryParse(paymentId, out var id) || !int.TryParse(memberUserId, out var memberId))
+        {
+            throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
+        }
+
+        var payment = await db.Payments
+            .AsNoTracking()
+            .Include(item => item.Invoice)
+            .Include(item => item.Class)
+            .FirstOrDefaultAsync(item => item.PaymentId == id && item.UserId == memberId && item.ClassId != null)
+            ?? throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
+
+        return await BuildStatusAsync(payment);
+    }
+
+    // Hệ thống xác nhận đã nhận tiền (webhook payOS gọi hàm này). Gọi lặp lại không ghi thêm gì.
+    public async Task<RegistrationStatusDto> MarkPaymentPaidAsync(int paymentId, int? actorUserId = null)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var payment = await db.Payments
+            .Include(item => item.Invoice)
+            .Include(item => item.Class)
+            .FirstOrDefaultAsync(item => item.PaymentId == paymentId)
+            ?? throw new KeyNotFoundException("Không tìm thấy đơn thanh toán.");
+
+        if (payment.Status == "refunded")
+        {
+            throw new InvalidOperationException("Đơn thanh toán đã được hoàn tiền.");
+        }
+
+        if (payment.Status == "paid")
+        {
+            return await BuildStatusAsync(payment);
+        }
+
+        var now = DateTime.Now;
+        var className = payment.Class?.ClassName ?? "";
+        var hasSeat = true;
+        if (payment.ClassId is int classId)
+        {
+            // Khóa dòng lớp để hai thanh toán cùng lúc cho chỗ cuối không cùng qua.
+            await db.Database
+                .SqlQuery<int>($"SELECT class_id AS [Value] FROM class WITH (UPDLOCK, HOLDLOCK) WHERE class_id = {classId}")
+                .ToListAsync();
+
+            var capacity = await db.Classes
+                .Where(item => item.ClassId == classId)
+                .Select(item => item.Capacity)
+                .FirstAsync();
+            var enrolledCount = await db.ClassEnrollments
+                .CountAsync(item => item.ClassId == classId && item.Status == "enrolled");
+            var enrollment = await db.ClassEnrollments
+                .FirstOrDefaultAsync(item => item.ClassId == classId && item.UserId == payment.UserId);
+
+            var alreadyEnrolled = enrollment?.Status == "enrolled";
+            hasSeat = alreadyEnrolled || capacity is null || enrolledCount < capacity;
+            if (hasSeat && !alreadyEnrolled)
+            {
+                if (enrollment is null)
+                {
+                    db.ClassEnrollments.Add(new ClassEnrollment
+                    {
+                        ClassId = classId,
+                        UserId = payment.UserId,
+                        EnrolledAt = now,
+                        Status = "enrolled",
+                    });
+                }
+                else
+                {
+                    // Bảng có UNIQUE(class_id, user_id): mở lại dòng cũ thay vì tạo dòng mới.
+                    enrollment.Status = "enrolled";
+                    enrollment.EnrolledAt = now;
+                }
+            }
+        }
+
+        payment.Status = "paid";
+        payment.PaidAt = now;
+        if (payment.Invoice is not null)
+        {
+            payment.Invoice.Status = "paid";
+        }
+
+        if (payment.ClassId is not null)
+        {
+            var memberName = await db.UserAccounts
+                .AsNoTracking()
+                .Where(user => user.UserId == payment.UserId)
+                .Select(user => user.FullName)
+                .FirstOrDefaultAsync() ?? "";
+            db.Notifications.Add(new AccountNotification
+            {
+                UserId = payment.UserId,
+                Title = hasSeat ? "Cảm ơn bạn đã đăng ký lớp" : "Lớp đã đầy, AnhDuy Sport sẽ hoàn tiền",
+                Content = hasSeat
+                    ? $"Cảm ơn {memberName}. AnhDuy Sport đã nhận học phí lớp {className}. Tôi, {memberName}, cam kết tham gia đúng lịch lớp {className}, đóng học phí đã thống nhất và tuân thủ nội quy trung tâm AnhDuy Sport."
+                    : $"Xin lỗi {memberName}. AnhDuy Sport đã nhận học phí nhưng lớp {className} đã đầy. Chúng tôi sẽ liên hệ để hoàn tiền cho bạn.",
+                IsRead = false,
+                CreatedAt = now,
+            });
+        }
+
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = actorUserId ?? payment.UserId,
+            Action = Shorten(hasSeat ? $"Thanh toán lớp {className}" : $"Lớp đầy, cần hoàn tiền: {className}", 100),
+            EntityName = "payment",
+            EntityId = payment.PaymentId,
+            Detail = hasSeat
+                ? $"Hóa đơn {payment.Invoice?.InvoiceCode}, học phí {payment.Amount:N0}"
+                : $"Đã thu {payment.Amount:N0} (hóa đơn {payment.Invoice?.InvoiceCode}) nhưng lớp đầy, chưa ghi danh. Cần hoàn tiền.",
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return await BuildStatusAsync(payment);
+    }
+
+    // Nhánh NO của "Payment Success?": đơn đang chờ chuyển sang thất bại. Gọi lặp lại không ghi thêm gì.
+    public async Task<RegistrationStatusDto> MarkPaymentFailedAsync(int paymentId, int? actorUserId = null)
+    {
+        var payment = await db.Payments
+            .Include(item => item.Invoice)
+            .Include(item => item.Class)
+            .FirstOrDefaultAsync(item => item.PaymentId == paymentId)
+            ?? throw new KeyNotFoundException("Không tìm thấy đơn thanh toán.");
+
+        if (payment.Status is "paid" or "refunded")
+        {
+            throw new InvalidOperationException("Đơn thanh toán đã hoàn tất, không thể đánh dấu thất bại.");
+        }
+
+        if (payment.Status == "pending")
+        {
+            payment.Status = "failed";
+            if (payment.Invoice is not null)
+            {
+                payment.Invoice.Status = "cancelled";
+            }
+
+            db.ActivityLogs.Add(new ActivityLog
+            {
+                ActorUserId = actorUserId ?? payment.UserId,
+                Action = Shorten($"Thanh toán thất bại: {payment.Class?.ClassName}", 100),
+                EntityName = "payment",
+                EntityId = payment.PaymentId,
+                Detail = $"Hóa đơn {payment.Invoice?.InvoiceCode} bị hủy.",
+                CreatedAt = DateTime.Now,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        return await BuildStatusAsync(payment);
+    }
+
     private async Task<UserAccount> FindActiveMemberAsync(string memberUserId)
     {
         if (!int.TryParse(memberUserId, out var id))
@@ -377,6 +536,49 @@ public class ClassRegistrationFlowService(AppDbContext db)
             "",
             isExisting);
 
+    // Người gọi phải Include(Invoice), nếu không InvoiceCode và InvoiceStatus sẽ rỗng.
+    private static RegistrationStatusDto ToRegistrationStatusDto(Payment payment, string className, string? enrollmentStatus, string message) =>
+        new RegistrationStatusDto(
+            payment.PaymentId.ToString(),
+            payment.Invoice?.InvoiceCode ?? "",
+            payment.ClassId?.ToString() ?? "",
+            className,
+            payment.Amount,
+            payment.Status,
+            payment.Invoice?.Status ?? "",
+            enrollmentStatus,
+            message);
+
+    // Đơn có thể không gắn lớp (thanh toán gói hội viên): khi đó không có tên lớp và trạng thái ghi danh.
+    private async Task<RegistrationStatusDto> BuildStatusAsync(Payment payment)
+    {
+        var className = payment.Class?.ClassName ?? "";
+        string? enrollmentStatus = null;
+        if (payment.ClassId is int classId)
+        {
+            enrollmentStatus = await db.ClassEnrollments
+                .AsNoTracking()
+                .Where(item => item.ClassId == classId && item.UserId == payment.UserId)
+                .Select(item => item.Status)
+                .FirstOrDefaultAsync();
+        }
+
+        return ToRegistrationStatusDto(payment, className, enrollmentStatus, StatusMessage(payment.Status, enrollmentStatus, className));
+    }
+
+    private static string StatusMessage(string paymentStatus, string? enrollmentStatus, string className) =>
+        paymentStatus switch
+        {
+            "paid" when enrollmentStatus is "enrolled" or "completed" =>
+                $"Cảm ơn bạn đã thanh toán. Bạn đã được ghi danh vào lớp {className}.",
+            "paid" =>
+                $"AnhDuy Sport đã nhận thanh toán nhưng lớp {className} đã đầy. Chúng tôi sẽ liên hệ để hoàn tiền cho bạn.",
+            "failed" => "Thanh toán không thành công.",
+            _ => "",
+        };
+
+    private static string Shorten(string value, int max) => value.Length > max ? value[..max] : value;
+
     private static bool IsOpenForRegistration(
         string classStatus,
         DateOnly? endDate,
@@ -388,3 +590,4 @@ public class ClassRegistrationFlowService(AppDbContext db)
         && courseStatus == "active"
         && (availableSeats is null || availableSeats > 0);
 }
+
