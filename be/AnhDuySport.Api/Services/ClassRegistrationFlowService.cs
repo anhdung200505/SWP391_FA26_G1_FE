@@ -32,12 +32,8 @@ public class ClassRegistrationFlowService(AppDbContext db)
         }
 
         var today = DateOnly.FromDateTime(DateTime.Now);
-        var sports = await db.Classes
-            .AsNoTracking()
+        var sports = await OpenClasses(today)
             .Where(item => item.Room != null && item.Room.CenterId == id)
-            .Where(item => item.Status == "open" || item.Status == "ongoing")
-            .Where(item => item.EndDate == null || item.EndDate >= today)
-            .Where(item => item.Course!.Status == "active")
             .Select(item => new
             {
                 item.Course!.Sport!.SportId,
@@ -84,12 +80,9 @@ public class ClassRegistrationFlowService(AppDbContext db)
         }
 
         var today = DateOnly.FromDateTime(DateTime.Now);
-        var classes = await db.Classes
-            .AsNoTracking()
+        var holds = LiveHolds();
+        var classes = await OpenClasses(today)
             .Where(item => item.Room != null && item.Room.CenterId == centerKey)
-            .Where(item => item.Status == "open" || item.Status == "ongoing")
-            .Where(item => item.EndDate == null || item.EndDate >= today)
-            .Where(item => item.Course!.Status == "active")
             .Where(item => sportKey == null || item.Course!.SportId == sportKey)
             .OrderBy(item => item.StartDate)
             .ThenBy(item => item.ClassName)
@@ -108,6 +101,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
                 item.EndDate,
                 item.Capacity,
                 EnrolledCount = item.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
+                HeldCount = holds.Count(hold => hold.ClassId == item.ClassId),
                 NextSlot = item.Slots
                     .Where(slot => slot.SlotDate >= today)
                     .OrderBy(slot => slot.SlotDate)
@@ -131,7 +125,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
                 item.EndDate,
                 item.Capacity,
                 item.EnrolledCount,
-                item.Capacity is int capacity ? Math.Max(capacity - item.EnrolledCount, 0) : null,
+                AvailableSeats(item.Capacity, item.EnrolledCount + item.HeldCount),
                 item.Price,
                 item.NextSlot is null
                     ? null
@@ -151,6 +145,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
             throw new KeyNotFoundException("Không tìm thấy lớp học.");
         }
 
+        var holds = LiveHolds();
         var item = await db.Classes
             .AsNoTracking()
             .Where(current => current.ClassId == id)
@@ -175,6 +170,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
                 CoachName = current.Coach!.FullName,
                 current.Capacity,
                 EnrolledCount = current.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
+                HeldCount = holds.Count(hold => hold.ClassId == current.ClassId),
                 Slots = current.Slots
                     .OrderBy(slot => slot.SlotDate)
                     .ThenBy(slot => slot.StartTime)
@@ -185,7 +181,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
             ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
 
         var today = DateOnly.FromDateTime(DateTime.Now);
-        int? availableSeats = item.Capacity is int capacity ? Math.Max(capacity - item.EnrolledCount, 0) : null;
+        var availableSeats = AvailableSeats(item.Capacity, item.EnrolledCount + item.HeldCount);
         var isOpen = IsOpenForRegistration(item.Status, item.EndDate, item.CourseStatus, availableSeats, today);
 
         return new ClassDetailDto(
@@ -219,9 +215,9 @@ public class ClassRegistrationFlowService(AppDbContext db)
                 .ToList());
     }
 
-    public async Task<ClassRegistrationDto> SubmitRegistrationAsync(CreateClassRegistrationRequest request)
+    public async Task<ClassRegistrationDto> SubmitRegistrationAsync(int memberUserId, CreateClassRegistrationRequest request)
     {
-        var member = await FindActiveMemberAsync(request.MemberUserId);
+        var member = await FindActiveMemberAsync(memberUserId);
         if (string.IsNullOrWhiteSpace(member.Phone))
         {
             throw new InvalidOperationException("Hồ sơ chưa có số điện thoại, cần bổ sung trước khi đăng ký.");
@@ -254,7 +250,9 @@ public class ClassRegistrationFlowService(AppDbContext db)
             ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
 
         var today = DateOnly.FromDateTime(DateTime.Now);
-        int? availableSeats = item.Capacity is int capacity ? Math.Max(capacity - item.EnrolledCount, 0) : null;
+        // Chỗ người khác đang giữ cũng tính là hết chỗ. Chỗ giữ của chính học viên này thì không, để họ nhận lại được đơn cũ.
+        var heldByOthers = await LiveHolds().CountAsync(hold => hold.ClassId == classId && hold.UserId != member.UserId);
+        var availableSeats = AvailableSeats(item.Capacity, item.EnrolledCount + heldByOthers);
         if (!IsOpenForRegistration(item.Status, item.EndDate, item.CourseStatus, availableSeats, today))
         {
             throw new InvalidOperationException("Lớp học không còn nhận đăng ký.");
@@ -292,9 +290,9 @@ public class ClassRegistrationFlowService(AppDbContext db)
     }
 
     // #7: học viên xem trạng thái đơn của mình. Sai chủ đơn và không có đơn cùng trả 404 để không lộ id nào có thật.
-    public async Task<RegistrationStatusDto> SelectRegistrationStatusAsync(string paymentId, string memberUserId)
+    public async Task<RegistrationStatusDto> SelectRegistrationStatusAsync(string paymentId, int memberId)
     {
-        if (!int.TryParse(paymentId, out var id) || !int.TryParse(memberUserId, out var memberId))
+        if (!int.TryParse(paymentId, out var id))
         {
             throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
         }
@@ -450,13 +448,8 @@ public class ClassRegistrationFlowService(AppDbContext db)
         return await BuildStatusAsync(payment);
     }
 
-    private async Task<UserAccount> FindActiveMemberAsync(string memberUserId)
+    private async Task<UserAccount> FindActiveMemberAsync(int id)
     {
-        if (!int.TryParse(memberUserId, out var id))
-        {
-            throw new KeyNotFoundException("Không tìm thấy học viên.");
-        }
-
         var member = await db.UserAccounts
             .Include(user => user.Role)
             .FirstOrDefaultAsync(user => user.UserId == id);
@@ -473,12 +466,11 @@ public class ClassRegistrationFlowService(AppDbContext db)
         return member;
     }
 
+    // Chỉ lấy đơn pending còn hạn giữ chỗ: đơn quá hạn không được trả lại cho học viên.
     private Task<Payment?> FindPendingPaymentAsync(int userId, int classId) =>
-        db.Payments
-            .AsNoTracking()
+        LiveHolds()
             .Include(payment => payment.Invoice)
-            .FirstOrDefaultAsync(payment =>
-                payment.UserId == userId && payment.ClassId == classId && payment.Status == "pending");
+            .FirstOrDefaultAsync(payment => payment.UserId == userId && payment.ClassId == classId);
 
     private async Task<Payment> CreatePendingPaymentAsync(int userId, int classId, string className, decimal tuition)
     {
@@ -490,6 +482,34 @@ public class ClassRegistrationFlowService(AppDbContext db)
         var now = DateTime.Now;
 
         await using var transaction = await db.Database.BeginTransactionAsync();
+
+        // Khóa dòng lớp để hai đăng ký cùng lúc cho chỗ cuối không cùng qua (cùng cách với MarkPaymentPaidAsync).
+        await db.Database
+            .SqlQuery<int>($"SELECT class_id AS [Value] FROM class WITH (UPDLOCK, HOLDLOCK) WHERE class_id = {classId}")
+            .ToListAsync();
+        var capacity = await db.Classes.Where(item => item.ClassId == classId).Select(item => item.Capacity).FirstAsync();
+        var enrolled = await db.ClassEnrollments.CountAsync(item => item.ClassId == classId && item.Status == "enrolled");
+        var heldByOthers = await LiveHolds().CountAsync(hold => hold.ClassId == classId && hold.UserId != userId);
+        if (AvailableSeats(capacity, enrolled + heldByOthers) == 0)
+        {
+            throw new InvalidOperationException("Lớp đã hết chỗ (đang có người giữ chỗ chờ thanh toán). Vui lòng thử lại sau ít phút.");
+        }
+
+        // Đơn pending cũ của chính học viên đã quá hạn giữ chỗ: hủy để chỉ mục UX_payment_pending_per_class cho tạo đơn mới.
+        var holdSince = HoldSince();
+        var expired = await db.Payments
+            .Include(payment => payment.Invoice)
+            .Where(payment => payment.UserId == userId && payment.ClassId == classId && payment.Status == "pending"
+                && payment.Invoice!.IssuedAt <= holdSince)
+            .ToListAsync();
+        foreach (var old in expired)
+        {
+            old.Status = "failed";
+            old.Invoice!.Status = "cancelled";
+        }
+
+        await db.SaveChangesAsync();
+
         var invoice = new Invoice
         {
             UserId = userId,
@@ -510,11 +530,10 @@ public class ClassRegistrationFlowService(AppDbContext db)
         db.Payments.Add(payment);
         await db.SaveChangesAsync();
 
-        var action = $"Đăng ký lớp {className}";
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = userId,
-            Action = action.Length > 100 ? action[..100] : action,
+            Action = Shorten($"Đăng ký lớp {className}", 100),
             EntityName = "payment",
             EntityId = payment.PaymentId,
             Detail = $"Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}",
@@ -578,6 +597,31 @@ public class ClassRegistrationFlowService(AppDbContext db)
         };
 
     private static string Shorten(string value, int max) => value.Length > max ? value[..max] : value;
+
+    // Đơn pending giữ chỗ HoldMinutes phút kể từ lúc phát hành hóa đơn. Khi nối payOS, link phải hết hạn sớm hơn 1-2 phút
+    // (expiredAt = IssuedAt + HoldMinutes - 2) để QR đã hết hạn thì chỗ mới được nhả.
+    private const int HoldMinutes = 15;
+
+    private static DateTime HoldSince() => DateTime.Now.AddMinutes(-HoldMinutes);
+
+    private IQueryable<Payment> LiveHolds()
+    {
+        var since = HoldSince();
+        return db.Payments
+            .AsNoTracking()
+            .Where(payment => payment.ClassId != null && payment.Status == "pending" && payment.Invoice!.IssuedAt > since);
+    }
+
+    private static int? AvailableSeats(int? capacity, int enrolledCount) =>
+        capacity is int total ? Math.Max(total - enrolledCount, 0) : null;
+
+    // Cùng luật với IsOpenForRegistration (chưa tính chỗ trống): đổi một nơi thì đổi cả nơi kia.
+    private IQueryable<TrainingClass> OpenClasses(DateOnly today) =>
+        db.Classes
+            .AsNoTracking()
+            .Where(item => item.Status == "open" || item.Status == "ongoing")
+            .Where(item => item.EndDate == null || item.EndDate >= today)
+            .Where(item => item.Course!.Status == "active");
 
     private static bool IsOpenForRegistration(
         string classStatus,
