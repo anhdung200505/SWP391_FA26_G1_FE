@@ -221,7 +221,18 @@ public class ClassRegistrationFlowService(AppDbContext db)
     public async Task<ClassRegistrationDto> SubmitRegistrationAsync(int memberUserId, CreateClassRegistrationRequest request)
     {
         var member = await FindActiveMemberAsync(memberUserId);
-        if (string.IsNullOrWhiteSpace(member.Phone))
+        if (request.FullName is not null && string.IsNullOrWhiteSpace(request.FullName))
+        {
+            throw new RegistrationException("Họ tên không được để trống.");
+        }
+
+        if (request.DateOfBirth > DateOnly.FromDateTime(DateTime.Now))
+        {
+            throw new RegistrationException("Ngày sinh không hợp lệ.");
+        }
+
+        // Số điện thoại gửi lên thay số trong hồ sơ; hồ sơ thiếu và không gửi thì không đăng ký được.
+        if (string.IsNullOrWhiteSpace(request.Phone) && string.IsNullOrWhiteSpace(member.Phone))
         {
             throw new RegistrationException("Hồ sơ chưa có số điện thoại, cần bổ sung trước khi đăng ký.");
         }
@@ -281,7 +292,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
 
         try
         {
-            var created = await CreatePendingPaymentAsync(member.UserId, classId, item.ClassName, item.Tuition);
+            var created = await CreatePendingPaymentAsync(member, request, classId, item.ClassName, item.Tuition);
             return ToRegistrationDto(created, item.ClassName, false);
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
@@ -481,8 +492,9 @@ public class ClassRegistrationFlowService(AppDbContext db)
             .Include(payment => payment.Invoice)
             .FirstOrDefaultAsync(payment => payment.UserId == userId && payment.ClassId == classId);
 
-    private async Task<Payment> CreatePendingPaymentAsync(int userId, int classId, string className, decimal tuition)
+    private async Task<Payment> CreatePendingPaymentAsync(UserAccount member, CreateClassRegistrationRequest request, int classId, string className, decimal tuition)
     {
+        var userId = member.UserId;
         // Số lấy từ SEQUENCE nên hai đơn tạo cùng lúc không bao giờ trùng mã.
         // ToListAsync (không SingleAsync) để EF không bọc câu lệnh thành truy vấn con.
         var number = (await db.Database
@@ -515,6 +527,20 @@ public class ClassRegistrationFlowService(AppDbContext db)
         {
             old.Status = "failed";
             old.Invoice!.Status = "cancelled";
+        }
+
+        var changedFields = ApplyProfile(member, request);
+        if (changedFields.Count > 0)
+        {
+            db.ActivityLogs.Add(new ActivityLog
+            {
+                ActorUserId = userId,
+                Action = "Cập nhật hồ sơ khi đăng ký lớp",
+                EntityName = "user",
+                EntityId = userId,
+                Detail = $"Đã đổi: {string.Join(", ", changedFields)}",
+                CreatedAt = now,
+            });
         }
 
         await db.SaveChangesAsync();
@@ -604,6 +630,39 @@ public class ClassRegistrationFlowService(AppDbContext db)
             "failed" => "Thanh toán không thành công.",
             _ => "",
         };
+
+    // Ghi đè hồ sơ bằng các trường học viên gửi lên; trả tên các trường thực sự thay đổi.
+    private static List<string> ApplyProfile(UserAccount member, CreateClassRegistrationRequest request)
+    {
+        var changed = new List<string>();
+        var fullName = request.FullName?.Trim();
+        if (fullName is not null && fullName != member.FullName)
+        {
+            member.FullName = fullName;
+            changed.Add("họ tên");
+        }
+
+        var phone = request.Phone?.Trim();
+        if (!string.IsNullOrEmpty(phone) && phone != member.Phone)
+        {
+            member.Phone = phone;
+            changed.Add("số điện thoại");
+        }
+
+        if (request.DateOfBirth is { } dateOfBirth && dateOfBirth != member.DateOfBirth)
+        {
+            member.DateOfBirth = dateOfBirth;
+            changed.Add("ngày sinh");
+        }
+
+        if (request.Gender is not null && request.Gender != member.Gender)
+        {
+            member.Gender = request.Gender;
+            changed.Add("giới tính");
+        }
+
+        return changed;
+    }
 
     private static string Shorten(string value, int max) => value.Length > max ? value[..max] : value;
 

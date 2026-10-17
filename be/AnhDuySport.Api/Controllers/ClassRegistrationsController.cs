@@ -13,7 +13,7 @@ public class ClassRegistrationsController(ClassRegistrationFlowService registrat
 {
     [HttpPost]
     [EndpointSummary("Học viên đăng ký lớp học theo nhóm")]
-    [EndpointDescription("Học viên lấy từ token đăng nhập. Học viên cần có số điện thoại và email. Tạo hóa đơn và thanh toán ở trạng thái pending; nếu đã có đơn pending cho lớp này thì trả lại đơn cũ (isExisting = true).")]
+    [EndpointDescription("Học viên lấy từ token đăng nhập. Có thể gửi kèm fullName, phone, dateOfBirth, gender để ghi đè hồ sơ (gender: Nam, Nữ, Khác). Hồ sơ cần có số điện thoại (gửi phone hoặc đã có sẵn) và email. Tạo hóa đơn và thanh toán ở trạng thái pending; nếu đã có đơn pending cho lớp này thì trả lại đơn cũ (isExisting = true).")]
     public async Task<ActionResult<ClassRegistrationDto>> Submit(CreateClassRegistrationRequest request) =>
         Ok(await registrations.SubmitRegistrationAsync(actor.UserId, request));
 
