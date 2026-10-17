@@ -28,4 +28,29 @@ public class ClassRegistrationsController(ClassRegistrationFlowService registrat
             return BadRequest(new { message = exception.Message });
         }
     }
+
+    [AllowAnonymous]
+    [HttpGet("{paymentId}")]
+    [EndpointSummary("Học viên xem trạng thái đơn đăng ký")]
+    [EndpointDescription("Chưa có đăng nhập cho học viên nên truyền memberUserId. Chỉ trả đơn của đúng học viên đó, ngược lại trả 404. Message có lời cảm ơn khi đã thanh toán.")]
+    public async Task<ActionResult<RegistrationStatusDto>> SelectStatus(string paymentId, [FromQuery] string? memberUserId)
+    {
+        if (string.IsNullOrWhiteSpace(memberUserId))
+        {
+            return BadRequest(new { message = "Cần memberUserId." });
+        }
+
+        try
+        {
+            return Ok(await registrations.SelectRegistrationStatusAsync(paymentId, memberUserId));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
 }
