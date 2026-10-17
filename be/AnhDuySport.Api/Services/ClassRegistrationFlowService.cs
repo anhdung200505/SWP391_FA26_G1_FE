@@ -221,7 +221,14 @@ public class ClassRegistrationFlowService(AppDbContext db)
 
     public async Task<ClassRegistrationDto> SubmitRegistrationAsync(CreateClassRegistrationRequest request)
     {
-        var member = await FindActiveMemberAsync(request.MemberUserId);
+        var result = await GetOrCreatePendingPaymentAsync(request.MemberUserId, request.ClassId);
+        return ToRegistrationDto(result.Payment, result.ClassName, result.IsExisting);
+    }
+
+    // Dùng chung cho đăng ký tại quầy (#5) và thanh toán online (payOS): kiểm tra rồi tạo hoặc lấy lại đơn pending.
+    public async Task<PendingPaymentResult> GetOrCreatePendingPaymentAsync(string memberUserId, string classIdText)
+    {
+        var member = await FindActiveMemberAsync(memberUserId);
         if (string.IsNullOrWhiteSpace(member.Phone))
         {
             throw new InvalidOperationException("Hồ sơ chưa có số điện thoại, cần bổ sung trước khi đăng ký.");
@@ -232,7 +239,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
             throw new InvalidOperationException("Hồ sơ chưa có email, cần bổ sung trước khi đăng ký.");
         }
 
-        if (!int.TryParse(request.ClassId, out var classId))
+        if (!int.TryParse(classIdText, out var classId))
         {
             throw new KeyNotFoundException("Không tìm thấy lớp học.");
         }
@@ -269,13 +276,13 @@ public class ClassRegistrationFlowService(AppDbContext db)
         var pending = await FindPendingPaymentAsync(member.UserId, classId);
         if (pending is not null)
         {
-            return ToRegistrationDto(pending, item.ClassName, true);
+            return new PendingPaymentResult(pending, item.ClassName, true);
         }
 
         try
         {
             var created = await CreatePendingPaymentAsync(member.UserId, classId, item.ClassName, item.Tuition);
-            return ToRegistrationDto(created, item.ClassName, false);
+            return new PendingPaymentResult(created, item.ClassName, false);
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
         {
@@ -287,7 +294,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
                 throw;
             }
 
-            return ToRegistrationDto(existing, item.ClassName, true);
+            return new PendingPaymentResult(existing, item.ClassName, true);
         }
     }
 
@@ -388,3 +395,5 @@ public class ClassRegistrationFlowService(AppDbContext db)
         && courseStatus == "active"
         && (availableSeats is null || availableSeats > 0);
 }
+
+public sealed record PendingPaymentResult(Payment Payment, string ClassName, bool IsExisting);

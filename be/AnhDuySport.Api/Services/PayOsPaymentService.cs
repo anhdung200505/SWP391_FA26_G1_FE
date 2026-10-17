@@ -1,9 +1,7 @@
-using System.Data;
 using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Data;
 using AnhDuySport.Api.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using PayOS;
 using PayOS.Exceptions;
 using PayOS.Models.V2.PaymentRequests;
@@ -11,50 +9,32 @@ using PayOS.Models.Webhooks;
 
 namespace AnhDuySport.Api.Services;
 
-public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfiguration configuration)
+public class PayOsPaymentService(
+    AppDbContext db,
+    PayOSClient payOs,
+    IConfiguration configuration,
+    ClassRegistrationFlowService registrations)
 {
-    private const int CheckoutAmount = 10_000;
     public async Task<PayOsPaymentDto> CreateAsync(CreatePayOsPaymentRequest request)
     {
-        var member = await FindActiveMemberAsync(request.MemberUserId);
-        var trainingClass = await FindPayableClassAsync(request.ClassId);
+        // Kiểm tra và tạo đơn pending dùng chung với đăng ký tại quầy; ở đây chỉ thêm link payOS.
+        var pending = await registrations.GetOrCreatePendingPaymentAsync(request.MemberUserId, request.ClassId);
 
-        var alreadyPaid = await db.Payments.AnyAsync(item =>
-            item.UserId == member.UserId && item.ClassId == trainingClass.ClassId && item.Status == "paid");
-        if (alreadyPaid)
-        {
-            throw new InvalidOperationException("Học viên đã thanh toán lớp này.");
-        }
-
-        var enrolled = await db.ClassEnrollments.AnyAsync(item =>
-            item.UserId == member.UserId && item.ClassId == trainingClass.ClassId && item.Status == "enrolled");
-        if (enrolled)
-        {
-            throw new InvalidOperationException("Học viên đã ghi danh lớp này.");
-        }
-
-        var pending = await db.Payments
+        // Đơn có thể không được theo dõi (lấy lại đơn cũ), nạp lại để cập nhật link.
+        var payment = await db.Payments
             .Include(item => item.Invoice)
-            .FirstOrDefaultAsync(item =>
-                item.UserId == member.UserId && item.ClassId == trainingClass.ClassId && item.Status == "pending");
-        if (pending is not null && pending.Amount != CheckoutAmount)
+            .FirstAsync(item => item.PaymentId == pending.Payment.PaymentId);
+        if (payment.PayosOrderCode is null)
         {
-            await RetirePendingAsync(pending);
-            pending = null;
+            payment.PayosOrderCode = payment.PaymentId;
+            await db.SaveChangesAsync();
         }
 
-        if (pending is not null)
+        if (string.IsNullOrWhiteSpace(payment.CheckoutUrl))
         {
-            if (string.IsNullOrWhiteSpace(pending.CheckoutUrl))
-            {
-                await CreateLinkAsync(pending, pending.Invoice?.InvoiceCode ?? "");
-            }
-
-            return ToDto(pending);
+            await CreateLinkAsync(payment, payment.Invoice?.InvoiceCode ?? "");
         }
 
-        var payment = await CreatePendingPaymentAsync(member, trainingClass);
-        await CreateLinkAsync(payment, payment.Invoice?.InvoiceCode ?? "");
         return ToDto(payment);
     }
 
@@ -185,70 +165,18 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         await db.SaveChangesAsync();
     }
 
-    private async Task RetirePendingAsync(Payment payment)
-    {
-        if (payment.PayosOrderCode is long orderCode)
-        {
-            try
-            {
-                await payOs.PaymentRequests.CancelAsync(orderCode, "Đổi số tiền thử nghiệm");
-            }
-            catch (ApiException)
-            {
-            }
-        }
-
-        payment.Status = "failed";
-        if (payment.Invoice is not null)
-        {
-            payment.Invoice.Status = "cancelled";
-        }
-
-        await db.SaveChangesAsync();
-    }
-
-    private async Task<Payment> CreatePendingPaymentAsync(UserAccount member, PayableClass trainingClass)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync();
-        var invoice = new Invoice
-        {
-            UserId = member.UserId,
-            InvoiceCode = await NextInvoiceCodeAsync(),
-            IssuedAt = DateTime.Now,
-            TotalAmount = CheckoutAmount,
-            Status = "issued",
-        };
-        var payment = new Payment
-        {
-            UserId = member.UserId,
-            ClassId = trainingClass.ClassId,
-            Amount = CheckoutAmount,
-            PaymentMethod = "payos",
-            Status = "pending",
-            Invoice = invoice,
-        };
-        db.Payments.Add(payment);
-        await db.SaveChangesAsync();
-        payment.PayosOrderCode = payment.PaymentId;
-        db.ActivityLogs.Add(new ActivityLog
-        {
-            ActorUserId = member.UserId,
-            Action = "Tạo link thanh toán payOS",
-            EntityName = "payment",
-            EntityId = payment.PaymentId,
-            Detail = $"{invoice.InvoiceCode} / {trainingClass.ClassName}",
-            CreatedAt = DateTime.Now,
-        });
-        await db.SaveChangesAsync();
-        await transaction.CommitAsync();
-        return payment;
-    }
-
     private async Task CreateLinkAsync(Payment payment, string invoiceCode)
     {
         if (payment.PayosOrderCode is not long orderCode)
         {
             throw new InvalidOperationException("Đơn thanh toán chưa có mã payOS.");
+        }
+
+        // payOS chỉ nhận số tiền nguyên từ 2.000đ. Kiểm tra trước khi gọi để đơn pending không bị hủy oan.
+        var amount = payment.Amount;
+        if (amount < 2000 || amount != decimal.Truncate(amount) || amount > int.MaxValue)
+        {
+            throw new InvalidOperationException("Học phí không hợp lệ để tạo link payOS.");
         }
 
         var description = invoiceCode.Length <= 25 ? invoiceCode : invoiceCode[..25];
@@ -257,7 +185,7 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             var link = await payOs.PaymentRequests.CreateAsync(new CreatePaymentLinkRequest
             {
                 OrderCode = orderCode,
-                Amount = decimal.ToInt32(payment.Amount),
+                Amount = decimal.ToInt32(amount),
                 Description = description,
                 ReturnUrl = RequireUrl("PayOS:ReturnUrl"),
                 CancelUrl = RequireUrl("PayOS:CancelUrl"),
@@ -281,21 +209,6 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         }
     }
 
-    private async Task<string> NextInvoiceCodeAsync()
-    {
-        var connection = db.Database.GetDbConnection();
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync();
-        }
-
-        await using var command = connection.CreateCommand();
-        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
-        command.CommandText = "SELECT NEXT VALUE FOR dbo.invoice_code_seq";
-        var value = Convert.ToInt32(await command.ExecuteScalarAsync());
-        return $"INV-{DateTime.Now.Year}-{value:D4}";
-    }
-
     private string RequireUrl(string key)
     {
         var url = configuration[key];
@@ -307,72 +220,6 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         return url;
     }
 
-    private async Task<PayableClass> FindPayableClassAsync(string classId)
-    {
-        if (!int.TryParse(classId, out var id))
-        {
-            throw new KeyNotFoundException("Không tìm thấy lớp học.");
-        }
-
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        var item = await db.Classes
-            .AsNoTracking()
-            .Where(current => current.ClassId == id)
-            .Select(current => new
-            {
-                current.ClassId,
-                current.ClassName,
-                current.Status,
-                current.EndDate,
-                current.Capacity,
-                CourseStatus = current.Course!.Status,
-                Price = current.Course.Price,
-                EnrolledCount = current.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
-            })
-            .FirstOrDefaultAsync()
-            ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
-
-        int? seats = item.Capacity is int capacity ? capacity - item.EnrolledCount : null;
-        var isOpen = item.Status is "open" or "ongoing"
-            && (item.EndDate is null || item.EndDate >= today)
-            && item.CourseStatus == "active"
-            && (seats is null || seats > 0);
-        if (!isOpen)
-        {
-            throw new InvalidOperationException("Lớp không còn mở để thanh toán.");
-        }
-
-        if (item.Price < 2000 || item.Price != decimal.Truncate(item.Price) || item.Price > int.MaxValue)
-        {
-            throw new InvalidOperationException("Học phí không hợp lệ để tạo link payOS.");
-        }
-
-        return new PayableClass(item.ClassId, item.ClassName, item.Price);
-    }
-
-    private async Task<UserAccount> FindActiveMemberAsync(string memberUserId)
-    {
-        if (!int.TryParse(memberUserId, out var id))
-        {
-            throw new KeyNotFoundException("Không tìm thấy học viên.");
-        }
-
-        var member = await db.UserAccounts
-            .Include(user => user.Role)
-            .FirstOrDefaultAsync(user => user.UserId == id);
-        if (member is null || member.Role?.RoleCode != "MEMBER")
-        {
-            throw new KeyNotFoundException("Không tìm thấy học viên.");
-        }
-
-        if (member.Status != "active")
-        {
-            throw new InvalidOperationException("Tài khoản học viên không hoạt động.");
-        }
-
-        return member;
-    }
-
     private static PayOsPaymentDto ToDto(Payment payment) =>
         new(
             payment.PaymentId.ToString(),
@@ -382,6 +229,4 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             payment.Status,
             decimal.ToInt32(payment.Amount),
             payment.CheckoutUrl);
-
-    private sealed record PayableClass(int ClassId, string ClassName, decimal Amount);
 }
