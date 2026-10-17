@@ -59,7 +59,7 @@ public sealed record ClassDetailDto(
     bool IsOpenForRegistration,
     IReadOnlyList<ClassSlotDto> Slots);
 
-public sealed record CreateClassRegistrationRequest(string MemberUserId, string ClassId);
+public sealed record CreateClassRegistrationRequest(string ClassId);
 
 public sealed record ClassRegistrationDto(
     string PaymentId,
