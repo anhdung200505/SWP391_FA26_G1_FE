@@ -5,52 +5,21 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnhDuySport.Api.Controllers;
 
+[Authorize(Roles = "MEMBER")]
 [ApiController]
+[FlowErrors]
 [Route("api/class-registrations")]
-public class ClassRegistrationsController(ClassRegistrationFlowService registrations) : ControllerBase
+public class ClassRegistrationsController(ClassRegistrationFlowService registrations, CurrentActor actor) : ControllerBase
 {
-    [AllowAnonymous]
     [HttpPost]
     [EndpointSummary("Học viên đăng ký lớp học theo nhóm")]
-    [EndpointDescription("Chưa có đăng nhập cho học viên nên truyền memberUserId. Học viên cần có số điện thoại và email. Tạo hóa đơn và thanh toán ở trạng thái pending; nếu đã có đơn pending cho lớp này thì trả lại đơn cũ (isExisting = true).")]
-    public async Task<ActionResult<ClassRegistrationDto>> Submit(CreateClassRegistrationRequest request)
-    {
-        try
-        {
-            return Ok(await registrations.SubmitRegistrationAsync(request));
-        }
-        catch (KeyNotFoundException exception)
-        {
-            return NotFound(new { message = exception.Message });
-        }
-        catch (InvalidOperationException exception)
-        {
-            return BadRequest(new { message = exception.Message });
-        }
-    }
+    [EndpointDescription("Học viên lấy từ token đăng nhập. Học viên cần có số điện thoại và email. Tạo hóa đơn và thanh toán ở trạng thái pending; nếu đã có đơn pending cho lớp này thì trả lại đơn cũ (isExisting = true).")]
+    public async Task<ActionResult<ClassRegistrationDto>> Submit(CreateClassRegistrationRequest request) =>
+        Ok(await registrations.SubmitRegistrationAsync(actor.UserId, request));
 
-    [AllowAnonymous]
     [HttpGet("{paymentId}")]
     [EndpointSummary("Học viên xem trạng thái đơn đăng ký")]
-    [EndpointDescription("Chưa có đăng nhập cho học viên nên truyền memberUserId. Chỉ trả đơn của đúng học viên đó, ngược lại trả 404. Message có lời cảm ơn khi đã thanh toán.")]
-    public async Task<ActionResult<RegistrationStatusDto>> SelectStatus(string paymentId, [FromQuery] string? memberUserId)
-    {
-        if (string.IsNullOrWhiteSpace(memberUserId))
-        {
-            return BadRequest(new { message = "Cần memberUserId." });
-        }
-
-        try
-        {
-            return Ok(await registrations.SelectRegistrationStatusAsync(paymentId, memberUserId));
-        }
-        catch (KeyNotFoundException exception)
-        {
-            return NotFound(new { message = exception.Message });
-        }
-        catch (InvalidOperationException exception)
-        {
-            return BadRequest(new { message = exception.Message });
-        }
-    }
+    [EndpointDescription("Chỉ trả đơn của chính học viên đang đăng nhập, ngược lại trả 404. Message có lời cảm ơn khi đã thanh toán.")]
+    public async Task<ActionResult<RegistrationStatusDto>> SelectStatus(string paymentId) =>
+        Ok(await registrations.SelectRegistrationStatusAsync(paymentId, actor.UserId));
 }
