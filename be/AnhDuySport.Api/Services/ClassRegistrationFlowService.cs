@@ -6,6 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
 
+// Lỗi nghiệp vụ (trả 400). InvalidOperationException của .NET/EF vẫn ra 500.
+public sealed class RegistrationException(string message) : InvalidOperationException(message);
+
 public class ClassRegistrationFlowService(AppDbContext db)
 {
     public async Task<IReadOnlyList<CenterDto>> AccessCentersAsync()
@@ -60,7 +63,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
     {
         if (string.IsNullOrWhiteSpace(centerId))
         {
-            throw new InvalidOperationException("Cần chọn trung tâm.");
+            throw new RegistrationException("Cần chọn trung tâm.");
         }
 
         if (!int.TryParse(centerId, out var centerKey) || !await db.Centers.AnyAsync(center => center.CenterId == centerKey))
@@ -220,12 +223,12 @@ public class ClassRegistrationFlowService(AppDbContext db)
         var member = await FindActiveMemberAsync(memberUserId);
         if (string.IsNullOrWhiteSpace(member.Phone))
         {
-            throw new InvalidOperationException("Hồ sơ chưa có số điện thoại, cần bổ sung trước khi đăng ký.");
+            throw new RegistrationException("Hồ sơ chưa có số điện thoại, cần bổ sung trước khi đăng ký.");
         }
 
         if (string.IsNullOrWhiteSpace(member.Email))
         {
-            throw new InvalidOperationException("Hồ sơ chưa có email, cần bổ sung trước khi đăng ký.");
+            throw new RegistrationException("Hồ sơ chưa có email, cần bổ sung trước khi đăng ký.");
         }
 
         if (!int.TryParse(request.ClassId, out var classId))
@@ -249,25 +252,31 @@ public class ClassRegistrationFlowService(AppDbContext db)
             .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
 
+        if (await db.ClassEnrollments.AnyAsync(enrollment =>
+                enrollment.ClassId == classId && enrollment.UserId == member.UserId && enrollment.Status == "enrolled"))
+        {
+            throw new RegistrationException("Bạn đã đăng ký lớp học này.");
+        }
+
         var today = DateOnly.FromDateTime(DateTime.Now);
         // Chỗ người khác đang giữ cũng tính là hết chỗ. Chỗ giữ của chính học viên này thì không, để họ nhận lại được đơn cũ.
         var heldByOthers = await LiveHolds().CountAsync(hold => hold.ClassId == classId && hold.UserId != member.UserId);
         var availableSeats = AvailableSeats(item.Capacity, item.EnrolledCount + heldByOthers);
         if (!IsOpenForRegistration(item.Status, item.EndDate, item.CourseStatus, availableSeats, today))
         {
-            throw new InvalidOperationException("Lớp học không còn nhận đăng ký.");
-        }
-
-        if (await db.ClassEnrollments.AnyAsync(enrollment =>
-                enrollment.ClassId == classId && enrollment.UserId == member.UserId && enrollment.Status == "enrolled"))
-        {
-            throw new InvalidOperationException("Bạn đã đăng ký lớp học này.");
+            throw new RegistrationException("Lớp học không còn nhận đăng ký.");
         }
 
         var pending = await FindPendingPaymentAsync(member.UserId, classId);
         if (pending is not null)
         {
             return ToRegistrationDto(pending, item.ClassName, true);
+        }
+
+        // shortcut: giới hạn mềm, hai request cùng lúc ở hai lớp khác nhau có thể vượt 1 đơn; đủ cho chặn spam giữ chỗ.
+        if (await LiveHolds().CountAsync(hold => hold.UserId == member.UserId) >= MaxHoldsPerMember)
+        {
+            throw new RegistrationException($"Bạn đang giữ chỗ ở {MaxHoldsPerMember} lớp. Hãy thanh toán hoặc đợi hết hạn giữ chỗ trước khi đăng ký thêm.");
         }
 
         try
@@ -319,7 +328,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
 
         if (payment.Status == "refunded")
         {
-            throw new InvalidOperationException("Đơn thanh toán đã được hoàn tiền.");
+            throw new RegistrationException("Đơn thanh toán đã được hoàn tiền.");
         }
 
         if (payment.Status == "paid")
@@ -422,7 +431,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
 
         if (payment.Status is "paid" or "refunded")
         {
-            throw new InvalidOperationException("Đơn thanh toán đã hoàn tất, không thể đánh dấu thất bại.");
+            throw new RegistrationException("Đơn thanh toán đã hoàn tất, không thể đánh dấu thất bại.");
         }
 
         if (payment.Status == "pending")
@@ -460,7 +469,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
 
         if (member.Status != "active")
         {
-            throw new InvalidOperationException("Tài khoản học viên không hoạt động.");
+            throw new RegistrationException("Tài khoản học viên không hoạt động.");
         }
 
         return member;
@@ -492,7 +501,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
         var heldByOthers = await LiveHolds().CountAsync(hold => hold.ClassId == classId && hold.UserId != userId);
         if (AvailableSeats(capacity, enrolled + heldByOthers) == 0)
         {
-            throw new InvalidOperationException("Lớp đã hết chỗ (đang có người giữ chỗ chờ thanh toán). Vui lòng thử lại sau ít phút.");
+            throw new RegistrationException("Lớp đã hết chỗ (đang có người giữ chỗ chờ thanh toán). Vui lòng thử lại sau ít phút.");
         }
 
         // Đơn pending cũ của chính học viên đã quá hạn giữ chỗ: hủy để chỉ mục UX_payment_pending_per_class cho tạo đơn mới.
@@ -601,6 +610,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
     // Đơn pending giữ chỗ HoldMinutes phút kể từ lúc phát hành hóa đơn. Khi nối payOS, link phải hết hạn sớm hơn 1-2 phút
     // (expiredAt = IssuedAt + HoldMinutes - 2) để QR đã hết hạn thì chỗ mới được nhả.
     private const int HoldMinutes = 15;
+    private const int MaxHoldsPerMember = 3;
 
     private static DateTime HoldSince() => DateTime.Now.AddMinutes(-HoldMinutes);
 
