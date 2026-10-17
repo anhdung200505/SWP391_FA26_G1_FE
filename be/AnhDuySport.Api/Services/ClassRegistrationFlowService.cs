@@ -609,7 +609,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
 
     // Đơn pending giữ chỗ HoldMinutes phút kể từ lúc phát hành hóa đơn. Khi nối payOS, link phải hết hạn sớm hơn 1-2 phút
     // (expiredAt = IssuedAt + HoldMinutes - 2) để QR đã hết hạn thì chỗ mới được nhả.
-    private const int HoldMinutes = 15;
+    private const int HoldMinutes = 10;
     private const int MaxHoldsPerMember = 3;
 
     private static DateTime HoldSince() => DateTime.Now.AddMinutes(-HoldMinutes);
