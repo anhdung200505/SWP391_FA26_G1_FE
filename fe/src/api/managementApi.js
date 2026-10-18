@@ -56,6 +56,11 @@ export function getDashboard() {
   return request('/management/dashboard');
 }
 
+export function getUserAccounts(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/user-accounts${query ? `?${query}` : ''}`);
+}
+
 export function updateUserRole(userId, roleId) {
   return request(`/user-accounts/${userId}/role`, {
     method: 'PUT',
