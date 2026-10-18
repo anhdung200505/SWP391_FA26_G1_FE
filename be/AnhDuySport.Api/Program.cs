@@ -29,9 +29,8 @@ builder.Services.AddScoped<MembershipPackageFlowService>();
 builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<SlotFlowService>();
+builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
-builder.Services.AddScoped<MemberProfileFlowService>();
-builder.Services.AddScoped<MembershipRenewalFlowService>();
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
