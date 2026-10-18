@@ -5,24 +5,20 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnhDuySport.Api.Controllers;
 
-// Lane "Member" của main flow User Information Edit & Membership Renewal.
-// Học viên lấy JWT từ POST /api/auth/login (Access System); id học viên đọc từ token, không truyền qua URL.
-// Nhánh Need Consultation? = Yes dùng POST /api/support-requests có sẵn (requestType = consultation).
-[Authorize(Roles = "MEMBER")]
+// Main flow: User Information Edit & Membership Renewal.
+// Dùng memberUserId có sẵn trong bảng user vì học viên chưa đăng nhập được (giống SlotsController).
+[AllowAnonymous]
 [ApiController]
-[Route("api/members/me")]
-public class MemberMembershipController(
-    MemberProfileFlowService profiles,
-    MembershipRenewalFlowService renewals) : ControllerBase
+[Route("api/members/{memberUserId}")]
+public class MemberMembershipController(MemberMembershipFlowService flow) : ControllerBase
 {
-    [HttpGet]
-    [EndpointSummary("Access System")]
-    [EndpointDescription("Trả hồ sơ học viên để chọn thao tác: Edit personal information hoặc Renew/Upgrade Package.")]
-    public async Task<ActionResult<MemberProfileDto>> AccessSystem()
+    [HttpGet("profile")]
+    [EndpointSummary("Access System: xem hồ sơ học viên")]
+    public async Task<ActionResult<MemberProfileDto>> AccessSystem(string memberUserId)
     {
         try
         {
-            return Ok(await profiles.AccessSystemAsync());
+            return Ok(await flow.AccessSystemAsync(memberUserId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -31,13 +27,13 @@ public class MemberMembershipController(
     }
 
     [HttpPut("profile")]
-    [EndpointSummary("Edit personal information → Input changes")]
-    [EndpointDescription("Hệ thống validate rồi cập nhật database, trả thông báo thành công và hồ sơ mới.")]
-    public async Task<ActionResult<MemberProfileMutationResponse>> InputChanges(UpdateMemberProfileRequest request)
+    [EndpointSummary("Edit personal information: học viên sửa thông tin cá nhân")]
+    [EndpointDescription("gender: Nam, Nữ hoặc Khác. Hệ thống kiểm tra rồi cập nhật database và ghi nhật ký.")]
+    public async Task<ActionResult<MemberProfileMutationResponse>> InputChanges(string memberUserId, UpdateMemberProfileRequest request)
     {
         try
         {
-            return Ok(await profiles.InputChangesAsync(request));
+            return Ok(await flow.InputChangesAsync(memberUserId, request));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -46,13 +42,26 @@ public class MemberMembershipController(
     }
 
     [HttpGet("membership")]
-    [EndpointSummary("View membership management")]
-    [EndpointDescription("Gói đang dùng, ngày hết hạn, lịch sử mua gói và danh sách gói đang bán.")]
-    public async Task<ActionResult<MembershipManagementDto>> ViewMembershipManagement()
+    [EndpointSummary("View membership management: gói đang dùng, lịch sử và các gói đang bán")]
+    public async Task<ActionResult<MembershipManagementDto>> ViewMembershipManagement(string memberUserId)
     {
         try
         {
-            return Ok(await renewals.ViewMembershipManagementAsync());
+            return Ok(await flow.ViewMembershipManagementAsync(memberUserId));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
+    [HttpGet("consultation-contact")]
+    [EndpointSummary("Need Consultation? = Yes: hiển thị số chăm sóc khách hàng của trung tâm")]
+    public async Task<ActionResult<ConsultationContactDto>> AccessConsultationContact(string memberUserId)
+    {
+        try
+        {
+            return Ok(await flow.AccessConsultationContactAsync(memberUserId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -61,13 +70,13 @@ public class MemberMembershipController(
     }
 
     [HttpPost("membership/renewals")]
-    [EndpointSummary("Need Consultation? = No → Select Membership Package")]
+    [EndpointSummary("Select Membership Package: chọn gói và thanh toán")]
     [EndpointDescription("paymentMethod: chuyen_khoan hoặc the. Hệ thống Process Payment → Update Membership Expiry → Validate & Update database.")]
-    public async Task<ActionResult<MembershipRenewalResponse>> SelectMembershipPackage(RenewMembershipRequest request)
+    public async Task<ActionResult<MembershipRenewalResponse>> SelectMembershipPackage(string memberUserId, RenewMembershipRequest request)
     {
         try
         {
-            return Ok(await renewals.SelectMembershipPackageAsync(request));
+            return Ok(await flow.SelectMembershipPackageAsync(memberUserId, request));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -81,7 +90,6 @@ public class MemberMembershipController(
         {
             KeyNotFoundException keyNotFound => NotFound(new { message = keyNotFound.Message }),
             InvalidOperationException invalid => BadRequest(new { message = invalid.Message }),
-            UnauthorizedAccessException unauthorized => Unauthorized(new { message = unauthorized.Message }),
             _ => null,
         };
         return result is not null;
