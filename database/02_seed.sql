@@ -149,20 +149,32 @@ INNER JOIN course AS c ON c.course_code = v.course_code
 INNER JOIN class AS cl ON cl.course_id = c.course_id
 INNER JOIN [user] AS u ON u.email = v.email;
 
-INSERT INTO slot (class_id, room_id, slot_date, start_time, end_time, title)
-SELECT cl.class_id, cl.room_id, DATEADD(DAY, 2, CAST(GETDATE() AS DATE)), v.start_time, v.end_time, v.title
+INSERT INTO slot (class_id, room_id, slot_date, start_time, end_time, title, registration_limit)
+SELECT cl.class_id, cl.room_id, DATEADD(DAY, 2, CAST(GETDATE() AS DATE)), v.start_time, v.end_time, v.title, v.registration_limit
 FROM (VALUES
-    (N'SWIM-01', CAST('07:00' AS TIME), CAST('08:00' AS TIME), N'Làm quen nước và thở'),
-    (N'TT-01',   CAST('16:00' AS TIME), CAST('17:30' AS TIME), N'Cầm vợt và giao bóng'),
-    (N'FB-01',   CAST('18:00' AS TIME), CAST('19:30' AS TIME), N'Kỹ thuật dẫn bóng'),
-    (N'BB-01',   CAST('18:30' AS TIME), CAST('20:00' AS TIME), N'Dẫn bóng và ném rổ'),
-    (N'BD-01',   CAST('08:00' AS TIME), CAST('09:30' AS TIME), N'Di chuyển và cầu thuận tay'),
-    (N'GOLF-01', CAST('14:00' AS TIME), CAST('15:30' AS TIME), N'Tư thế swing'),
-    (N'TN-01',   CAST('08:00' AS TIME), CAST('09:30' AS TIME), N'Footwork'),
-    (N'TKD-01',  CAST('18:00' AS TIME), CAST('19:30' AS TIME), N'Tư thế và kỹ thuật căn bản')
-) AS v(course_code, start_time, end_time, title)
+    (N'SWIM-01', CAST('07:00' AS TIME), CAST('08:00' AS TIME), N'Làm quen nước và thở', 10),
+    (N'TT-01',   CAST('16:00' AS TIME), CAST('17:30' AS TIME), N'Cầm vợt và giao bóng', 8),
+    (N'FB-01',   CAST('18:00' AS TIME), CAST('19:30' AS TIME), N'Kỹ thuật dẫn bóng', 16),
+    (N'BB-01',   CAST('18:30' AS TIME), CAST('20:00' AS TIME), N'Dẫn bóng và ném rổ', 12),
+    (N'BD-01',   CAST('08:00' AS TIME), CAST('09:30' AS TIME), N'Di chuyển và cầu thuận tay', 8),
+    (N'GOLF-01', CAST('14:00' AS TIME), CAST('15:30' AS TIME), N'Tư thế swing', 4),
+    (N'TN-01',   CAST('08:00' AS TIME), CAST('09:30' AS TIME), N'Footwork', 4),
+    (N'TKD-01',  CAST('18:00' AS TIME), CAST('19:30' AS TIME), N'Tư thế và kỹ thuật căn bản', 15)
+) AS v(course_code, start_time, end_time, title, registration_limit)
 INNER JOIN course AS c ON c.course_code = v.course_code
 INNER JOIN class AS cl ON cl.course_id = c.course_id;
+
+INSERT INTO slot_registration (slot_id, user_id, status)
+SELECT s.slot_id, u.user_id, N'registered'
+FROM (VALUES
+    (N'SWIM-01', N'khang.nguyen@gmail.com'),
+    (N'BB-01',   N'khang.nguyen@gmail.com'),
+    (N'TKD-01',  N'han.tran@gmail.com')
+) AS v(course_code, email)
+INNER JOIN course AS c ON c.course_code = v.course_code
+INNER JOIN class AS cl ON cl.course_id = c.course_id
+INNER JOIN slot AS s ON s.class_id = cl.class_id
+INNER JOIN [user] AS u ON u.email = v.email;
 
 INSERT INTO assignment (slot_id, title, description, due_at)
 SELECT
