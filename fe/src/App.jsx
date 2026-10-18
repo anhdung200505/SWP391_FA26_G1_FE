@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import FacilitiesPage from './pages/FacilitiesPage';
 import CoachPage from './pages/CoachPage';
 import CoursesPage from './pages/CoursesPage';
+import CourseDetailPage from './pages/CourseDetailPage'; // Import trang chi tiết môn học
 import LoginPage from './pages/LoginPage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
@@ -28,7 +29,11 @@ export default function App() {
             <Route path="/home" element={<HomePage />} />
             <Route path="/co-so-vat-chat" element={<FacilitiesPage />} />
             <Route path="/hlv" element={<CoachPage />} />
+            
+            {/* Trang danh sách khóa học và Trang chi tiết môn học */}
             <Route path="/khoa-hoc" element={<CoursesPage />} />
+            <Route path="/khoa-hoc/:courseSlug" element={<CourseDetailPage />} />
+
             <Route path="/dang-nhap" element={<LoginPage />} />
             <Route path="/quan-ly" element={<Protected><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected><UserAccountListPage /></Protected>} />

@@ -28,6 +28,7 @@ builder.Services.AddScoped<UserAccountFlowService>();
 builder.Services.AddScoped<MembershipPackageFlowService>();
 builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
+builder.Services.AddScoped<SlotFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
 builder.Services.AddScoped<MemberProfileFlowService>();
 builder.Services.AddScoped<MembershipRenewalFlowService>();
