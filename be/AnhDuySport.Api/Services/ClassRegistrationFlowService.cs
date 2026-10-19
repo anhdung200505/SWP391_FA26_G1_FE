@@ -9,7 +9,7 @@ namespace AnhDuySport.Api.Services;
 // Lỗi nghiệp vụ (trả 400). InvalidOperationException của .NET/EF vẫn ra 500.
 public sealed class RegistrationException(string message) : InvalidOperationException(message);
 
-public class ClassRegistrationFlowService(AppDbContext db)
+public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, AuthService auth)
 {
     public async Task<IReadOnlyList<CenterDto>> AccessCentersAsync()
     {
@@ -467,6 +467,161 @@ public class ClassRegistrationFlowService(AppDbContext db)
 
         return await BuildStatusAsync(payment);
     }
+
+    public async Task<RegistrationPaymentResponse> PayAsync(PayRegistrationRequest request)
+    {
+        if (actor.UserId == 0)
+        {
+            throw new UnauthorizedAccessException("Hãy đăng nhập bằng tài khoản khách.");
+        }
+
+        var user = await db.UserAccounts.Include(account => account.Role)
+            .FirstOrDefaultAsync(account => account.UserId == actor.UserId)
+            ?? throw new UnauthorizedAccessException("Hãy đăng nhập bằng tài khoản khách.");
+        if (user.Role?.RoleCode is not "MEMBER")
+        {
+            throw new UnauthorizedAccessException("Chỉ học viên thanh toán học phí tại đây.");
+        }
+
+        var fullName = request.FullName?.Trim() ?? "";
+        var phone = request.Phone?.Trim() ?? "";
+        if (fullName.Length is 0 or > 200)
+        {
+            throw new InvalidOperationException("Nhập họ tên khách hàng.");
+        }
+
+        if (phone.Length is 0 or > 20)
+        {
+            throw new InvalidOperationException("Nhập số điện thoại không quá 20 ký tự.");
+        }
+
+        if (!PaymentMethods.TryGetValue(request.PaymentMethod?.Trim() ?? "", out var methodLabel))
+        {
+            throw new InvalidOperationException("Chọn hình thức thanh toán.");
+        }
+
+        if (!int.TryParse(request.ClassId, out var classId))
+        {
+            throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        }
+
+        var trainingClass = await db.Classes
+            .Include(item => item.Course)
+            .Include(item => item.Room)
+            .Include(item => item.Coach)
+            .Include(item => item.Enrollments)
+            .Include(item => item.Slots)
+            .FirstOrDefaultAsync(item => item.ClassId == classId)
+            ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
+
+        if (!string.IsNullOrWhiteSpace(request.SlotId))
+        {
+            if (!int.TryParse(request.SlotId, out var slotId) || trainingClass.Slots.All(slot => slot.SlotId != slotId))
+            {
+                throw new InvalidOperationException("Khung giờ không thuộc lớp đã chọn.");
+            }
+        }
+        else if (!request.GroupStudy)
+        {
+            throw new InvalidOperationException("Hãy chọn giờ học và huấn luyện viên.");
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var enrolledCount = trainingClass.Enrollments.Count(item => item.Status == "enrolled");
+        var seatsLeft = trainingClass.Capacity is int capacity ? capacity - enrolledCount : int.MaxValue;
+        var isOpen = trainingClass.Status is "open" or "ongoing"
+            && (trainingClass.EndDate is null || trainingClass.EndDate >= today)
+            && trainingClass.Course?.Status == "active"
+            && seatsLeft > 0;
+        if (!isOpen)
+        {
+            throw new InvalidOperationException("Thanh toán chưa thành công vì lớp không còn chỗ. Hãy chọn lớp khác.");
+        }
+
+        if (trainingClass.Enrollments.Any(item => item.UserId == user.UserId && item.Status == "enrolled"))
+        {
+            throw new InvalidOperationException("Bạn đã ghi danh lớp này.");
+        }
+
+        user.FullName = fullName;
+        user.Phone = phone;
+        if (trainingClass.Room is not null)
+        {
+            user.CenterId = trainingClass.Room.CenterId;
+        }
+
+        var now = DateTime.Now;
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var invoice = new Invoice
+        {
+            UserId = user.UserId,
+            InvoiceCode = $"HD{now:yyyyMMddHHmmss}{user.UserId}",
+            IssuedAt = now,
+            TotalAmount = trainingClass.Course?.Price ?? 0,
+            Status = "paid",
+        };
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync();
+
+        var payment = new Payment
+        {
+            InvoiceId = invoice.InvoiceId,
+            UserId = user.UserId,
+            ClassId = trainingClass.ClassId,
+            Amount = invoice.TotalAmount,
+            PaymentMethod = methodLabel,
+            PaidAt = now,
+            Status = "paid",
+        };
+        db.Payments.Add(payment);
+        db.ClassEnrollments.Add(new ClassEnrollment
+        {
+            ClassId = trainingClass.ClassId,
+            UserId = user.UserId,
+            EnrolledAt = now,
+            Status = "enrolled",
+        });
+
+        var thankYou = $"Cảm ơn {user.FullName}. AnhDuy Sport đã nhận học phí lớp {trainingClass.ClassName}.";
+        var commitment = $"Tôi, {user.FullName}, cam kết tham gia đúng lịch lớp {trainingClass.ClassName}, đóng học phí đã thống nhất và tuân thủ nội quy trung tâm AnhDuy Sport.";
+        db.Notifications.Add(new AccountNotification
+        {
+            UserId = user.UserId,
+            Title = "Cảm ơn bạn đã đăng ký lớp",
+            Content = $"{thankYou} {commitment}",
+            IsRead = false,
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = user.UserId,
+            Action = Shorten($"Thanh toán lớp {trainingClass.ClassName}", 100),
+            EntityName = "payment",
+            EntityId = payment.PaymentId,
+            Detail = $"Học viên {user.FullName} thanh toán học phí lớp {trainingClass.ClassName}.",
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        var session = await auth.IssueAsync(user);
+        return new RegistrationPaymentResponse(
+            true,
+            "Thanh toán thành công. Bạn có thể dùng các thao tác còn lại của học viên.",
+            thankYou,
+            commitment,
+            invoice.InvoiceCode,
+            session.Token,
+            session.User);
+    }
+
+    private static readonly Dictionary<string, string> PaymentMethods = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["cash"] = "Tiền mặt",
+        ["transfer"] = "Chuyển khoản",
+        ["card"] = "Thẻ",
+    };
 
     private async Task<UserAccount> FindActiveMemberAsync(int id)
     {

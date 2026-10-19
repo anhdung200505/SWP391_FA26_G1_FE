@@ -21,6 +21,8 @@ var connectionString = builder.Configuration["connectionString"]
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddHostedService<PendingRegistrationCleanupService>();
 builder.Services.AddScoped<CurrentActor>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailNotificationService>();
@@ -99,6 +101,7 @@ app.MapControllers();
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
+    await auth.EnsurePendingRegistrationTableAsync();
     await auth.EnsureBootstrapAdminPasswordAsync();
 }
 
