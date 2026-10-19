@@ -49,6 +49,15 @@ public sealed record UserMutationResponse(UserAccountDto User, ActivityLogDto Lo
 
 public sealed record PackageMutationResponse(PackageDto Package, ActivityLogDto Log);
 
+public sealed class CreateStaffRequest
+{
+    public string FullName { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string? Phone { get; set; }
+    public string Password { get; set; } = "";
+    public string RoleId { get; set; } = "";
+}
+
 public sealed class UpdateRoleRequest
 {
     public string RoleId { get; set; } = "";

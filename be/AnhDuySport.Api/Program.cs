@@ -22,6 +22,8 @@ var connectionString = builder.Configuration["connectionString"]
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddHostedService<PendingRegistrationCleanupService>();
 builder.Services.AddScoped<CurrentActor>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailNotificationService>();
@@ -30,6 +32,7 @@ builder.Services.AddScoped<MembershipPackageFlowService>();
 builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<SlotFlowService>();
+builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
 builder.Services.AddScoped<PayOsPaymentService>();
 
@@ -112,6 +115,7 @@ app.MapControllers();
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
+    await auth.EnsurePendingRegistrationTableAsync();
     await auth.EnsureBootstrapAdminPasswordAsync();
 }
 
