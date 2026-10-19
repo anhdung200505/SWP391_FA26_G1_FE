@@ -30,16 +30,29 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         await db.SaveChangesAsync();
     }
 
-    public Task<LoginResponse> LoginAsync(LoginRequest request) =>
-        SignInAsync(request, [RoleCatalog.AdminCode, "RECEPTIONIST"], "Chỉ quản trị trung tâm và lễ tân đăng nhập được.");
-
-    public Task<LoginResponse> LoginMemberAsync(LoginRequest request) =>
-        SignInAsync(request, ["MEMBER"], "Chỉ học viên đăng nhập được ở đây.");
-
-    private async Task<LoginResponse> SignInAsync(LoginRequest request, string[] allowedRoles, string wrongRoleMessage)
+    public Task<LoginResponse> LoginAsync(LoginRequest request)
     {
-        var email = request.Email?.Trim() ?? "";
-        var password = request.Password ?? "";
+        var portal = request.Portal?.Trim().ToLowerInvariant() ?? "";
+        if (portal == "customer")
+        {
+            return SignInAsync(request.Email, request.Password, ["MEMBER"], "Cửa này dành cho học viên.");
+        }
+
+        if (portal.Length == 0)
+        {
+            return SignInAsync(request.Email, request.Password, [RoleCatalog.AdminCode, "RECEPTIONIST"], "Chỉ quản trị trung tâm và lễ tân đăng nhập được.");
+        }
+
+        return SignInAsync(request.Email, request.Password, [RoleCatalog.AdminCode, "RECEPTIONIST", "COACH"], "Cửa này dành cho quản trị trung tâm, lễ tân và huấn luyện viên.");
+    }
+
+    public Task<LoginResponse> LoginMemberAsync(MemberLoginRequest request) =>
+        SignInAsync(request.Email, request.Password, ["MEMBER"], "Chỉ học viên đăng nhập được ở đây.");
+
+    private async Task<LoginResponse> SignInAsync(string? emailValue, string? passwordValue, string[] allowedRoles, string wrongRoleMessage)
+    {
+        var email = emailValue?.Trim() ?? "";
+        var password = passwordValue ?? "";
         if (email.Length == 0 || password.Length == 0)
         {
             throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng.");
@@ -47,7 +60,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
 
         var user = await db.UserAccounts
             .Include(account => account.Role)
-            .FirstOrDefaultAsync(account => account.Email == email);
+            .FirstOrDefaultAsync(account => account.Email != null && account.Email.ToLower() == email.ToLower());
         if (user is null || !passwords.Verify(password, user.PasswordHash))
         {
             throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng.");
@@ -63,22 +76,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new UnauthorizedAccessException("Tài khoản đã ngưng hoạt động.");
         }
 
-        var portal = request.Portal?.Trim().ToLowerInvariant() ?? "";
-        if (portal == "customer")
-        {
-            if (user.Role?.RoleCode is not "MEMBER")
-            {
-                throw new UnauthorizedAccessException("Cửa này dành cho học viên.");
-            }
-        }
-        else if (portal.Length > 0)
-        {
-            if (user.Role?.RoleCode is not (RoleCatalog.AdminCode or "RECEPTIONIST" or "COACH"))
-            {
-                throw new UnauthorizedAccessException("Cửa này dành cho quản trị trung tâm, lễ tân và huấn luyện viên.");
-            }
-        }
-        else if (user.Role is null || !allowedRoles.Contains(user.Role.RoleCode))
+        if (user.Role is null || !allowedRoles.Contains(user.Role.RoleCode))
         {
             throw new UnauthorizedAccessException(wrongRoleMessage);
         }
