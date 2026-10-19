@@ -11,11 +11,20 @@ public class AuthController(AuthService auth) : ControllerBase
 {
     [AllowAnonymous]
     [HttpPost("login")]
-    public async Task<ActionResult<LoginResponse>> Login(LoginRequest request)
+    [EndpointSummary("Quản trị và lễ tân đăng nhập")]
+    public Task<ActionResult<LoginResponse>> Login(LoginRequest request) => SignIn(() => auth.LoginAsync(request));
+
+    [AllowAnonymous]
+    [HttpPost("member-login")]
+    [EndpointSummary("Học viên đăng nhập")]
+    [EndpointDescription("Trả JWT vai trò MEMBER để gọi các API đăng ký lớp. Chỉ tài khoản học viên đã có mật khẩu mới đăng nhập được.")]
+    public Task<ActionResult<LoginResponse>> LoginMember(LoginRequest request) => SignIn(() => auth.LoginMemberAsync(request));
+
+    private async Task<ActionResult<LoginResponse>> SignIn(Func<Task<LoginResponse>> login)
     {
         try
         {
-            return Ok(await auth.LoginAsync(request));
+            return Ok(await login());
         }
         catch (UnauthorizedAccessException exception)
         {
