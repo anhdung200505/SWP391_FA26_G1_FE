@@ -20,18 +20,16 @@ const navItems = [
   { name: 'TRANG CHỦ', path: '/home' },
   { name: 'VỀ CHÚNG TÔI', path: '#', hasDropdown: false },
   { name: 'KHÓA HỌC', path: '/khoa-hoc', hasDropdown: true },
-  { name: 'ĐĂNG KÝ', path: '/dang-ky' },
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
-  { name: 'TUYỂN SINH', path: '/dang-ky' },
-  { name: 'ĐĂNG NHẬP', path: '/dang-nhap' },
+  { name: 'TUYỂN SINH', path: '/tuyen-sinh' }, // Gắn đường dẫn /tuyen-sinh
 ];
 
 export default function Header({ forceWhite = false }) {
   const [isHeaderTransparent, setIsHeaderTransparent] = useState(!forceWhite);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuth(); // Lấy hàm logout và user từ AuthContext
 
   useEffect(() => {
     if (forceWhite) {
@@ -74,12 +72,14 @@ export default function Header({ forceWhite = false }) {
       path === '/home' ||
       path === '/co-so-vat-chat' ||
       path === '/hlv' ||
+      path === '/tuyen-sinh' ||
       path.startsWith('/khoa-hoc')
     ) {
-      window.location.href = path;
+      navigate(path);
+      window.scrollTo(0, 0);
     } else if (path.startsWith('#')) {
       if (location.pathname !== '/home') {
-        window.location.href = `/home${path}`;
+        navigate(`/home${path}`);
       } else {
         const elem = document.querySelector(path);
         if (elem) elem.scrollIntoView({ behavior: 'smooth' });
