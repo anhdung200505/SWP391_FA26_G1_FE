@@ -6,7 +6,8 @@ import CoachPage from './pages/CoachPage';
 import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage'; // Import trang đăng ký
+import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage'; // 1. Import trang Hồ sơ cá nhân
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
 import UserAccountPage from './pages/management/UserAccountPage';
@@ -38,6 +39,10 @@ export default function App() {
             <Route path="/dang-nhap" element={<LoginPage />} />
             <Route path="/dang-ky" element={<RegisterPage />} />
 
+            {/* 2. Khai báo Route Hồ sơ cá nhân (Chỉ cho phép khi đã đăng nhập) */}
+            <Route path="/ho-so" element={<Protected><ProfilePage /></Protected>} />
+
+            {/* Khai báo các route Quản lý */}
             <Route path="/quan-ly" element={<Protected><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected><UserAccountListPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected><UserAccountPage /></Protected>} />

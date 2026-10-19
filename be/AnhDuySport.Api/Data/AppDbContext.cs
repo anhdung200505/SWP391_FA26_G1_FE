@@ -6,6 +6,7 @@ namespace AnhDuySport.Api.Data;
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+    public DbSet<PendingRegistration> PendingRegistrations => Set<PendingRegistration>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<MembershipPackage> MembershipPackages => Set<MembershipPackage>();
@@ -18,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<TrainingClass> Classes => Set<TrainingClass>();
     public DbSet<ClassSlot> ClassSlots => Set<ClassSlot>();
     public DbSet<SlotRegistration> SlotRegistrations => Set<SlotRegistration>();
+    public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<ClassEnrollment> ClassEnrollments => Set<ClassEnrollment>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -111,6 +113,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(item => item.AssignedToUserId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<Membership>(entity =>
+        {
+            entity.HasOne(item => item.Package)
+                .WithMany()
+                .HasForeignKey(item => item.MembershipPackageId);
+            entity.HasOne(item => item.Payment)
+                .WithMany()
+                .HasForeignKey(item => item.PaymentId);
         });
     }
 }

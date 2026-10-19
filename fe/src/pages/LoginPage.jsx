@@ -6,22 +6,27 @@ import PasswordField from '../components/PasswordField';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, loginAsMember, loginAsStaff } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [portal, setPortal] = useState('member'); // 'member' | 'staff'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Nếu đã đăng nhập thì điều hướng theo vai trò
   if (user) {
-    return <Navigate to="/quan-ly" replace />;
+    const defaultNav = user.roleId === 'ADMIN' || user.roleId === 'STAFF' ? '/quan-ly' : '/home';
+    return <Navigate to={defaultNav} replace />;
   }
 
   const submit = async (event) => {
     event.preventDefault();
     if (saving) return;
     setError('');
+
     if (!email.trim() || !password) {
       setError('Vui lòng nhập đầy đủ email và mật khẩu.');
       return;
@@ -29,10 +34,15 @@ export default function LoginPage() {
 
     setSaving(true);
     try {
-      await login(email.trim(), password);
-      const from = location.state?.from;
-      const next = typeof from === 'string' && from.startsWith('/quan-ly') ? from : '/quan-ly';
-      navigate(next, { replace: true });
+      if (portal === 'member') {
+        await loginAsMember(email.trim(), password);
+        const from = location.state?.from || '/home';
+        navigate(from, { replace: true });
+      } else {
+        await loginAsStaff(email.trim(), password);
+        const from = location.state?.from || '/quan-ly';
+        navigate(from, { replace: true });
+      }
     } catch (requestError) {
       setError(requestError.message || 'Đăng nhập thất bại.');
       setSaving(false);
@@ -41,9 +51,8 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen w-full bg-[#0d0f17] font-sans select-none overflow-hidden">
-      {/* BÊN TRÁI: BANNER THỂ THAO ĐẲNG CẤP (Ẩn trên màn hình nhỏ) */}
+      {/* BÊN TRÁI: BANNER THỂ THAO */}
       <div className="relative hidden w-1/2 lg:flex flex-col justify-between p-12 overflow-hidden bg-[#0d0f17]">
-        {/* Ảnh nền + Overlay Gradient */}
         <div className="absolute inset-0 z-0">
           <img
             src={arenaImg}
@@ -51,14 +60,8 @@ export default function LoginPage() {
             className="w-full h-full object-cover object-center filter brightness-[0.55] contrast-[1.1]"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
-          {/* Mảng trang trí vát chéo đỏ */}
-          <div
-            className="absolute -right-20 inset-y-0 w-80 bg-[#e31b23]/30 mix-blend-multiply pointer-events-none"
-            style={{ clipPath: 'polygon(30% 0, 100% 0, 100% 100%, 0% 100%)' }}
-          ></div>
         </div>
 
-        {/* Logo góc trên bên trái */}
         <div className="relative z-10">
           <Link to="/home" className="inline-flex items-center gap-3 group">
             <img src={logoImg} alt="AnhDuy Sport" className="h-12 w-auto object-contain drop-shadow-md" />
@@ -68,22 +71,20 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        {/* Khẩu hiệu & Thông điệp ở giữa */}
         <div className="relative z-10 max-w-lg my-auto pt-10">
           <div className="mb-4">
             <span className="inline-block bg-[#e31b23] text-white font-black text-xs px-3.5 py-1 transform -skew-x-12 uppercase tracking-widest shadow-lg">
-              <span className="inline-block transform skew-x-12">ANHDUY SPORT PORTAL</span>
+              ANHDUY SPORT PORTAL
             </span>
           </div>
           <h2 className="text-4xl xl:text-5xl font-black uppercase text-white leading-tight tracking-tight drop-shadow-xl mb-4">
             CHINH PHỤC <span className="text-[#e31b23]">ĐỈNH CAO</span> THỂ THAO
           </h2>
           <p className="text-gray-300 text-sm xl:text-base font-semibold leading-relaxed border-l-4 border-[#e31b23] pl-4">
-            Hệ thống quản trị đào tạo và chăm sóc hội viên chuyên nghiệp dành riêng cho trung tâm AnhDuy Sport.
+            Hệ thống đào tạo và chăm sóc hội viên chuyên nghiệp dành riêng cho trung tâm AnhDuy Sport.
           </p>
         </div>
 
-        {/* Dải thống kê ở đáy Banner */}
         <div className="relative z-10 grid grid-cols-3 gap-4 pt-6 border-t border-gray-800/80">
           <div>
             <span className="block text-2xl font-black text-[#e31b23]">8+</span>
@@ -103,7 +104,6 @@ export default function LoginPage() {
       {/* BÊN PHẢI: FORM ĐĂNG NHẬP */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 md:p-16 bg-[#12141d] relative z-10">
         <div className="w-full max-w-md bg-[#181d2a] rounded-2xl p-8 sm:p-10 border border-gray-800 shadow-2xl">
-          {/* Logo cho thiết bị di động */}
           <div className="lg:hidden mb-6 flex justify-center">
             <Link to="/home" className="inline-flex items-center gap-2.5">
               <img src={logoImg} alt="AnhDuy Sport" className="h-10 w-auto object-contain" />
@@ -114,13 +114,36 @@ export default function LoginPage() {
           </div>
 
           <div className="mb-6">
-            <span className="inline-block text-[11px] font-black uppercase tracking-widest text-[#e31b23] bg-[#e31b23]/10 px-3 py-1 rounded-sm border border-[#e31b23]/30 mb-2">
-              Đăng nhập vào hệ thống
-            </span>
             <h1 className="text-3xl font-black text-white uppercase tracking-tight">Đăng nhập</h1>
             <p className="mt-2 text-xs sm:text-sm font-medium text-gray-400">
-              Nhập tài khoản để truy cập hệ thống quản lý hội viên và gói tập.
+              Chọn cổng đăng nhập tương ứng với tài khoản của bạn.
             </p>
+          </div>
+
+          {/* CỔNG ĐĂNG NHẬP (TAB PORTAL) */}
+          <div className="grid grid-cols-2 gap-2 bg-[#0d0f17] p-1.5 rounded-xl border border-gray-800 mb-6">
+            <button
+              type="button"
+              onClick={() => { setPortal('member'); setError(''); }}
+              className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                portal === 'member'
+                  ? 'bg-[#e31b23] text-white shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Học viên
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPortal('staff'); setError(''); }}
+              className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                portal === 'staff'
+                  ? 'bg-[#e31b23] text-white shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Quản trị & Lễ tân
+            </button>
           </div>
 
           <form className="space-y-4" onSubmit={submit}>
@@ -158,7 +181,7 @@ export default function LoginPage() {
               disabled={saving}
               className="w-full rounded-xl bg-[#e31b23] hover:bg-[#c4131a] px-4 py-3.5 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-red-900/40 cursor-pointer disabled:opacity-60 transition-all transform active:scale-[0.99]"
             >
-              {saving ? 'Đang xác thực...' : 'Đăng nhập'}
+              {saving ? 'Đang xác thực...' : portal === 'member' ? 'Đăng nhập Học viên' : 'Đăng nhập Quản trị'}
             </button>
           </form>
 
