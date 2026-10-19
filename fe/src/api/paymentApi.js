@@ -28,14 +28,34 @@ export function getCenters() {
   return request('/catalog/centers');
 }
 
-export function getClasses(centerId) {
-  return request(`/catalog/classes?centerId=${encodeURIComponent(centerId)}`);
+export function getSports(centerId) {
+  return request(`/catalog/centers/${encodeURIComponent(centerId)}/sports`);
 }
 
-export function createPayOsPayment(memberUserId, classId) {
+export function getClasses(centerId, sportId) {
+  const query = new URLSearchParams({ centerId });
+  if (sportId) query.set('sportId', sportId);
+  return request(`/catalog/classes?${query.toString()}`);
+}
+
+export const registrationDraftKey = 'anhduy-registration';
+
+export function saveRegistrationDraft(draft) {
+  sessionStorage.setItem(registrationDraftKey, JSON.stringify(draft));
+}
+
+export function readRegistrationDraft() {
+  try {
+    return JSON.parse(sessionStorage.getItem(registrationDraftKey) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export function createPayOsPayment(payload) {
   return request('/payments/payos', {
     method: 'POST',
-    body: JSON.stringify({ memberUserId, classId }),
+    body: JSON.stringify(payload),
   });
 }
 

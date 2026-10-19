@@ -32,6 +32,7 @@ export default function App() {
             <Route path="/hlv" element={<CoachPage />} />
             <Route path="/khoa-hoc" element={<CoursesPage />} />
             <Route path="/thanh-toan" element={<PaymentPage />} />
+            <Route path="/dang-ky" element={<PaymentPage />} />
             <Route path="/payment/result" element={<PaymentResultPage />} />
             <Route path="/payment/cancel" element={<PaymentResultPage />} />
             <Route path="/dang-nhap" element={<LoginPage />} />

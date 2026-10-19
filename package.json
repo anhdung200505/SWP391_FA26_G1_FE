@@ -1,0 +1,7 @@
+{
+  "name": "swp391-fa26-g1",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix fe run dev"
+  }
+}
