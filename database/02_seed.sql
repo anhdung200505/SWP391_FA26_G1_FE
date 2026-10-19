@@ -69,8 +69,8 @@ INSERT INTO sport (sport_code, sport_name, category) VALUES
     (N'tennis',      N'Quần vợt',      N'Racket'),
     (N'taekwondo',   N'Taekwondo',     N'Võ thuật');
 
-INSERT INTO [user] (role_id, center_id, full_name, email, phone, gender, avatar_url, status)
-SELECT r.role_id, c.center_id, v.full_name, v.email, v.phone, v.gender, v.avatar_url, N'active'
+INSERT INTO [user] (role_id, center_id, full_name, email, phone, password_hash, gender, avatar_url, status)
+SELECT r.role_id, c.center_id, v.full_name, v.email, v.phone, N'pbkdf2.100000.oiS/WGvU0MeybY5K6gbcZA==.ZFllnZtVBr5cGSCT7D98RgDFcDII0uMzP7LcddpBueo=', v.gender, v.avatar_url, N'active'
 FROM (VALUES
     (N'ADMIN',        N'Quản trị AnhDuy',     N'admin@anhduysport.vn',        N'0901000001', NULL,      NULL),
     (N'RECEPTIONIST', N'Lễ tân AnhDuy',       N'letan@anhduysport.vn',        N'0901000002', NULL,      NULL),
