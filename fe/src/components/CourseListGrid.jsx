@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // Import chính xác 8 file ảnh từ thư mục src/assets/page course/
 import swimmingImg from '../assets/page course/swimming.webp';
@@ -13,6 +14,7 @@ import taekwondoImg from '../assets/page course/taekwondo-1-1024x683.webp';
 const coursesData = [
   {
     id: 'swimming',
+    slug: 'boi-loi',
     category: 'CÁ NHÂN',
     level: 'BEGINNER',
     title: 'BƠI LỘI',
@@ -22,6 +24,7 @@ const coursesData = [
   },
   {
     id: 'tabletennis',
+    slug: 'bong-ban',
     category: 'CÁ NHÂN',
     level: 'BEGINNER',
     title: 'BÓNG BÀN',
@@ -31,6 +34,7 @@ const coursesData = [
   },
   {
     id: 'soccer',
+    slug: 'bong-da',
     category: 'ĐỒNG ĐỘI',
     level: 'MỌI CẤP ĐỘ',
     title: 'BÓNG ĐÁ',
@@ -40,6 +44,7 @@ const coursesData = [
   },
   {
     id: 'basketball',
+    slug: 'bong-ro',
     category: 'ĐỒNG ĐỘI',
     level: 'INTERMEDIATE',
     title: 'BÓNG RỔ',
@@ -49,6 +54,7 @@ const coursesData = [
   },
   {
     id: 'badminton',
+    slug: 'cau-long',
     category: 'RACKET',
     level: 'MỌI CẤP ĐỘ',
     title: 'CẦU LÔNG',
@@ -58,6 +64,7 @@ const coursesData = [
   },
   {
     id: 'golf',
+    slug: 'golf-3d',
     category: 'CÁ NHÂN',
     level: 'INTERMEDIATE',
     title: 'GOLF 3D',
@@ -67,6 +74,7 @@ const coursesData = [
   },
   {
     id: 'tennis',
+    slug: 'quan-vot',
     category: 'RACKET',
     level: 'INTERMEDIATE',
     title: 'QUẦN VỢT',
@@ -76,6 +84,7 @@ const coursesData = [
   },
   {
     id: 'taekwondo',
+    slug: 'taekwondo',
     category: 'VÕ THUẬT',
     level: 'FOUNDATION',
     title: 'TAEKWONDO',
@@ -86,6 +95,7 @@ const coursesData = [
 ];
 
 export default function CourseListGrid() {
+  const navigate = useNavigate();
   const sectionRef = useRef(null);
   const cardRefs = useRef([]);
 
@@ -113,13 +123,18 @@ export default function CourseListGrid() {
     return () => observer.disconnect();
   }, []);
 
+  const handleCardClick = (slug) => {
+    navigate(`/khoa-hoc/${slug}`);
+    window.scrollTo(0, 0);
+  };
+
   return (
     <section
       ref={sectionRef}
       className="relative w-full bg-[#1c0f13] py-16 md:py-24 text-white font-sans select-none overflow-hidden"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* TIÊU ĐỀ SECTION CHUẨN MẪU */}
+        {/* TIÊU ĐỀ SECTION */}
         <div className="mb-12 md:mb-16">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight">
             CÁC KHÓA HỌC <span className="text-[#e31b23]">CỦA CHÚNG TÔI</span>
@@ -127,15 +142,16 @@ export default function CourseListGrid() {
           <div className="w-20 h-1 bg-[#e31b23] mt-3"></div>
         </div>
 
-        {/* LƯỚI 8 KHÓA HỌC (GRID 4 CỘT DÀN ĐỀU 2 HÀNG) */}
+        {/* LƯỚI 8 KHÓA HỌC */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-7">
           {coursesData.map((course, index) => (
             <div
               key={course.id}
               ref={(el) => (cardRefs.current[index] = el)}
-              className="opacity-0 translate-y-12 transition-all duration-700 ease-out bg-[#2a171d] rounded-sm overflow-hidden border border-[#3d2028] hover:border-[#e31b23]/60 shadow-2xl group flex flex-col justify-between"
+              onClick={() => handleCardClick(course.slug)}
+              className="opacity-0 translate-y-12 transition-all duration-700 ease-out bg-[#2a171d] rounded-sm overflow-hidden border border-[#3d2028] hover:border-[#e31b23]/80 shadow-2xl group flex flex-col justify-between cursor-pointer"
             >
-              {/* KHỐI ẢNH BÌA + BADGE TRÌNH ĐỘ */}
+              {/* KHỐI ẢNH BÌA */}
               <div className="relative aspect-[16/10] overflow-hidden bg-[#12080a]">
                 <img
                   src={course.img}
@@ -144,7 +160,6 @@ export default function CourseListGrid() {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#2a171d] via-transparent to-transparent"></div>
 
-                {/* BADGE TRÌNH ĐỘ TRÊN GÓC PHẢI */}
                 <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md text-white text-[10px] font-black px-2.5 py-1 uppercase tracking-widest border border-gray-700/60 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 bg-[#e31b23] inline-block"></span>
                   <span>{course.level}</span>
@@ -154,34 +169,29 @@ export default function CourseListGrid() {
               {/* KHỐI NỘI DUNG CHÍNH */}
               <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                 <div>
-                  {/* CATEGORY SUBTITLE */}
                   <span className="text-[10px] font-black text-[#e31b23] uppercase tracking-widest block mb-1">
                     🎯 {course.category}
                   </span>
 
-                  {/* TIÊU ĐỀ KHÓA HỌC */}
                   <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2 group-hover:text-[#e31b23] transition-colors duration-200">
                     {course.title}
                   </h3>
 
-                  {/* MÔ TẢ NỘI DUNG */}
                   <p className="text-gray-300 text-xs sm:text-sm font-medium leading-relaxed line-clamp-3">
                     {course.desc}
                   </p>
                 </div>
 
-                {/* FOOTER THẺ: ĐỘ TUỔI & NÚT XEM CHI TIẾT */}
+                {/* FOOTER THẺ */}
                 <div className="pt-3 border-t border-[#3d2028] flex items-center justify-between text-xs">
                   <span className="bg-[#e31b23]/20 border border-[#e31b23]/40 text-white font-black px-2.5 py-0.5 rounded-sm">
                     {course.age}
                   </span>
 
                   <button
-                    onClick={() => {
-                      const formSection = document.getElementById('facilities-section') || document.getElementById('courses-section');
-                      if (formSection) {
-                        formSection.scrollIntoView({ behavior: 'smooth' });
-                      }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCardClick(course.slug);
                     }}
                     className="text-[#e31b23] group-hover:text-white font-black uppercase tracking-wider flex items-center gap-1 hover:underline cursor-pointer transition-colors duration-200"
                   >
