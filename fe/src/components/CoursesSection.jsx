@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getSportsByCenter } from '../api/managementApi';
 
-// Import ảnh 8 môn thể thao chủ đạo từ assets
+// Fallback Ảnh môn học theo mã code trả về từ API
 import swimmingImg from '../assets/sports/swimming-1024x576.png';
 import tabletennisImg from '../assets/sports/tabletennis-1024x576.png';
 import soccerImg from '../assets/sports/soccer-1024x576.png';
@@ -10,42 +11,61 @@ import golfImg from '../assets/sports/golf-1024x576.png';
 import tennisImg from '../assets/sports/tennis-1024x576.png';
 import taekwondoImg from '../assets/sports/taekwondo-1024x576.png';
 
-const coursesData = [
-  { id: 'basketball', name: 'Bóng rổ', img: basketballImg },
-  { id: 'swimming', name: 'Bơi lội', img: swimmingImg },
-  { id: 'golf', name: 'Golf 3D', img: golfImg },
-  { id: 'tennis', name: 'Quần vợt', img: tennisImg },
-  { id: 'tabletennis', name: 'Bóng bàn', img: tabletennisImg },
-  { id: 'badminton', name: 'Cầu lông', img: badmintonImg },
-  { id: 'taekwondo', name: 'Taekwondo', img: taekwondoImg },
-  { id: 'soccer', name: 'Bóng đá', img: soccerImg },
-];
+const SPORTS_IMAGE_MAP = {
+  basketball: basketballImg,
+  swimming: swimmingImg,
+  golf: golfImg,
+  tennis: tennisImg,
+  tabletennis: tabletennisImg,
+  badminton: badmintonImg,
+  taekwondo: taekwondoImg,
+  soccer: soccerImg,
+};
 
 export default function CoursesSection() {
-  const [activeCourse, setActiveCourse] = useState(coursesData[0]);
+  const [sports, setSports] = useState([]);
+  const [activeCourse, setActiveCourse] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef(null);
+
+  // Gọi API lấy bộ môn thể thao từ Center ID 1
+  useEffect(() => {
+    getSportsByCenter('1')
+      .then((data) => {
+        const mappedData = data.map((item) => ({
+          ...item,
+          img: SPORTS_IMAGE_MAP[item.code] || basketballImg,
+        }));
+        setSports(mappedData);
+        if (mappedData.length > 0) setActiveCourse(mappedData[0]);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-        }
+        if (entry.isIntersecting) setIsVisible(true);
       },
       { threshold: 0.15 }
     );
 
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
-    }
-
+    if (sectionRef.current) observer.observe(sectionRef.current);
     return () => {
-      if (sectionRef.current) {
-        observer.unobserve(sectionRef.current);
-      }
+      if (sectionRef.current) observer.unobserve(sectionRef.current);
     };
   }, []);
+
+  if (loading) {
+    return (
+      <div className="w-full h-[300px] bg-black flex items-center justify-center text-white font-bold">
+        Đang tải danh sách bộ môn thể thao...
+      </div>
+    );
+  }
 
   return (
     <section
@@ -55,8 +75,8 @@ export default function CoursesSection() {
     >
       {/* 1. KHỐI ẢNH NỀN FADE MƯỢT MÀ */}
       <div className="absolute inset-0 z-0">
-        {coursesData.map((course) => {
-          const isActive = activeCourse.id === course.id;
+        {sports.map((course) => {
+          const isActive = activeCourse?.id === course.id;
           return (
             <div
               key={course.id}
@@ -82,18 +102,17 @@ export default function CoursesSection() {
           isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
         }`}
       >
-        {/* TIÊU ĐỀ BÊN TRÊN */}
         <div className="mt-1 md:mt-2">
           <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-[#e31b23] uppercase tracking-tight drop-shadow-lg">
-            8 KHÓA HỌC THỂ THAO
+            {sports.length} KHÓA HỌC THỂ THAO
           </h2>
         </div>
 
-        {/* 3. KHỐI NÚT DỐC NGHIÊNG (-skew-x-[20deg]) Bố cục 8 nút đẹp mắt */}
+        {/* 3. KHỐI NÚT DỐC NGHIÊNG (-skew-x-[20deg]) */}
         <div className="transform -skew-x-[20deg] origin-left w-full max-w-[320px] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[640px] mb-6 md:mb-14">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-3.5">
-            {coursesData.map((course) => {
-              const isActive = activeCourse.id === course.id;
+            {sports.map((course) => {
+              const isActive = activeCourse?.id === course.id;
               return (
                 <button
                   key={course.id}
