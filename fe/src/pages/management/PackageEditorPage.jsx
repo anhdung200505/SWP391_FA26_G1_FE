@@ -11,8 +11,10 @@ export default function PackageEditorPage({ mode }) {
   const isCreate = mode === 'create';
   const { packageId } = useParams();
   const navigate = useNavigate();
-  const { packages, loading, error, createPackage, updatePackageSetting } = useAccountManagement();
-  const existing = packages.find((item) => item.id === packageId);
+  const { packages = [], loading, error, createPackage, updatePackageSetting } = useAccountManagement();
+
+  // Ép kiểu String để so sánh an toàn
+  const existing = packages.find((item) => String(item.id) === String(packageId));
 
   const [name, setName] = useState('');
   const [fee, setFee] = useState('');
@@ -30,13 +32,15 @@ export default function PackageEditorPage({ mode }) {
     document.title = isCreate ? 'Tạo gói hội viên · AnhDuy Sport' : 'Sửa gói hội viên · AnhDuy Sport';
   }, [isCreate]);
 
-  if (!isCreate && existing && formPackageId !== existing.id) {
-    setFormPackageId(existing.id);
-    setName(existing.name);
-    setFee(String(existing.fee));
-    setValidityMonths(String(existing.validityMonths));
-    setBenefits(existing.benefits.length ? existing.benefits : ['']);
-  }
+  useEffect(() => {
+    if (!isCreate && existing && formPackageId !== existing.id) {
+      setFormPackageId(existing.id);
+      setName(existing.name || '');
+      setFee(String(existing.fee ?? ''));
+      setValidityMonths(String(existing.validityMonths ?? '1'));
+      setBenefits(Array.isArray(existing.benefits) && existing.benefits.length ? existing.benefits : ['']);
+    }
+  }, [isCreate, existing, formPackageId]);
 
   useEffect(() => {
     if (phase !== 'system' || shown >= steps.length) return undefined;
@@ -81,10 +85,11 @@ export default function PackageEditorPage({ mode }) {
       fee: feeNumber,
       validityMonths: monthsNumber,
       benefits: cleanedBenefits,
+      ...(isCreate && { name: name.trim() }),
     };
     try {
       const log = isCreate
-        ? await createPackage({ ...payload, name: name.trim() })
+        ? await createPackage(payload)
         : await updatePackageSetting(existing.id, payload);
       const title = isCreate ? 'Lưu gói mới' : 'Lưu thiết lập gói hội viên';
       const diagram = isCreate ? 'Save New Package' : 'Save Membership Package Setting';
@@ -95,17 +100,17 @@ export default function PackageEditorPage({ mode }) {
             lane: 'Hệ thống',
             diagram,
             title,
-            detail: log.detail,
+            detail: log?.detail || 'Hệ thống đã lưu thành công.',
           },
           {
             id: 'record-log',
             lane: 'Hệ thống',
             diagram: 'Record Log',
             title: 'Ghi nhật ký',
-            detail: `${log.actor} đã ${isCreate ? 'tạo' : 'cập nhật'} gói. ${log.summary}.`,
+            detail: `${log?.actor || 'Quản trị'} đã ${isCreate ? 'tạo' : 'cập nhật'} gói. ${log?.summary || ''}.`,
           },
         ],
-        log.id,
+        log?.id,
       );
     } catch (requestError) {
       setActionError(requestError.message);
