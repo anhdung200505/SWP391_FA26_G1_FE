@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { registrationOnly, registrationOnlyMessage } from '../auth/destination';
+import { useAuth } from '../context/AuthContext';
 
 export default function FacilityTourSection({ formRef }) {
+  const { user } = useAuth();
   const sectionRef = useRef(null);
+  const [actionNotice, setActionNotice] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -45,6 +49,11 @@ export default function FacilityTourSection({ formRef }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (registrationOnly(user)) {
+      setActionNotice(registrationOnlyMessage);
+      return;
+    }
+    setActionNotice('');
     const newErrors = {};
 
     if (!formData.fullName.trim()) {
@@ -238,6 +247,9 @@ export default function FacilityTourSection({ formRef }) {
               </div>
             ) : (
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                {actionNotice && (
+                  <p className="rounded-sm bg-[#fff2f2] px-3 py-2 text-xs font-bold text-[#b1131a]">{actionNotice}</p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">

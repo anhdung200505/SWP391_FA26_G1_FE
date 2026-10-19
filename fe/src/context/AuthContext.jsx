@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { login as loginRequest, setUnauthorizedHandler } from '../api/managementApi';
+import { login as loginRequest, registerGuest as registerRequest, setUnauthorizedHandler } from '../api/managementApi';
 import { clearSession, readSession, writeSession } from '../auth/session';
 
 const AuthContext = createContext(null);
@@ -14,12 +14,27 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const login = async (email, password) => {
-    const result = await loginRequest(email, password);
+  const login = async (email, password, portal) => {
+    const result = await loginRequest(email, password, portal);
+    return store(result);
+  };
+
+  const register = async (payload) => {
+    const result = await registerRequest(payload);
+    return store(result);
+  };
+
+  const store = (result) => {
     const next = { token: result.token, user: result.user };
     writeSession(next);
     setSession(next);
     return next.user;
+  };
+
+  const applySession = (token, user) => {
+    const next = { token, user };
+    writeSession(next);
+    setSession(next);
   };
 
   const logout = () => {
@@ -28,7 +43,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user: session?.user ?? null, login, logout }}>
+    <AuthContext.Provider value={{ user: session?.user ?? null, login, register, applySession, logout }}>
       {children}
     </AuthContext.Provider>
   );
