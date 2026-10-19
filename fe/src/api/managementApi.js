@@ -132,3 +132,14 @@ export function updatePackageSetting(packageId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function getMemberProfile(memberUserId) {
+  return request(`/members/${memberUserId}/profile`);
+}
+
+export function updateMemberProfile(memberUserId, payload) {
+  return request(`/members/${memberUserId}/profile`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
