@@ -7,15 +7,9 @@ import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-<<<<<<< Updated upstream
-import GuestWorkspacePage from './pages/GuestWorkspacePage';
-=======
 import ProfilePage from './pages/ProfilePage'; // 1. Import trang Hồ sơ cá nhân
->>>>>>> Stashed changes
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
-import CreateStaffPage from './pages/management/CreateStaffPage';
-import StaffHomePage from './pages/StaffHomePage';
 import UserAccountPage from './pages/management/UserAccountPage';
 import PackageListPage from './pages/management/PackageListPage';
 import PackageEditorPage from './pages/management/PackageEditorPage';
@@ -44,19 +38,13 @@ export default function App() {
             {/* Khai báo route Đăng nhập & Đăng ký */}
             <Route path="/dang-nhap" element={<LoginPage />} />
             <Route path="/dang-ky" element={<RegisterPage />} />
-<<<<<<< Updated upstream
-            <Route path="/khach" element={<GuestWorkspacePage />} />
-            <Route path="/nhan-su" element={<StaffHomePage />} />
-=======
 
             {/* 2. Khai báo Route Hồ sơ cá nhân (Chỉ cho phép khi đã đăng nhập) */}
             <Route path="/ho-so" element={<Protected><ProfilePage /></Protected>} />
 
             {/* Khai báo các route Quản lý */}
->>>>>>> Stashed changes
             <Route path="/quan-ly" element={<Protected><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected><UserAccountListPage /></Protected>} />
-            <Route path="/quan-ly/tai-khoan/moi" element={<Protected><CreateStaffPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected><UserAccountPage /></Protected>} />
             <Route path="/quan-ly/goi" element={<Protected><PackageListPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected><PackageEditorPage mode="create" /></Protected>} />
