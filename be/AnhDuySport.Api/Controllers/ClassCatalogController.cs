@@ -19,6 +19,19 @@ public class ClassCatalogController(ClassRegistrationFlowService registrations) 
     public async Task<ActionResult<IReadOnlyList<SportDto>>> AccessSports(string centerId) =>
         Ok(await registrations.AccessSportsAsync(centerId));
 
+    [HttpGet("sports/{sportId}/coaches")]
+    public async Task<ActionResult<IReadOnlyList<CoachOptionDto>>> AccessCoaches(string sportId)
+    {
+        try
+        {
+            return Ok(await registrations.AccessCoachesAsync(sportId));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+    }
+
     [HttpGet("classes")]
     public async Task<ActionResult<IReadOnlyList<ClassSummaryDto>>> AccessUpcomingClasses(
         [FromQuery] string? centerId,

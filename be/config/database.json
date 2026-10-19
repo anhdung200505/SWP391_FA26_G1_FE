@@ -1,11 +1,11 @@
 {
   "driver": "sqlserver",
-  "server": "localhost\\SQLEXPRESS",
+  "server": "(localdb)\\MSSQLLocalDB",
   "database": "AnhDuySport",
   "options": {
     "trustedConnection": true,
     "trustServerCertificate": true,
     "encrypt": true
   },
-  "connectionString": "Server=localhost\\SQLEXPRESS;Database=AnhDuySport;Trusted_Connection=True;TrustServerCertificate=True;"
+  "connectionString": "Server=(localdb)\\MSSQLLocalDB;Database=AnhDuySport;Trusted_Connection=True;TrustServerCertificate=True;"
 }

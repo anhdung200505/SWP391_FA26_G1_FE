@@ -1,4 +1,7 @@
 -- Đăng ký học viên chưa xác nhận OTP. Hết 3 phút thì xóa, không tạo tài khoản.
+USE AnhDuySport;
+GO
+
 IF OBJECT_ID(N'dbo.pending_registration', N'U') IS NULL
 BEGIN
     CREATE TABLE pending_registration (

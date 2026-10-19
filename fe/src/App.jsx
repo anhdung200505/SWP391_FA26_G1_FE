@@ -7,12 +7,17 @@ import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage'; // 1. Import trang Hồ sơ cá nhân
+import GuestWorkspacePage from './pages/GuestWorkspacePage';
+import ProfilePage from './pages/ProfilePage';
+import StaffHomePage from './pages/StaffHomePage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
+import CreateStaffPage from './pages/management/CreateStaffPage';
 import UserAccountPage from './pages/management/UserAccountPage';
 import PackageListPage from './pages/management/PackageListPage';
 import PackageEditorPage from './pages/management/PackageEditorPage';
+import PaymentPage from './pages/PaymentPage';
+import PaymentResultPage from './pages/PaymentResultPage';
 import RequireAuth from './components/RequireAuth';
 import { AccountManagementProvider } from './context/AccountManagementContext';
 import { AuthProvider } from './context/AuthContext';
@@ -31,20 +36,19 @@ export default function App() {
             <Route path="/home" element={<HomePage />} />
             <Route path="/co-so-vat-chat" element={<FacilitiesPage />} />
             <Route path="/hlv" element={<CoachPage />} />
-            
             <Route path="/khoa-hoc" element={<CoursesPage />} />
             <Route path="/khoa-hoc/:courseSlug" element={<CourseDetailPage />} />
-
-            {/* Khai báo route Đăng nhập & Đăng ký */}
+            <Route path="/thanh-toan" element={<PaymentPage />} />
+            <Route path="/payment/result" element={<PaymentResultPage />} />
+            <Route path="/payment/cancel" element={<PaymentResultPage />} />
             <Route path="/dang-nhap" element={<LoginPage />} />
             <Route path="/dang-ky" element={<RegisterPage />} />
-
-            {/* 2. Khai báo Route Hồ sơ cá nhân (Chỉ cho phép khi đã đăng nhập) */}
+            <Route path="/khach" element={<GuestWorkspacePage />} />
+            <Route path="/nhan-su" element={<StaffHomePage />} />
             <Route path="/ho-so" element={<Protected><ProfilePage /></Protected>} />
-
-            {/* Khai báo các route Quản lý */}
             <Route path="/quan-ly" element={<Protected><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected><UserAccountListPage /></Protected>} />
+            <Route path="/quan-ly/tai-khoan/moi" element={<Protected><CreateStaffPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected><UserAccountPage /></Protected>} />
             <Route path="/quan-ly/goi" element={<Protected><PackageListPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected><PackageEditorPage mode="create" /></Protected>} />
