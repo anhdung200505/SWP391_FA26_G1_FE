@@ -29,6 +29,8 @@
     payment issues membership          membership.payment_id
     user makes membership              membership.user_id
     class consists of slot             slot.class_id
+    slot registration_limit            slot.registration_limit
+    user registers slot                slot_registration (slot_id, user_id)
     assignment has slot                assignment.slot_id
     slot check_in attendance           attendance.slot_id + attendance.user_id
     evaluation is_assessed_through class   evaluation.class_id
@@ -219,18 +221,75 @@ CREATE TABLE class_enrollment (
 GO
 
 CREATE TABLE slot (
-    slot_id    INT IDENTITY(1,1) NOT NULL,
-    class_id   INT           NOT NULL,
-    room_id    INT           NULL,
-    slot_date  DATE          NOT NULL,
-    start_time TIME(0)       NOT NULL,
-    end_time   TIME(0)       NOT NULL,
-    title      NVARCHAR(200) NULL,
+    slot_id            INT IDENTITY(1,1) NOT NULL,
+    class_id           INT           NOT NULL,
+    room_id            INT           NULL,
+    slot_date          DATE          NOT NULL,
+    start_time         TIME(0)       NOT NULL,
+    end_time           TIME(0)       NOT NULL,
+    title              NVARCHAR(200) NULL,
+    registration_limit INT           NOT NULL,
     CONSTRAINT PK_slot PRIMARY KEY (slot_id),
     CONSTRAINT FK_slot_class FOREIGN KEY (class_id) REFERENCES class (class_id),
     CONSTRAINT FK_slot_room FOREIGN KEY (room_id) REFERENCES room (room_id),
-    CONSTRAINT CK_slot_time CHECK (end_time > start_time)
+    CONSTRAINT CK_slot_time CHECK (end_time > start_time),
+    CONSTRAINT CK_slot_registration_limit CHECK (registration_limit > 0)
 );
+GO
+
+CREATE TABLE slot_registration (
+    slot_registration_id INT IDENTITY(1,1) NOT NULL,
+    slot_id              INT          NOT NULL,
+    user_id              INT          NOT NULL,
+    registered_at        DATETIME2(0) NOT NULL CONSTRAINT DF_slot_registration_registered_at DEFAULT (SYSUTCDATETIME()),
+    status               NVARCHAR(30) NOT NULL CONSTRAINT DF_slot_registration_status DEFAULT (N'registered'),
+    CONSTRAINT PK_slot_registration PRIMARY KEY (slot_registration_id),
+    CONSTRAINT UQ_slot_registration UNIQUE (slot_id, user_id),
+    CONSTRAINT FK_slot_registration_slot FOREIGN KEY (slot_id) REFERENCES slot (slot_id),
+    CONSTRAINT FK_slot_registration_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
+    CONSTRAINT CK_slot_registration_status CHECK (status IN (N'registered', N'cancelled'))
+);
+GO
+
+CREATE TRIGGER TR_slot_registration_limit
+ON slot_registration
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted AS i
+        INNER JOIN slot AS s ON s.slot_id = i.slot_id
+        WHERE i.status = N'registered'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM class_enrollment AS e
+              WHERE e.class_id = s.class_id
+                AND e.user_id = i.user_id
+                AND e.status = N'enrolled'
+          )
+    )
+    BEGIN
+        THROW 50001, N'Chỉ đăng ký slot khi đã ghi danh lớp của môn đó.', 1;
+    END
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted AS i
+        INNER JOIN slot AS s WITH (UPDLOCK, HOLDLOCK) ON s.slot_id = i.slot_id
+        WHERE (
+            SELECT COUNT(*)
+            FROM slot_registration AS r
+            WHERE r.slot_id = s.slot_id
+              AND r.status = N'registered'
+        ) > s.registration_limit
+    )
+    BEGIN
+        THROW 50002, N'Slot đã đạt giới hạn đăng ký.', 1;
+    END
+END
 GO
 
 CREATE TABLE assignment (
@@ -385,6 +444,7 @@ CREATE INDEX IX_class_room_id ON class (room_id);
 CREATE INDEX IX_class_enrollment_user_id ON class_enrollment (user_id);
 CREATE INDEX IX_slot_class_id ON slot (class_id);
 CREATE INDEX IX_slot_room_id ON slot (room_id);
+CREATE INDEX IX_slot_registration_user_id ON slot_registration (user_id);
 CREATE INDEX IX_assignment_slot_id ON assignment (slot_id);
 CREATE INDEX IX_attendance_user_id ON attendance (user_id);
 CREATE INDEX IX_evaluation_class_id ON evaluation (class_id);
@@ -433,6 +493,36 @@ INNER JOIN role AS r ON r.role_id = u.role_id AND r.role_code = N'COACH'
 INNER JOIN class AS cl ON cl.coach_user_id = u.user_id
 INNER JOIN course AS c ON c.course_id = cl.course_id
 INNER JOIN sport AS s ON s.sport_id = c.sport_id;
+GO
+
+CREATE VIEW vw_slot_availability AS
+SELECT
+    s.slot_id,
+    sp.sport_name,
+    c.course_name,
+    cl.class_name,
+    s.slot_date,
+    s.start_time,
+    s.end_time,
+    s.title,
+    s.registration_limit,
+    SUM(CASE WHEN r.status = N'registered' THEN 1 ELSE 0 END) AS registered_count,
+    s.registration_limit - SUM(CASE WHEN r.status = N'registered' THEN 1 ELSE 0 END) AS remaining
+FROM slot AS s
+INNER JOIN class AS cl ON cl.class_id = s.class_id
+INNER JOIN course AS c ON c.course_id = cl.course_id
+INNER JOIN sport AS sp ON sp.sport_id = c.sport_id
+LEFT JOIN slot_registration AS r ON r.slot_id = s.slot_id
+GROUP BY
+    s.slot_id,
+    sp.sport_name,
+    c.course_name,
+    cl.class_name,
+    s.slot_date,
+    s.start_time,
+    s.end_time,
+    s.title,
+    s.registration_limit;
 GO
 
 CREATE VIEW vw_facility_catalog AS

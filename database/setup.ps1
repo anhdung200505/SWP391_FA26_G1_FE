@@ -17,5 +17,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $sqlcmd -S $server -E -b -f 65001 -d AnhDuySport -i (Join-Path $root '07_pending_registration.sql')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $sqlcmd -S '(localdb)\MSSQLLocalDB' -E -b -f 65001 -d AnhDuySport -i (Join-Path $root '05_payment_pending_unique.sql')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $sqlcmd -S '(localdb)\MSSQLLocalDB' -E -b -f 65001 -d AnhDuySport -i (Join-Path $root '07_membership_renewal.sql')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Output 'AnhDuySport is ready on localhost\SQLEXPRESS'

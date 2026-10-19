@@ -18,6 +18,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<TrainingClass> Classes => Set<TrainingClass>();
     public DbSet<ClassSlot> ClassSlots => Set<ClassSlot>();
+    public DbSet<SlotRegistration> SlotRegistrations => Set<SlotRegistration>();
+    public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<ClassEnrollment> ClassEnrollments => Set<ClassEnrollment>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -68,11 +70,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(item => item.RoomId);
             entity.HasMany(item => item.Slots)
-                .WithOne()
+                .WithOne(slot => slot.Class)
                 .HasForeignKey(slot => slot.ClassId);
             entity.HasMany(item => item.Enrollments)
                 .WithOne()
                 .HasForeignKey(enrollment => enrollment.ClassId);
+        });
+
+        modelBuilder.Entity<SlotRegistration>(entity =>
+        {
+            entity.ToTable("slot_registration", table => table.HasTrigger("TR_slot_registration_limit"));
+            entity.HasOne(item => item.Slot)
+                .WithMany(slot => slot.Registrations)
+                .HasForeignKey(item => item.SlotId);
+            entity.HasOne(item => item.Member)
+                .WithMany()
+                .HasForeignKey(item => item.UserId);
         });
 
         modelBuilder.Entity<Invoice>()
@@ -100,6 +113,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(item => item.AssignedToUserId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<Membership>(entity =>
+        {
+            entity.HasOne(item => item.Package)
+                .WithMany()
+                .HasForeignKey(item => item.MembershipPackageId);
+            entity.HasOne(item => item.Payment)
+                .WithMany()
+                .HasForeignKey(item => item.PaymentId);
         });
     }
 }
