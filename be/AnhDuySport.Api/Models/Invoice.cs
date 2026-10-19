@@ -54,6 +54,38 @@ public class Payment
     [Column("status")]
     public string Status { get; set; } = "pending";
 
+    [Column("payos_order_code")]
+    public long? PayosOrderCode { get; set; }
+
+    [Column("checkout_url")]
+    public string? CheckoutUrl { get; set; }
+
+    [Column("payment_link_id")]
+    public string? PaymentLinkId { get; set; }
+
+    [Column("qr_code")]
+    public string? QrCode { get; set; }
+
     public Invoice? Invoice { get; set; }
     public TrainingClass? Class { get; set; }
+}
+
+[Table("payment_history")]
+public class PaymentHistory
+{
+    [Key]
+    [Column("payment_history_id")]
+    public int PaymentHistoryId { get; set; }
+
+    [Column("payment_id")]
+    public int PaymentId { get; set; }
+
+    [Column("status")]
+    public string Status { get; set; } = "";
+
+    [Column("note")]
+    public string? Note { get; set; }
+
+    [Column("created_at")]
+    public DateTime CreatedAt { get; set; }
 }
