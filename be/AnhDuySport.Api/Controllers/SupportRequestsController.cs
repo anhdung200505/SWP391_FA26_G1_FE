@@ -50,7 +50,7 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     [Authorize(Roles = "ADMIN")]
     [HttpPost("{requestId}/decision")]
     [EndpointSummary("Quản trị trung tâm ra quyết định")]
-    [EndpointDescription("decision: approved hoặc rejected. Hệ thống lưu kết quả và tạo email thông báo cho học viên.")]
+    [EndpointDescription("decision: approved hoặc rejected. Hệ thống lưu kết quả và gửi email thông báo cho học viên.")]
     public async Task<ActionResult<SupportRequestResultDto>> Decide(string requestId, FinancialDecisionRequest request)
     {
         try
@@ -88,6 +88,7 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     [Authorize(Roles = "RECEPTIONIST")]
     [HttpPost("{requestId}/resolve-account")]
     [EndpointSummary("Lễ tân xử lý sự cố tài khoản")]
+    [EndpointDescription("Hệ thống lưu kết quả và gửi email thông báo cho học viên.")]
     public async Task<ActionResult<SupportRequestResultDto>> ResolveAccount(string requestId, SupportResultRequest request)
     {
         try
@@ -103,6 +104,7 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     [Authorize(Roles = "RECEPTIONIST")]
     [HttpPost("{requestId}/provide-consultation")]
     [EndpointSummary("Lễ tân tư vấn")]
+    [EndpointDescription("Hệ thống lưu kết quả và gửi email thông báo cho học viên.")]
     public async Task<ActionResult<SupportRequestResultDto>> ProvideConsultation(string requestId, SupportResultRequest request)
     {
         try

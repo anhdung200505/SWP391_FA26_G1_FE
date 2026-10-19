@@ -4,9 +4,15 @@ import HomePage from './pages/HomePage';
 import FacilitiesPage from './pages/FacilitiesPage';
 import CoachPage from './pages/CoachPage';
 import CoursesPage from './pages/CoursesPage';
+import CourseDetailPage from './pages/CourseDetailPage';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import GuestWorkspacePage from './pages/GuestWorkspacePage';
+import ProfilePage from './pages/ProfilePage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
+import CreateStaffPage from './pages/management/CreateStaffPage';
+import StaffHomePage from './pages/StaffHomePage';
 import UserAccountPage from './pages/management/UserAccountPage';
 import PackageListPage from './pages/management/PackageListPage';
 import PackageEditorPage from './pages/management/PackageEditorPage';
@@ -31,13 +37,18 @@ export default function App() {
             <Route path="/co-so-vat-chat" element={<FacilitiesPage />} />
             <Route path="/hlv" element={<CoachPage />} />
             <Route path="/khoa-hoc" element={<CoursesPage />} />
+            <Route path="/khoa-hoc/:courseSlug" element={<CourseDetailPage />} />
             <Route path="/thanh-toan" element={<PaymentPage />} />
-            <Route path="/dang-ky" element={<PaymentPage />} />
             <Route path="/payment/result" element={<PaymentResultPage />} />
             <Route path="/payment/cancel" element={<PaymentResultPage />} />
             <Route path="/dang-nhap" element={<LoginPage />} />
+            <Route path="/dang-ky" element={<RegisterPage />} />
+            <Route path="/khach" element={<GuestWorkspacePage />} />
+            <Route path="/nhan-su" element={<StaffHomePage />} />
+            <Route path="/ho-so" element={<Protected><ProfilePage /></Protected>} />
             <Route path="/quan-ly" element={<Protected><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected><UserAccountListPage /></Protected>} />
+            <Route path="/quan-ly/tai-khoan/moi" element={<Protected><CreateStaffPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected><UserAccountPage /></Protected>} />
             <Route path="/quan-ly/goi" element={<Protected><PackageListPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected><PackageEditorPage mode="create" /></Protected>} />
