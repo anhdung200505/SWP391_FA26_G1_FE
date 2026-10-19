@@ -20,16 +20,18 @@ const navItems = [
   { name: 'TRANG CHỦ', path: '/home' },
   { name: 'VỀ CHÚNG TÔI', path: '#', hasDropdown: false },
   { name: 'KHÓA HỌC', path: '/khoa-hoc', hasDropdown: true },
+  { name: 'ĐĂNG KÝ', path: '/dang-ky' },
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
-  { name: 'TUYỂN SINH', path: '#' },
+  { name: 'TUYỂN SINH', path: '/dang-ky' },
+  { name: 'ĐĂNG NHẬP', path: '/dang-nhap' },
 ];
 
 export default function Header({ forceWhite = false }) {
   const [isHeaderTransparent, setIsHeaderTransparent] = useState(!forceWhite);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth(); // Lấy hàm logout và user từ AuthContext
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     if (forceWhite) {
