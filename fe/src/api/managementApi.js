@@ -75,6 +75,11 @@ export function updateAccountStatus(userId, status) {
   });
 }
 
+// BỔ SUNG EXPORT TẤT CẢ CÁC HÀM NÀY:
+export function getPackages() {
+  return request('/packages');
+}
+
 export function createPackage(payload) {
   return request('/packages', {
     method: 'POST',

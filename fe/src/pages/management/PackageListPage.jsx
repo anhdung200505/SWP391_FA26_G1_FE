@@ -8,7 +8,7 @@ import { formatFee } from '../../data/accountManagement';
 const PACKAGE_FLOW = ['Bảng điều khiển', 'Danh sách gói', 'Tạo hoặc sửa gói', 'Hệ thống ghi nhận'];
 
 export default function PackageListPage() {
-  const { packages, loading, error } = useAccountManagement();
+  const { packages = [], loading, error } = useAccountManagement();
 
   useEffect(() => {
     document.title = 'Danh sách gói hội viên · AnhDuy Sport';
@@ -66,10 +66,10 @@ export default function PackageListPage() {
             <article key={item.id} className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold text-gray-400">{item.code}</p>
-                  <h3 className="text-lg font-black">{item.name}</h3>
+                  <p className="text-xs font-bold text-gray-400">{item.code || 'N/A'}</p>
+                  <h3 className="text-lg font-black">{item.name || 'Gói hội viên'}</h3>
                   <p className="mt-1 text-sm text-gray-600">
-                    {formatFee(item.fee)} · {item.validityMonths} tháng
+                    {formatFee(item.fee || 0)} · {item.validityMonths || 0} tháng
                   </p>
                 </div>
                 <Link
@@ -79,13 +79,15 @@ export default function PackageListPage() {
                   Chọn gói
                 </Link>
               </div>
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {item.benefits.map((benefit) => (
-                  <li key={benefit} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-                    {benefit}
-                  </li>
-                ))}
-              </ul>
+              {Array.isArray(item.benefits) && item.benefits.length > 0 && (
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {item.benefits.map((benefit, idx) => (
+                    <li key={`${item.id}-benefit-${idx}`} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                      {benefit}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </article>
           ))}
         </div>
@@ -93,4 +95,3 @@ export default function PackageListPage() {
     </ManagementShell>
   );
 }
-
