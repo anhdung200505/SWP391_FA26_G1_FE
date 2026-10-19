@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
-import { pathForRole, registrationOnly, registrationOnlyMessage } from '../auth/destination';
 import { useAuth } from '../context/AuthContext';
 
 // Danh sách các khóa học kèm đường dẫn chi tiết chuẩn slug
@@ -33,10 +32,6 @@ export default function Header({ forceWhite = false }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const items = user?.roleId === 'MEMBER'
-    ? [...navItems.filter((item) => item.name !== 'ĐĂNG NHẬP'), { name: 'ĐĂNG KÝ LỚP', path: '/khach' }]
-    : navItems;
-  const limited = registrationOnly(user);
 
   useEffect(() => {
     if (forceWhite) {
@@ -144,10 +139,11 @@ export default function Header({ forceWhite = false }) {
 
         {/* MENU ĐIỀU HƯỚNG */}
         <nav className="hidden lg:flex items-center space-x-1 xl:space-x-2">
-          {items.map((item, index) => {
-            const path = item.name === 'ĐĂNG NHẬP' && user ? pathForRole(user.roleId) : item.path;
-            const here = `${location.pathname}${location.search}`;
-            const isActive = path.includes('?') ? here === path : location.pathname === path;
+          {navItems.map((item, index) => {
+            const path = item.path;
+            const isActive =
+              location.pathname === path ||
+              (path !== '/home' && path !== '#' && location.pathname.startsWith(path));
 
             return (
               <div key={index} className="relative group">
@@ -208,6 +204,7 @@ export default function Header({ forceWhite = false }) {
               </div>
             );
           })}
+
           {/* KHU VỰC ĐĂNG NHẬP / AVATAR HỒ SƠ */}
           {!user ? (
             /* Chưa đăng nhập */
@@ -295,11 +292,6 @@ export default function Header({ forceWhite = false }) {
           )}
         </nav>
       </div>
-      {limited && (
-        <p className="bg-[#12141d] px-6 py-2 text-center text-xs font-semibold text-white">
-          {registrationOnlyMessage}
-        </p>
-      )}
     </header>
   );
 }
