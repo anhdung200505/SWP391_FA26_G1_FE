@@ -95,6 +95,11 @@ export function getDashboard() {
   return request('/management/dashboard');
 }
 
+export function getUserAccounts(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/user-accounts${query ? `?${query}` : ''}`);
+}
+
 export function updateUserRole(userId, roleId) {
   return request(`/user-accounts/${userId}/role`, {
     method: 'PUT',
@@ -107,6 +112,11 @@ export function updateAccountStatus(userId, status) {
     method: 'PUT',
     body: JSON.stringify({ status }),
   });
+}
+
+// BỔ SUNG EXPORT TẤT CẢ CÁC HÀM NÀY:
+export function getPackages() {
+  return request('/packages');
 }
 
 export function createPackage(payload) {
