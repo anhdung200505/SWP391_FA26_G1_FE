@@ -20,7 +20,7 @@ async function request(path, options = {}) {
       },
     });
   } catch {
-    throw new Error('Không kết nối được máy chủ quản lý. Hãy chạy API tại http://localhost:5080.');
+    throw new Error('Không kết nối được máy chủ. Vui lòng kiểm tra lại kết nối mạng hoặc API.');
   }
 
   if (response.status === 401 && !anonymous) {
@@ -30,12 +30,12 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok) {
-    let message = 'Máy chủ quản lý từ chối thao tác.';
+    let message = 'Thao tác thất bại.';
     try {
       const body = await response.json();
       if (body.message) message = body.message;
     } catch {
-      message = 'Máy chủ quản lý từ chối thao tác.';
+      message = 'Máy chủ từ chối thao tác.';
     }
     throw new Error(message);
   }
@@ -44,7 +44,12 @@ async function request(path, options = {}) {
   return response.json();
 }
 
-export function login(email, password, portal = 'staff') {
+// ==========================================
+// API XÁC THỰC (AUTHENTICATION)
+// ==========================================
+
+// POST /api/auth/login - Đăng nhập Quản trị & Lễ tân
+export function loginStaff(email, password, portal = 'staff') {
   return request('/auth/login', {
     method: 'POST',
     anonymous: true,
@@ -52,6 +57,16 @@ export function login(email, password, portal = 'staff') {
   });
 }
 
+// POST /api/auth/member-login - Đăng nhập Học viên
+export function loginMember(email, password, portal = 'member') {
+  return request('/auth/member-login', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, password, portal }),
+  });
+}
+
+// POST /api/auth/register - Đăng ký trực tiếp
 export function registerGuest(payload) {
   return request('/auth/register', {
     method: 'POST',
@@ -59,6 +74,28 @@ export function registerGuest(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// POST /api/auth/register/otp - Gửi mã OTP đăng ký
+export function sendRegisterOtp(payload) {
+  return request('/auth/register/otp', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+// POST /api/auth/register/confirm - Xác nhận mã OTP đăng ký
+export function confirmRegisterOtp(email, code) {
+  return request('/auth/register/confirm', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, code }),
+  });
+}
+
+// ==========================================
+// API DÂN CƯ & DANH MỤC (CATALOG)
+// ==========================================
 
 export function getCenters() {
   return request('/catalog/centers');
@@ -114,7 +151,10 @@ export function updateAccountStatus(userId, status) {
   });
 }
 
-// BỔ SUNG EXPORT TẤT CẢ CÁC HÀM NÀY:
+// ==========================================
+// API GÓI HỘI VIÊN (PACKAGES)
+// ==========================================
+
 export function getPackages() {
   return request('/packages');
 }
@@ -132,6 +172,10 @@ export function updatePackageSetting(packageId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// ==========================================
+// API HỒ SƠ CÁ NHÂN (MEMBERS PROFILE)
+// ==========================================
 
 export function getMemberProfile(memberUserId) {
   return request(`/members/${memberUserId}/profile`);
