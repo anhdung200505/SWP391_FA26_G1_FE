@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getSportsByCenter } from '../api/managementApi';
+import { useNavigate } from 'react-router-dom';
 
-// Fallback Ảnh môn học theo mã code trả về từ API
+// Import ảnh 8 môn thể thao chủ đạo từ assets
 import swimmingImg from '../assets/sports/swimming-1024x576.png';
 import tabletennisImg from '../assets/sports/tabletennis-1024x576.png';
 import soccerImg from '../assets/sports/soccer-1024x576.png';
@@ -11,61 +11,49 @@ import golfImg from '../assets/sports/golf-1024x576.png';
 import tennisImg from '../assets/sports/tennis-1024x576.png';
 import taekwondoImg from '../assets/sports/taekwondo-1024x576.png';
 
-const SPORTS_IMAGE_MAP = {
-  basketball: basketballImg,
-  swimming: swimmingImg,
-  golf: golfImg,
-  tennis: tennisImg,
-  tabletennis: tabletennisImg,
-  badminton: badmintonImg,
-  taekwondo: taekwondoImg,
-  soccer: soccerImg,
-};
+const coursesData = [
+  { id: 'bong-ro', name: 'Bóng rổ', img: basketballImg, path: '/khoa-hoc/bong-ro' },
+  { id: 'boi-loi', name: 'Bơi lội', img: swimmingImg, path: '/khoa-hoc/boi-loi' },
+  { id: 'golf-3d', name: 'Golf 3D', img: golfImg, path: '/khoa-hoc/golf-3d' },
+  { id: 'quan-vot', name: 'Quần vợt', img: tennisImg, path: '/khoa-hoc/quan-vot' },
+  { id: 'bong-ban', name: 'Bóng bàn', img: tabletennisImg, path: '/khoa-hoc/bong-ban' },
+  { id: 'cau-long', name: 'Cầu lông', img: badmintonImg, path: '/khoa-hoc/cau-long' },
+  { id: 'taekwondo', name: 'Taekwondo', img: taekwondoImg, path: '/khoa-hoc/taekwondo' },
+  { id: 'bong-da', name: 'Bóng đá', img: soccerImg, path: '/khoa-hoc/bong-da' },
+];
 
 export default function CoursesSection() {
-  const [sports, setSports] = useState([]);
-  const [activeCourse, setActiveCourse] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [activeCourse, setActiveCourse] = useState(coursesData[0]);
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef(null);
-
-  // Gọi API lấy bộ môn thể thao từ Center ID 1
-  useEffect(() => {
-    getSportsByCenter('1')
-      .then((data) => {
-        const mappedData = data.map((item) => ({
-          ...item,
-          img: SPORTS_IMAGE_MAP[item.code] || basketballImg,
-        }));
-        setSports(mappedData);
-        if (mappedData.length > 0) setActiveCourse(mappedData[0]);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        }
       },
       { threshold: 0.15 }
     );
 
-    if (sectionRef.current) observer.observe(sectionRef.current);
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
+    }
+
     return () => {
-      if (sectionRef.current) observer.unobserve(sectionRef.current);
+      if (sectionRef.current) {
+        observer.unobserve(sectionRef.current);
+      }
     };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="w-full h-[300px] bg-black flex items-center justify-center text-white font-bold">
-        Đang tải danh sách bộ môn thể thao...
-      </div>
-    );
-  }
+  // Xử lý khi người dùng nhấp chuột vào nút môn thể thao
+  const handleCourseClick = (course) => {
+    navigate(course.path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <section
@@ -75,8 +63,8 @@ export default function CoursesSection() {
     >
       {/* 1. KHỐI ẢNH NỀN FADE MƯỢT MÀ */}
       <div className="absolute inset-0 z-0">
-        {sports.map((course) => {
-          const isActive = activeCourse?.id === course.id;
+        {coursesData.map((course) => {
+          const isActive = activeCourse.id === course.id;
           return (
             <div
               key={course.id}
@@ -102,22 +90,23 @@ export default function CoursesSection() {
           isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
         }`}
       >
+        {/* TIÊU ĐỀ BÊN TRÊN */}
         <div className="mt-1 md:mt-2">
           <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-[#e31b23] uppercase tracking-tight drop-shadow-lg">
-            {sports.length} KHÓA HỌC THỂ THAO
+            8 KHÓA HỌC THỂ THAO
           </h2>
         </div>
 
         {/* 3. KHỐI NÚT DỐC NGHIÊNG (-skew-x-[20deg]) */}
         <div className="transform -skew-x-[20deg] origin-left w-full max-w-[320px] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[640px] mb-6 md:mb-14">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-3.5">
-            {sports.map((course) => {
-              const isActive = activeCourse?.id === course.id;
+            {coursesData.map((course) => {
+              const isActive = activeCourse.id === course.id;
               return (
                 <button
                   key={course.id}
                   onMouseEnter={() => setActiveCourse(course)}
-                  onClick={() => setActiveCourse(course)}
+                  onClick={() => handleCourseClick(course)}
                   className={`group relative h-12 sm:h-13 md:h-[54px] w-full transition-all duration-200 border-0 flex items-center justify-center cursor-pointer rounded-none shadow-md ${
                     isActive
                       ? 'bg-[#e31b23] text-white shadow-xl z-10 scale-[1.02]'
