@@ -1,6 +1,10 @@
 namespace AnhDuySport.Api.Contracts;
 
-public sealed record CreatePayOsPaymentRequest(string MemberUserId, string ClassId);
+public sealed record CreatePayOsPaymentRequest(
+    string ClassId,
+    string FullName,
+    string Phone,
+    string Email);
 
 public sealed record PayOsPaymentDto(
     string PaymentId,
@@ -9,4 +13,5 @@ public sealed record PayOsPaymentDto(
     string ClassId,
     string Status,
     int Amount,
-    string? CheckoutUrl);
+    string? CheckoutUrl,
+    string? QrCode);

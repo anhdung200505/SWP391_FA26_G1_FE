@@ -22,7 +22,7 @@ const navItems = [
   { name: 'THANH TOÁN', path: '/thanh-toan' },
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
-  { name: 'TUYỂN SINH', path: '#' },
+  { name: 'TUYỂN SINH', path: '/thanh-toan' },
   { name: 'ĐĂNG NHẬP', path: '/dang-nhap' },
 ];
 
