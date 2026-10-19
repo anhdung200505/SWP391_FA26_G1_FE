@@ -29,7 +29,13 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         await db.SaveChangesAsync();
     }
 
-    public async Task<LoginResponse> LoginAsync(LoginRequest request)
+    public Task<LoginResponse> LoginAsync(LoginRequest request) =>
+        SignInAsync(request, [RoleCatalog.AdminCode, "RECEPTIONIST"], "Chỉ quản trị trung tâm và lễ tân đăng nhập được.");
+
+    public Task<LoginResponse> LoginMemberAsync(LoginRequest request) =>
+        SignInAsync(request, ["MEMBER"], "Chỉ học viên đăng nhập được ở đây.");
+
+    private async Task<LoginResponse> SignInAsync(LoginRequest request, string[] allowedRoles, string wrongRoleMessage)
     {
         var email = request.Email?.Trim() ?? "";
         var password = request.Password ?? "";
@@ -56,9 +62,9 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new UnauthorizedAccessException("Tài khoản đã ngưng hoạt động.");
         }
 
-        if (user.Role?.RoleCode is not (RoleCatalog.AdminCode or "RECEPTIONIST"))
+        if (user.Role is null || !allowedRoles.Contains(user.Role.RoleCode))
         {
-            throw new UnauthorizedAccessException("Chỉ quản trị trung tâm và lễ tân đăng nhập được.");
+            throw new UnauthorizedAccessException(wrongRoleMessage);
         }
 
         return new LoginResponse(CreateToken(user), ToDto(user));
