@@ -63,6 +63,9 @@ public class Payment
     [Column("payment_link_id")]
     public string? PaymentLinkId { get; set; }
 
+    [Column("qr_code")]
+    public string? QrCode { get; set; }
+
     public Invoice? Invoice { get; set; }
     public TrainingClass? Class { get; set; }
 }
