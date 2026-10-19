@@ -17,8 +17,9 @@ public class AuthController(AuthService auth) : ControllerBase
     [AllowAnonymous]
     [HttpPost("member-login")]
     [EndpointSummary("Học viên đăng nhập")]
-    [EndpointDescription("Trả JWT vai trò MEMBER để gọi các API đăng ký lớp. Chỉ tài khoản học viên đã có mật khẩu mới đăng nhập được.")]
-    public Task<ActionResult<LoginResponse>> LoginMember(LoginRequest request) => SignIn(() => auth.LoginMemberAsync(request));
+    [EndpointDescription("Trả JWT vai trò MEMBER để gọi các API đăng ký lớp. Chỉ cần email và mật khẩu của học viên đã xác nhận OTP.")]
+    public Task<ActionResult<LoginResponse>> LoginMember(MemberLoginRequest request) =>
+        SignIn(() => auth.LoginMemberAsync(request));
 
     private async Task<ActionResult<LoginResponse>> SignIn(Func<Task<LoginResponse>> login)
     {
