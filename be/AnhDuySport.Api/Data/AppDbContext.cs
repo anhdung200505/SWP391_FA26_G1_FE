@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ClassEnrollment> ClassEnrollments => Set<ClassEnrollment>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentHistory> PaymentHistories => Set<PaymentHistory>();
     public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

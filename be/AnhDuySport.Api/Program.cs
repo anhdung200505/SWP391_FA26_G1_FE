@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PayOS;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +34,19 @@ builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<SlotFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
+builder.Services.AddScoped<PayOsPaymentService>();
+
+var payOsClientId = builder.Configuration["PayOS:ClientId"];
+var payOsApiKey = builder.Configuration["PayOS:ApiKey"];
+var payOsChecksumKey = builder.Configuration["PayOS:ChecksumKey"];
+if (string.IsNullOrWhiteSpace(payOsClientId)
+    || string.IsNullOrWhiteSpace(payOsApiKey)
+    || string.IsNullOrWhiteSpace(payOsChecksumKey))
+{
+    throw new InvalidOperationException("Thiếu cấu hình payOS. Đặt PayOS:ClientId, PayOS:ApiKey và PayOS:ChecksumKey trong user-secrets.");
+}
+
+builder.Services.AddSingleton(new PayOSClient(payOsClientId, payOsApiKey, payOsChecksumKey));
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
