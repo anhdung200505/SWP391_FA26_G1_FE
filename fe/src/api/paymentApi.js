@@ -32,6 +32,10 @@ export function getSports(centerId) {
   return request(`/catalog/centers/${encodeURIComponent(centerId)}/sports`);
 }
 
+export function getCoaches(sportId) {
+  return request(`/catalog/sports/${encodeURIComponent(sportId)}/coaches`);
+}
+
 export function getClasses(centerId, sportId) {
   const query = new URLSearchParams({ centerId });
   if (sportId) query.set('sportId', sportId);
@@ -61,4 +65,8 @@ export function createPayOsPayment(payload) {
 
 export function getPayment(paymentId) {
   return request(`/payments/${paymentId}`);
+}
+
+export function cancelPayment(paymentId) {
+  return request(`/payments/${paymentId}/cancel`, { method: 'POST' });
 }

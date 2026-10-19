@@ -39,13 +39,13 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
                 item.UserId == member.UserId && item.ClassId == trainingClass.ClassId && item.Status == "pending");
         if (pending is not null && pending.Amount != CheckoutAmount)
         {
-            await RetirePendingAsync(pending, "Đổi số tiền thử nghiệm");
+            await MarkCancelAsync(pending, "Đổi số tiền, đóng đơn pending cũ");
             pending = null;
         }
 
         if (pending is not null && !string.IsNullOrWhiteSpace(pending.CheckoutUrl) && string.IsNullOrWhiteSpace(pending.QrCode))
         {
-            await RetirePendingAsync(pending, "Tạo lại mã QR trên trang đăng ký");
+            await MarkCancelAsync(pending, "Tạo lại mã QR trên trang đăng ký");
             pending = null;
         }
 
@@ -66,18 +66,26 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
 
     public async Task<PayOsPaymentDto> AccessAsync(string paymentId)
     {
-        if (!int.TryParse(paymentId, out var id))
-        {
-            throw new KeyNotFoundException("Không tìm thấy thanh toán.");
-        }
-
-        var payment = await db.Payments
-            .Include(item => item.Invoice)
-            .FirstOrDefaultAsync(item => item.PaymentId == id)
-            ?? throw new KeyNotFoundException("Không tìm thấy thanh toán.");
+        var payment = await FindPaymentAsync(paymentId);
         if (payment.Status == "pending")
         {
             await TryConfirmFromPayOsAsync(payment);
+        }
+
+        return ToDto(payment);
+    }
+
+    public async Task<PayOsPaymentDto> CancelAsync(string paymentId)
+    {
+        var payment = await FindPaymentAsync(paymentId);
+        if (payment.Status == "paid")
+        {
+            throw new InvalidOperationException("Đơn đã thanh toán, không hủy.");
+        }
+
+        if (payment.Status == "pending")
+        {
+            await MarkCancelAsync(payment, "Không thanh toán");
         }
 
         return ToDto(payment);
@@ -139,14 +147,19 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         }
 
         var status = link.Status.ToString();
-        var paid = status.Equals("Paid", StringComparison.OrdinalIgnoreCase)
-            || status.Equals("PAID", StringComparison.OrdinalIgnoreCase);
-        if (!paid)
+        if (status.Equals("Paid", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("PAID", StringComparison.OrdinalIgnoreCase))
         {
+            await MarkPaidAsync(payment);
             return;
         }
 
-        await MarkPaidAsync(payment);
+        if (status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Canceled", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Expired", StringComparison.OrdinalIgnoreCase))
+        {
+            await MarkCancelAsync(payment, "payOS trả trạng thái " + status);
+        }
     }
 
     private async Task MarkPaidAsync(Payment payment)
@@ -179,6 +192,7 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             }
         }
 
+        AddHistory(payment, "paid", "Thanh toán thành công");
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = payment.UserId,
@@ -191,8 +205,13 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         await db.SaveChangesAsync();
     }
 
-    private async Task RetirePendingAsync(Payment payment, string reason)
+    private async Task MarkCancelAsync(Payment payment, string reason)
     {
+        if (payment.Status != "pending")
+        {
+            return;
+        }
+
         if (payment.PayosOrderCode is long orderCode)
         {
             try
@@ -204,13 +223,36 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             }
         }
 
-        payment.Status = "failed";
+        payment.Status = "cancel";
         if (payment.Invoice is not null)
         {
             payment.Invoice.Status = "cancelled";
         }
 
+        AddHistory(payment, "cancel", reason);
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = payment.UserId,
+            Action = "Hủy thanh toán payOS",
+            EntityName = "payment",
+            EntityId = payment.PaymentId,
+            Detail = reason,
+            CreatedAt = DateTime.Now,
+        });
         await db.SaveChangesAsync();
+    }
+
+    private async Task<Payment> FindPaymentAsync(string paymentId)
+    {
+        if (!int.TryParse(paymentId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy thanh toán.");
+        }
+
+        return await db.Payments
+            .Include(item => item.Invoice)
+            .FirstOrDefaultAsync(item => item.PaymentId == id)
+            ?? throw new KeyNotFoundException("Không tìm thấy thanh toán.");
     }
 
     private async Task<Payment> CreatePendingPaymentAsync(UserAccount member, PayableClass trainingClass)
@@ -271,21 +313,18 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             payment.CheckoutUrl = link.CheckoutUrl;
             payment.PaymentLinkId = link.PaymentLinkId;
             payment.QrCode = link.QrCode;
+            payment.Status = "pending";
+            AddHistory(payment, "pending", "Tạo mã QR");
             await db.SaveChangesAsync();
             if (string.IsNullOrWhiteSpace(link.QrCode))
             {
+                await MarkCancelAsync(payment, "payOS không trả mã QR");
                 throw new InvalidOperationException("payOS không trả mã QR.");
             }
         }
         catch (ApiException exception)
         {
-            payment.Status = "failed";
-            if (payment.Invoice is not null)
-            {
-                payment.Invoice.Status = "cancelled";
-            }
-
-            await db.SaveChangesAsync();
+            await MarkCancelAsync(payment, "payOS từ chối tạo mã QR");
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(exception.Message)
                 ? "payOS từ chối tạo link thanh toán."
                 : exception.Message);
@@ -316,6 +355,17 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         }
 
         return url;
+    }
+
+    private void AddHistory(Payment payment, string status, string note)
+    {
+        db.PaymentHistories.Add(new PaymentHistory
+        {
+            PaymentId = payment.PaymentId,
+            Status = status,
+            Note = note,
+            CreatedAt = DateTime.Now,
+        });
     }
 
     private async Task<PayableClass> FindPayableClassAsync(string classId)
@@ -371,14 +421,14 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             throw new InvalidOperationException("Nhập họ tên học viên.");
         }
 
-        if (phone.Length < 8)
+        if (!System.Text.RegularExpressions.Regex.IsMatch(phone, "^0\\d{9}$"))
         {
-            throw new InvalidOperationException("Nhập số điện thoại.");
+            throw new InvalidOperationException("Số điện thoại phải có 10 số và bắt đầu bằng 0.");
         }
 
-        if (!email.Contains('@') || !email.Contains('.'))
+        if (email.Contains(' ') || !email.Contains('@') || email.StartsWith('@') || email.EndsWith('@'))
         {
-            throw new InvalidOperationException("Nhập email.");
+            throw new InvalidOperationException("Email phải có ký tự @.");
         }
 
         var member = await db.UserAccounts

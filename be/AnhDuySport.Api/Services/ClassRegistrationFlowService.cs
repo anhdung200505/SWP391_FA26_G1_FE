@@ -107,8 +107,7 @@ public class ClassRegistrationFlowService(AppDbContext db)
                 item.Capacity,
                 EnrolledCount = item.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
                 NextSlot = item.Slots
-                    .Where(slot => slot.SlotDate >= today)
-                    .OrderBy(slot => slot.SlotDate)
+                    .OrderByDescending(slot => slot.SlotDate)
                     .ThenBy(slot => slot.StartTime)
                     .Select(slot => new { slot.SlotId, slot.SlotDate, slot.StartTime, slot.EndTime, slot.Title })
                     .FirstOrDefault(),
@@ -218,5 +217,37 @@ public class ClassRegistrationFlowService(AppDbContext db)
                     slot.EndTime,
                     slot.Title ?? ""))
                 .ToList());
+    }
+
+    public async Task<IReadOnlyList<CoachOptionDto>> AccessCoachesAsync(string sportId)
+    {
+        if (!int.TryParse(sportId, out var sportKey) || !await db.Sports.AnyAsync(sport => sport.SportId == sportKey))
+        {
+            throw new KeyNotFoundException("Không tìm thấy môn thể thao.");
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var rows = await db.Classes
+            .AsNoTracking()
+            .Where(item => item.Course!.SportId == sportKey)
+            .Where(item => item.Status == "open" || item.Status == "ongoing")
+            .Where(item => item.EndDate == null || item.EndDate >= today)
+            .Where(item => item.Course!.Status == "active")
+            .Select(item => new
+            {
+                item.CoachUserId,
+                item.Coach!.FullName,
+                item.ClassId,
+            })
+            .ToListAsync();
+
+        return rows
+            .GroupBy(item => item.CoachUserId)
+            .Select(group => new CoachOptionDto(
+                group.Key.ToString(),
+                group.First().FullName,
+                group.First().ClassId.ToString()))
+            .OrderBy(item => item.FullName)
+            .ToList();
     }
 }

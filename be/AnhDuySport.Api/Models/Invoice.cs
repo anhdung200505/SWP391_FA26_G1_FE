@@ -69,3 +69,23 @@ public class Payment
     public Invoice? Invoice { get; set; }
     public TrainingClass? Class { get; set; }
 }
+
+[Table("payment_history")]
+public class PaymentHistory
+{
+    [Key]
+    [Column("payment_history_id")]
+    public int PaymentHistoryId { get; set; }
+
+    [Column("payment_id")]
+    public int PaymentId { get; set; }
+
+    [Column("status")]
+    public string Status { get; set; } = "";
+
+    [Column("note")]
+    public string? Note { get; set; }
+
+    [Column("created_at")]
+    public DateTime CreatedAt { get; set; }
+}

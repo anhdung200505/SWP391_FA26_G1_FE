@@ -40,6 +40,21 @@ public class PaymentsController(PayOsPaymentService payments) : ControllerBase
         }
     }
 
+    [HttpPost("{paymentId}/cancel")]
+    [EndpointSummary("Ghi cancel khi không thanh toán")]
+    [EndpointDescription("Chỉ đơn pending mới chuyển cancel. Đơn paid giữ nguyên. Không xóa payment hay lịch sử.")]
+    public async Task<ActionResult<PayOsPaymentDto>> Cancel(string paymentId)
+    {
+        try
+        {
+            return Ok(await payments.CancelAsync(paymentId));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
     [HttpPost("payos/webhook")]
     [EndpointSummary("payOS báo thanh toán thành công")]
     [EndpointDescription("Chỉ cập nhật paid khi chữ ký checksum hợp lệ và số tiền khớp. payOS không gửi JWT.")]

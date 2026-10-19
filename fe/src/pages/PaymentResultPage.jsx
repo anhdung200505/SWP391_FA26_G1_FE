@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
-import { createPayOsPayment, getPayment, readRegistrationDraft } from '../api/paymentApi';
+import { cancelPayment, createPayOsPayment, getPayment, readRegistrationDraft } from '../api/paymentApi';
 
 function formatVnd(amount) {
   return new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
@@ -21,7 +21,10 @@ export default function PaymentResultPage() {
     document.title = 'Kết quả thanh toán - AnhDuy Sport';
     if (!orderCode) return;
     let ignore = false;
-    getPayment(orderCode)
+    const load = cancelled
+      ? cancelPayment(orderCode).catch(() => getPayment(orderCode))
+      : getPayment(orderCode);
+    load
       .then((item) => {
         if (!ignore) setPayment(item);
       })
@@ -34,7 +37,7 @@ export default function PaymentResultPage() {
   }, [orderCode]);
 
   const paid = !cancelled && (payment?.status === 'paid' || gatewayStatus === 'PAID');
-  const failed = cancelled || payment?.status === 'failed' || gatewayStatus === 'FAILED';
+  const failed = cancelled || payment?.status === 'failed' || payment?.status === 'cancel' || gatewayStatus === 'FAILED';
 
   async function repay() {
     if (!draft?.classId || !draft.customer) {
