@@ -15,6 +15,7 @@ dist-ssr
 # .NET
 bin/
 obj/
+be/AnhDuySport.Api/mailbox/
 
 # Editor directories and files
 .vs/
