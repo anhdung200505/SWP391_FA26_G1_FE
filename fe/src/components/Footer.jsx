@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import logoImg from '../assets/logo.png';
+import { registrationOnly, registrationOnlyMessage } from '../auth/destination';
+import { useAuth } from '../context/AuthContext';
 
 const sportsList = [
   'Bơi lội',
@@ -17,6 +19,8 @@ const sportsList = [
 ];
 
 export default function Footer() {
+  const { user } = useAuth();
+  const [actionNotice, setActionNotice] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -70,6 +74,11 @@ export default function Footer() {
   // Xử lý Validate & Submit
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (registrationOnly(user)) {
+      setActionNotice(registrationOnlyMessage);
+      return;
+    }
+    setActionNotice('');
     const newErrors = {};
 
     if (!formData.fullName.trim()) {
@@ -215,6 +224,9 @@ export default function Footer() {
             ) : (
               /* FORM VỚI KHUNG CẢNH BÁO CỐ ĐỊNH CHIỀU CAO (h-4) ĐỂ KHÔNG ĐẨY DÃN CÁC Ô */
               <form onSubmit={handleSubmit} noValidate className="space-y-1">
+                {actionNotice && (
+                  <p className="mb-3 bg-white px-3 py-2 text-center text-xs font-bold text-[#12141d]">{actionNotice}</p>
+                )}
                 
                 {/* 1. Họ và tên */}
                 <div className="relative">
