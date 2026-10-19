@@ -1,7 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useAuth } from './AuthContext';
 import {
   createPackage as createPackageRequest,
+  createStaffAccount as createStaffAccountRequest,
+  getPackages as getPackagesRequest,
   getUserAccounts,
   updateAccountStatus as updateAccountStatusRequest,
   updatePackageSetting as updatePackageSettingRequest,
@@ -22,19 +25,26 @@ export function AccountManagementProvider({ children }) {
     if (!user || user.roleId !== 'ADMIN') return undefined;
     let active = true;
 
-    // Gọi API lấy danh sách tài khoản thực tế từ /api/user-accounts
-    getUserAccounts()
-      .then((usersData) => {
-        if (active) {
-          setState((prev) => ({
-            ...prev,
-            users: Array.isArray(usersData) ? usersData : [],
-          }));
+    setLoading(true);
+
+    Promise.allSettled([getUserAccounts(), getPackagesRequest()])
+      .then(([usersRes, packagesRes]) => {
+        if (!active) return;
+
+        const usersData = usersRes.status === 'fulfilled' ? usersRes.value : [];
+        const packagesData = packagesRes.status === 'fulfilled' ? packagesRes.value : [];
+
+        if (usersRes.status === 'rejected' && packagesRes.status === 'rejected') {
+          setError(usersRes.reason?.message || 'Không thể tải dữ liệu từ máy chủ.');
+        } else {
           setError('');
         }
-      })
-      .catch((requestError) => {
-        if (active) setError(requestError.message);
+
+        setState((prev) => ({
+          ...prev,
+          users: Array.isArray(usersData) ? usersData : [],
+          packages: Array.isArray(packagesData) ? packagesData : [],
+        }));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -44,6 +54,18 @@ export function AccountManagementProvider({ children }) {
       active = false;
     };
   }, [user]);
+
+  const createStaffAccount = async (payload) => {
+    const result = await createStaffAccountRequest(payload);
+    flushSync(() => {
+      setState((current) => ({
+        ...current,
+        users: [...current.users, result.user].sort((left, right) => Number(left.id) - Number(right.id)),
+        logs: [result.log, ...current.logs],
+      }));
+    });
+    return result.user;
+  };
 
   const updateUserRole = async (userId, roleId) => {
     const result = await updateUserRoleRequest(userId, roleId);
@@ -69,7 +91,7 @@ export function AccountManagementProvider({ children }) {
     const result = await createPackageRequest(payload);
     setState((current) => ({
       ...current,
-      packages: [...current.packages, result.package].sort((left, right) => left.code.localeCompare(right.code)),
+      packages: [...current.packages, result.package].sort((left, right) => (left.code || '').localeCompare(right.code || '')),
       logs: [result.log, ...current.logs],
     }));
     return result.log;
@@ -94,6 +116,7 @@ export function AccountManagementProvider({ children }) {
         roles: state.roles,
         loading,
         error,
+        createStaffAccount,
         updateUserRole,
         updateAccountStatus,
         createPackage,

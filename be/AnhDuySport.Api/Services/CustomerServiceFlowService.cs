@@ -193,7 +193,7 @@ public class CustomerServiceFlowService(
 
         var handlerId = RequireActor();
         var member = item.Member ?? throw new KeyNotFoundException("Không tìm thấy học viên.");
-        var (subject, body) = emailNotifications.BuildSupportResultEmail(member, item.Title, result);
+        var email = await emailNotifications.SendSupportResultEmailAsync(member, item.Title, result);
         var now = DateTime.Now;
         item.Status = "resolved";
         item.AssignedToUserId = handlerId;
@@ -204,8 +204,8 @@ public class CustomerServiceFlowService(
         db.Notifications.Add(new AccountNotification
         {
             UserId = member.UserId,
-            Title = subject,
-            Content = body,
+            Title = email.Subject,
+            Content = email.Body,
             IsRead = false,
             CreatedAt = now,
         });
@@ -222,7 +222,7 @@ public class CustomerServiceFlowService(
 
         return new SupportRequestResultDto(
             await ToDtoAsync(item.SupportRequestId),
-            new EmailDto(member.Email ?? "", subject, body));
+            email);
     }
 
     private int RequireActor()
