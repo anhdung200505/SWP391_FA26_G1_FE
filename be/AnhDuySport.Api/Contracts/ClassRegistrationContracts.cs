@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AnhDuySport.Api.Contracts;
 
 public sealed record CenterDto(
@@ -58,3 +60,32 @@ public sealed record ClassDetailDto(
     decimal Tuition,
     bool IsOpenForRegistration,
     IReadOnlyList<ClassSlotDto> Slots);
+
+// Các trường hồ sơ đều tùy chọn: có gửi thì ghi đè hồ sơ học viên khi tạo đơn mới.
+public sealed record CreateClassRegistrationRequest(
+    string ClassId,
+    [StringLength(200, MinimumLength = 1)] string? FullName = null,
+    [RegularExpression(@"^\+?[0-9 ]{8,20}$")] string? Phone = null,
+    DateOnly? DateOfBirth = null,
+    [RegularExpression("^(Nam|Nữ|Khác)$")] string? Gender = null);
+
+public sealed record ClassRegistrationDto(
+    string PaymentId,
+    string InvoiceCode,
+    string ClassId,
+    string ClassName,
+    decimal Amount,
+    string Status,
+    string PaymentUrl,
+    bool IsExisting);
+
+public sealed record RegistrationStatusDto(
+    string PaymentId,
+    string InvoiceCode,
+    string ClassId,
+    string ClassName,
+    decimal Amount,
+    string PaymentStatus,
+    string InvoiceStatus,
+    string? EnrollmentStatus,
+    string Message);
