@@ -66,7 +66,10 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             throw new RegistrationException("Cần chọn trung tâm.");
         }
 
-        if (!int.TryParse(centerId, out var centerKey) || !await db.Centers.AnyAsync(center => center.CenterId == centerKey))
+        var isValid = int.TryParse(centerId, out var centerKey)
+                && await db.Centers.AnyAsync(center => center.CenterId == centerKey);
+
+        if (!isValid)
         {
             throw new KeyNotFoundException("Không tìm thấy trung tâm.");
         }
@@ -74,7 +77,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         int? sportKey = null;
         if (!string.IsNullOrWhiteSpace(sportId))
         {
-            if (!int.TryParse(sportId, out var parsedSport) || !await db.Sports.AnyAsync(sport => sport.SportId == parsedSport))
+            isValid = int.TryParse(sportId, out var parsedSport) && await db.Sports.AnyAsync(sport => sport.SportId == parsedSport);
+
+            if (!isValid)
             {
                 throw new KeyNotFoundException("Không tìm thấy môn thể thao.");
             }
@@ -338,6 +343,53 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
 
             return ToRegistrationDto(existing, item.ClassName, true);
         }
+    }
+
+    // Học viên xem các lớp mình đã ghi danh (enrolled), mới đăng ký nhất lên đầu.
+    public async Task<IReadOnlyList<EnrolledClassDto>> AccessEnrolledClassesAsync(int memberUserId)
+    {
+        var rows = await db.ClassEnrollments
+            .AsNoTracking()
+            .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled")
+            .Join(db.Classes, enrollment => enrollment.ClassId, item => item.ClassId, (enrollment, item) => new
+            {
+                enrollment.EnrolledAt,
+                item.ClassId,
+                item.ClassName,
+                item.Status,
+                item.StartDate,
+                item.EndDate,
+                item.Course!.SportId,
+                item.Course.Sport!.SportName,
+                item.Course.CourseName,
+                item.Course.LevelName,
+                Tuition = item.Course.Price,
+                CenterId = item.Room != null ? (int?)item.Room.CenterId : null,
+                CenterName = item.Room != null ? item.Room.Center!.CenterName : "",
+                RoomName = item.Room != null ? item.Room.RoomName : "",
+                CoachName = item.Coach!.FullName,
+            })
+            .OrderByDescending(row => row.EnrolledAt)
+            .ToListAsync();
+
+        return rows
+            .Select(row => new EnrolledClassDto(
+                row.ClassId.ToString(),
+                row.ClassName,
+                row.Status,
+                row.EnrolledAt,
+                row.StartDate,
+                row.EndDate,
+                row.SportId.ToString(),
+                row.SportName,
+                row.CourseName,
+                row.LevelName ?? "",
+                row.CenterId?.ToString() ?? "",
+                row.CenterName,
+                row.RoomName,
+                row.CoachName,
+                row.Tuition))
+            .ToList();
     }
 
     // #7: học viên xem trạng thái đơn của mình. Sai chủ đơn và không có đơn cùng trả 404 để không lộ id nào có thật.
