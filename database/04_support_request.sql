@@ -2,10 +2,13 @@
     AnhDuy Sport - Migration 04
     Luong Customer Service: hoc vien tao yeu cau ho tro.
 
-    He thong phan loai system_category:
-      financial_discount    -> status pending_manager
-      consultation_account  -> status pending_receptionist
+    Hoc vien gui moi yeu cau cho le tan (status pending_receptionist).
+    system_category ghi loai hoc vien chon:
+      financial_discount    tai chinh / giam gia
+      consultation_account  tu van / tai khoan
         receptionist_category: account_issue | consultation
+    Viec trong pham vi le tan xu ly. Viec ngoai pham vi le tan chuyen
+    status sang pending_manager de quan tri xu ly.
 
     Neu bang da co thi script khong doi gi. Chay sau 01_schema.sql.
 

@@ -192,3 +192,10 @@ export function updateMemberProfile(memberUserId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function createEnrollmentConsultation(payload) {
+  return request('/support-requests/enrollment', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
