@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import QRCode from 'qrcode';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -68,8 +67,6 @@ function stepUrl(pathname, nextStep) {
 export default function PaymentPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
-  const canRegister = user?.roleId === 'MEMBER';
   const [searchParams] = useSearchParams();
   const step = searchParams.get('buoc') || 'sport';
   const stackRef = useRef(['sport']);
@@ -129,15 +126,6 @@ export default function PaymentPage() {
   }, []);
 
   useEffect(() => {
-    if (user?.roleId !== 'MEMBER') return;
-    setCustomer({
-      fullName: user.fullName || '',
-      phone: user.phone || '',
-      email: user.email || '',
-    });
-  }, [user]);
-
-  useEffect(() => {
     document.title = 'Đăng ký lớp - AnhDuy Sport';
     let ignore = false;
     getCenters()
@@ -160,10 +148,6 @@ export default function PaymentPage() {
   }, []);
 
   function chooseSport(item) {
-    if (!canRegister) {
-      navigate('/dang-ky', { state: { from: '/thanh-toan' } });
-      return;
-    }
     setError('');
     setSport(item);
     setSelectedClass(null);
@@ -358,7 +342,7 @@ export default function PaymentPage() {
           <p className="mt-6 border border-[#e31b23] bg-[#e31b23]/15 px-4 py-3 text-sm">{error}</p>
         )}
 
-        {canRegister && step !== 'sport' && (
+        {step !== 'sport' && (
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -371,32 +355,17 @@ export default function PaymentPage() {
         {loading && <p className="mt-8 text-sm text-white/60">Đang tải...</p>}
 
         {!loading && step === 'sport' && (
-          <section className="mt-8">
-            {!canRegister && (
-              <div className="mb-6 border border-white/10 bg-[#1b1e2a] p-5">
-                <p className="text-sm text-white/80">Chưa đăng nhập thì bạn chỉ xem được môn học. Đăng ký lớp cần tạo tài khoản.</p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button type="button" onClick={() => navigate('/dang-ky', { state: { from: '/thanh-toan' } })} className="bg-[#e31b23] px-4 py-3 text-xs font-black uppercase tracking-wider">
-                    Tạo tài khoản
-                  </button>
-                  <button type="button" onClick={() => navigate('/dang-nhap', { state: { from: '/thanh-toan' } })} className="border border-white/20 px-4 py-3 text-xs font-black uppercase tracking-wider">
-                    Đã có tài khoản
-                  </button>
-                </div>
-              </div>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2">
+          <section className="mt-8 grid gap-3 sm:grid-cols-2">
             {sports.map((item) => (
               <button key={item.id} type="button" onClick={() => chooseSport(item)} className="border border-white/10 bg-[#1b1e2a] p-5 text-left">
                 <h2 className="text-lg font-black">{item.name}</h2>
                 <p className="mt-1 text-sm text-white/60">{item.openClassCount} lớp đang mở</p>
               </button>
             ))}
-            </div>
           </section>
         )}
 
-        {canRegister && step === 'mode' && (
+        {step === 'mode' && (
           <section className="mt-8 grid gap-4 sm:grid-cols-2">
             <button type="button" onClick={() => chooseMode(false)} className="border border-white/10 bg-[#1b1e2a] p-5 text-left">
               <p className="text-xs font-bold uppercase text-[#e31b23]">Học theo nhóm lớp</p>
@@ -409,7 +378,7 @@ export default function PaymentPage() {
           </section>
         )}
 
-        {canRegister && !loading && step === 'time' && (
+        {!loading && step === 'time' && (
           <section className="mt-8 grid gap-4">
             <h2 className="text-lg font-black">Chọn thời gian học {sport?.name}</h2>
             {classes.length === 0 && <p className="text-sm text-white/60">Môn này chưa có khung giờ.</p>}
@@ -427,7 +396,7 @@ export default function PaymentPage() {
           </section>
         )}
 
-        {canRegister && step === 'customer' && (
+        {step === 'customer' && (
           <form className="mt-8 grid max-w-xl gap-4" onSubmit={continueFromCustomer}>
             <label className="text-sm font-bold">
               Họ tên
@@ -450,7 +419,7 @@ export default function PaymentPage() {
           </form>
         )}
 
-        {canRegister && !loading && step === 'coach' && (
+        {!loading && step === 'coach' && (
           <section className="mt-8 grid gap-4">
             <h2 className="text-lg font-black">Chọn huấn luyện viên môn {sport?.name}</h2>
             {coaches.length === 0 && <p className="text-sm text-white/60">Môn này chưa có huấn luyện viên.</p>}
@@ -463,7 +432,7 @@ export default function PaymentPage() {
           </section>
         )}
 
-        {canRegister && step === 'confirm' && selectedClass && (
+        {step === 'confirm' && selectedClass && (
           <section className="mt-8 max-w-xl border border-white/10 bg-[#1b1e2a] p-6">
             <p className="text-xs font-bold uppercase text-[#e31b23]">Xác nhận thông tin</p>
             <h2 className="mt-2 text-2xl font-black">{selectedClass.name}</h2>
@@ -508,7 +477,7 @@ export default function PaymentPage() {
           </section>
         )}
 
-        {canRegister && step === 'pay' && selectedClass && (
+        {step === 'pay' && selectedClass && (
           <section className="mt-8 max-w-xl border border-white/10 bg-[#1b1e2a] p-6">
             {payment?.status === 'paid' ? (
               <>

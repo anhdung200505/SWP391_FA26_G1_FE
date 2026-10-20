@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
 import arenaImg from '../assets/facilities/facility-arena-1024x683.webp';
 import PasswordField from '../components/PasswordField';
@@ -7,11 +7,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { register, sendOtp, confirmOtp } = useAuth();
-  const nextPath = typeof location.state?.from === 'string' && location.state.from.startsWith('/')
-    ? location.state.from
-    : '/home';
 
   const [useOtp, setUseOtp] = useState(true);
   const [step, setStep] = useState('fill');
@@ -57,7 +53,7 @@ export default function RegisterPage() {
         // Đăng ký trực tiếp vào Database
         await register(payload);
         alert('Đăng ký tài khoản thành công!');
-        navigate(nextPath);
+        navigate('/home');
       }
     } catch (requestError) {
       setError(requestError.message || 'Đăng ký không thành công.');
@@ -91,7 +87,7 @@ export default function RegisterPage() {
     try {
       await confirmOtp(payloadConfirm);
       alert('Xác nhận OTP thành công! Tài khoản đã được kích hoạt.');
-      navigate(nextPath);
+      navigate('/home');
     } catch (requestError) {
       setError(requestError.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
     } finally {
