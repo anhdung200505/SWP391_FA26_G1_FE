@@ -515,15 +515,15 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
 
         var fullName = request.FullName?.Trim() ?? "";
-        var phone = request.Phone?.Trim() ?? "";
+        var phone = AccountPhone.Require(request.Phone);
         if (fullName.Length is 0 or > 200)
         {
             throw new InvalidOperationException("Nhập họ tên khách hàng.");
         }
 
-        if (phone.Length is 0 or > 20)
+        if (AccountPhone.Digits(user.Phone) != phone)
         {
-            throw new InvalidOperationException("Nhập số điện thoại không quá 20 ký tự.");
+            await AccountPhone.EnsureUniqueAsync(db, phone, user.UserId);
         }
 
         if (!PaymentMethods.TryGetValue(request.PaymentMethod?.Trim() ?? "", out var methodLabel))
@@ -715,6 +715,15 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             old.Invoice!.Status = "cancelled";
         }
 
+        if (!string.IsNullOrWhiteSpace(request.Phone))
+        {
+            var phone = AccountPhone.Require(request.Phone);
+            if (AccountPhone.Digits(member.Phone) != phone)
+            {
+                await AccountPhone.EnsureUniqueAsync(db, phone, member.UserId);
+            }
+        }
+
         var changedFields = ApplyProfile(member, request);
         if (changedFields.Count > 0)
         {
@@ -828,11 +837,14 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             changed.Add("họ tên");
         }
 
-        var phone = request.Phone?.Trim();
-        if (!string.IsNullOrEmpty(phone) && phone != member.Phone)
+        if (!string.IsNullOrWhiteSpace(request.Phone))
         {
-            member.Phone = phone;
-            changed.Add("số điện thoại");
+            var phone = AccountPhone.Require(request.Phone);
+            if (phone != AccountPhone.Digits(member.Phone))
+            {
+                member.Phone = phone;
+                changed.Add("số điện thoại");
+            }
         }
 
         if (request.DateOfBirth is { } dateOfBirth && dateOfBirth != member.DateOfBirth)
