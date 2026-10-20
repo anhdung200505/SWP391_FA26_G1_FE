@@ -12,6 +12,10 @@ public sealed record ConfirmRegistrationRequest(string Email, string Code);
 
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
+public sealed record ForgotPasswordRequest(string Email);
+
+public sealed record ResetPasswordRequest(string Email, string Code, string NewPassword);
+
 public sealed record AuthUserDto(
     string Id,
     string FullName,
