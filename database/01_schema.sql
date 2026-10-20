@@ -130,6 +130,9 @@ CREATE TABLE [user] (
 );
 GO
 
+CREATE UNIQUE INDEX UQ_user_phone ON [user] (phone) WHERE phone IS NOT NULL;
+GO
+
 CREATE TABLE sport (
     sport_id    INT IDENTITY(1,1) NOT NULL,
     sport_code  NVARCHAR(50)  NOT NULL,
