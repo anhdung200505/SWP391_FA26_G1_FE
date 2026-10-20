@@ -8,8 +8,25 @@ namespace AnhDuySport.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(AuthService auth) : ControllerBase
+public class AuthController(AuthService auth, CurrentActor actor) : ControllerBase
 {
+    [Authorize]
+    [HttpPost("change-password")]
+    [EndpointSummary("Đổi mật khẩu")]
+    [EndpointDescription("Mọi vai trò đã đăng nhập. Nhập mật khẩu hiện tại và mật khẩu mới (6-100 ký tự, có @, # hoặc !, khác mật khẩu cũ). Token cũ vẫn dùng được sau khi đổi.")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
+    {
+        try
+        {
+            await auth.ChangePasswordAsync(actor.UserId, request);
+            return Ok(new { message = "Đổi mật khẩu thành công." });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
     [AllowAnonymous]
     [HttpPost("login")]
     [EndpointSummary("Quản trị và lễ tân đăng nhập")]
