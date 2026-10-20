@@ -13,7 +13,9 @@ $scripts = @(
     '07_payment_qr.sql',
     '08_payment_cancel_history.sql',
     '07_membership_renewal.sql',
-    '07_pending_registration.sql'
+    '07_pending_registration.sql',
+    '08_ai_workout_recommendation.sql',
+    '10_password_reset.sql'
 )
 
 & $sqlcmd -S $server -E -b -f 65001 -i (Join-Path $root '01_schema.sql')
