@@ -1,51 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import Header from '../components/Header';
-import CourseListGrid from '../components/CourseListGrid'; // Import danh sách 8 khóa học
+import CourseListGrid from '../components/CourseListGrid';
 import Footer from '../components/Footer';
+import { getSportsByCenter } from '../api/managementApi';
 
-// Import ảnh basketball từ thư mục facilities
 import basketballImg from '../assets/facilities/facility-basketball-1024x683.webp';
-
-const courseStatsData = [
-  {
-    id: 1,
-    value: '8',
-    label: 'BỘ MÔN ĐÀO TẠO',
-  },
-  {
-    id: 2,
-    value: '5+',
-    label: 'ĐỘ TUỔI HỌC VIÊN',
-  },
-  {
-    id: 3,
-    value: '2L',
-    label: 'MÔI TRƯỜNG SONG NGỮ',
-  },
-  {
-    id: 4,
-    value: 'INTL',
-    label: 'CHUẨN HUẤN LUYỆN QUỐC TẾ',
-  },
-];
 
 export default function CoursesPage() {
   const [hoveredId, setHoveredId] = useState(null);
+  const [sportsCount, setSportsCount] = useState(8);
 
   useEffect(() => {
-    document.title = "Khóa học thể thao - AnhDuy Sport";
+    document.title = 'Khóa học thể thao - AnhDuy Sport';
     window.scrollTo(0, 0);
+
+    // Lấy số lượng bộ môn thực tế từ API
+    getSportsByCenter('1')
+      .then((data) => {
+        if (Array.isArray(data)) setSportsCount(data.length);
+      })
+      .catch(() => {});
   }, []);
+
+  const courseStatsData = [
+    { id: 1, value: String(sportsCount), label: 'BỘ MÔN ĐÀO TẠO' },
+    { id: 2, value: '5+', label: 'ĐỘ TUỔI HỌC VIÊN' },
+    { id: 3, value: '2L', label: 'MÔI TRƯỜNG SONG NGỮ' },
+    { id: 4, value: 'INTL', label: 'CHUẨN HUẤN LUYỆN QUỐC TẾ' },
+  ];
 
   return (
     <div className="relative w-full min-h-screen font-sans bg-[#12141d] text-white select-none overflow-x-hidden">
-      {/* 1. HEADER NỀN TRẮNG CỐ ĐỊNH */}
       <Header forceWhite />
 
-      {/* 2. HERO BANNER FULL MÀN HÌNH */}
       <section className="relative w-full h-screen pt-16 bg-[#0d0f17] overflow-hidden flex flex-col justify-between">
-        
-        {/* KHỐI ẢNH NỀN BASKETBALL & OVERLAY */}
         <div className="absolute inset-0 z-0">
           <img
             src={basketballImg}
@@ -63,13 +51,10 @@ export default function CoursesPage() {
           ></div>
         </div>
 
-        {/* NỘI DUNG CHÍNH HERO BANNER */}
         <div className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 my-auto pt-8">
           <div className="mb-3">
             <span className="inline-block bg-[#e31b23] text-white font-black text-xs sm:text-sm px-3.5 py-1 transform -skew-x-12 uppercase tracking-widest shadow-md">
-              <span className="inline-block transform skew-x-12">
-                ANHDUY SPORT CENTER
-              </span>
+              <span className="inline-block transform skew-x-12">ANHDUY SPORT CENTER</span>
             </span>
           </div>
 
@@ -82,7 +67,6 @@ export default function CoursesPage() {
           </p>
         </div>
 
-        {/* 3. DẢI 4 BLOCK THỐNG KÊ SÁT ĐÁY HERO BANNER */}
         <div className="relative z-20 w-full bg-[#0d0f17] py-6 px-4 sm:px-8 border-t border-gray-800/80 shrink-0">
           <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
             {courseStatsData.map((stat) => {
@@ -114,10 +98,7 @@ export default function CoursesPage() {
         </div>
       </section>
 
-      {/* 4. DANH SÁCH 8 KHÓA HỌC THỂ THAO */}
       <CourseListGrid />
-
-      {/* 5. FOOTER */}
       <Footer />
     </div>
   );
