@@ -111,12 +111,36 @@ export function getSportsByCenter(centerId = '1') {
 }
 
 export function getClasses(centerId, sportId) {
-  const query = new URLSearchParams({ centerId, sportId });
-  return request(`/catalog/classes?${query}`);
+  const params = new URLSearchParams();
+  if (centerId) params.append('centerId', centerId);
+  if (sportId) params.append('sportId', sportId);
+  
+  const queryString = params.toString();
+  return request(`/catalog/classes${queryString ? `?${queryString}` : ''}`);
 }
 
 export function getClassDetail(classId) {
   return request(`/catalog/classes/${classId}`);
+}
+
+// ==========================================
+// API ĐĂNG KÝ LỚP HỌC (CLASS REGISTRATIONS)
+// ==========================================
+
+// POST /api/class-registrations - Học viên đăng ký lớp học
+export function registerClass(classId, extraInfo = {}) {
+  return request('/class-registrations', {
+    method: 'POST',
+    body: JSON.stringify({
+      classId,
+      ...extraInfo,
+    }),
+  });
+}
+
+// GET /api/class-registrations/{paymentId} - Xem trạng thái đơn đăng ký
+export function getClassRegistrationStatus(paymentId) {
+  return request(`/class-registrations/${paymentId}`);
 }
 
 export function payRegistration(payload) {
@@ -125,6 +149,10 @@ export function payRegistration(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// ==========================================
+// API QUẢN LÝ (MANAGEMENT & USERS)
+// ==========================================
 
 export function createStaffAccount(payload) {
   return request('/user-accounts', {
