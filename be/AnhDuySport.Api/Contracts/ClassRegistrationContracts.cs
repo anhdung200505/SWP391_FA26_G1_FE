@@ -14,6 +14,11 @@ public sealed record SportDto(
     string Name,
     int OpenClassCount);
 
+public sealed record CoachOptionDto(
+    string Id,
+    string FullName,
+    string ClassId);
+
 public sealed record ClassSlotDto(
     string Id,
     DateOnly Date,
