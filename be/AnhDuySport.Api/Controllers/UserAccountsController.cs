@@ -18,6 +18,8 @@ public class UserAccountsController(UserAccountFlowService accounts) : Controlle
         Ok(await accounts.AccessUserAccountListAsync(search, roleId, status));
 
     [HttpPost]
+    [EndpointSummary("Quản trị trung tâm tạo lễ tân hoặc huấn luyện viên")]
+    [EndpointDescription("Chỉ tài khoản ADMIN. roleId nhận RECEPTIONIST hoặc COACH. Mật khẩu từ 6 ký tự và có @, # hoặc !.")]
     public async Task<ActionResult<UserMutationResponse>> CreateStaff(CreateStaffRequest request)
     {
         try
