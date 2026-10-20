@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import logoImg from '../assets/logo.png';
-import { registrationOnly, registrationOnlyMessage } from '../auth/destination';
-import { useAuth } from '../context/AuthContext';
+import { createEnrollmentConsultation } from '../api/managementApi';
 
 const sportsList = [
   'Bơi lội',
@@ -19,7 +18,6 @@ const sportsList = [
 ];
 
 export default function Footer() {
-  const { user } = useAuth();
   const [actionNotice, setActionNotice] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -72,12 +70,8 @@ export default function Footer() {
   };
 
   // Xử lý Validate & Submit
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (registrationOnly(user)) {
-      setActionNotice(registrationOnlyMessage);
-      return;
-    }
     setActionNotice('');
     const newErrors = {};
 
@@ -100,11 +94,21 @@ export default function Footer() {
 
     setErrors({});
     setIsLoading(true);
-
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await createEnrollmentConsultation({
+        fullName: formData.fullName.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim(),
+        sports: formData.selectedSports.join(', '),
+        age: formData.age ? Number(formData.age) : null,
+        kind: 'tu-van-ghi-danh',
+      });
       setIsSuccess(true);
-    }, 2000);
+    } catch (requestError) {
+      setActionNotice(requestError.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
