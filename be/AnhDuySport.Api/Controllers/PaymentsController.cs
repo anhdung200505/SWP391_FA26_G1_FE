@@ -14,11 +14,11 @@ public class PaymentsController(PayOsPaymentService payments) : ControllerBase
     [HttpPost("payos")]
     [EndpointSummary("Tạo link thanh toán payOS cho một lớp")]
     [EndpointDescription("Học viên chưa đăng nhập được, truyền memberUserId. Trả checkoutUrl. Nếu còn đơn pending thì trả lại link cũ.")]
-    public async Task<ActionResult<PayOsPaymentDto>> Create(CreatePayOsPaymentRequest request)
+    public async Task<ActionResult<PayOsPaymentDto>> Create(CreatePayOsPaymentRequest request, [FromQuery] int memberUserId)
     {
         try
         {
-            return Ok(await payments.CreateAsync(request));
+            return Ok(await payments.CreateAsync(request, memberUserId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -28,11 +28,11 @@ public class PaymentsController(PayOsPaymentService payments) : ControllerBase
 
     [HttpGet("{paymentId}")]
     [EndpointSummary("Xem trạng thái một thanh toán")]
-    public async Task<ActionResult<PayOsPaymentDto>> Access(string paymentId)
+    public async Task<ActionResult<PayOsPaymentDto>> Access(string paymentId, [FromQuery] int memberUserId)
     {
         try
         {
-            return Ok(await payments.AccessAsync(paymentId));
+            return Ok(await payments.AccessAsync(paymentId, memberUserId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -43,11 +43,11 @@ public class PaymentsController(PayOsPaymentService payments) : ControllerBase
     [HttpPost("{paymentId}/cancel")]
     [EndpointSummary("Ghi cancel khi không thanh toán")]
     [EndpointDescription("Chỉ đơn pending mới chuyển cancel. Đơn paid giữ nguyên. Không xóa payment hay lịch sử.")]
-    public async Task<ActionResult<PayOsPaymentDto>> Cancel(string paymentId)
+    public async Task<ActionResult<PayOsPaymentDto>> Cancel(string paymentId, [FromQuery] int memberUserId)
     {
         try
         {
-            return Ok(await payments.CancelAsync(paymentId));
+            return Ok(await payments.CancelAsync(paymentId, memberUserId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {

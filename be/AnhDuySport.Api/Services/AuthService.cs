@@ -88,7 +88,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
     {
         var fullName = request.FullName?.Trim() ?? "";
         var email = request.Email?.Trim() ?? "";
-        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        var phone = AccountPhone.Require(request.Phone);
         var password = request.Password ?? "";
 
         if (fullName.Length is 0 or > 200)
@@ -101,11 +101,6 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new InvalidOperationException("Email không hợp lệ.");
         }
 
-        if (phone is { Length: > 20 })
-        {
-            throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
-        }
-
         PasswordHasher.EnsureAcceptable(password);
 
         var emailTaken = await db.UserAccounts.AnyAsync(account =>
@@ -114,6 +109,8 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         {
             throw new InvalidOperationException("Email này đã được dùng.");
         }
+
+        await AccountPhone.EnsureUniqueAsync(db, phone);
 
         var memberRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == "MEMBER")
             ?? throw new InvalidOperationException("Chưa có vai trò học viên.");
@@ -146,7 +143,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
     {
         var fullName = request.FullName?.Trim() ?? "";
         var email = NormalizeEmail(request.Email);
-        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        var phone = AccountPhone.Require(request.Phone);
         var password = request.Password ?? "";
 
         if (fullName.Length is 0 or > 200)
@@ -159,11 +156,6 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new InvalidOperationException("Email không hợp lệ.");
         }
 
-        if (phone is { Length: > 20 })
-        {
-            throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
-        }
-
         PasswordHasher.EnsureAcceptable(password);
 
         await DeleteUnconfirmedRegistrationsAsync();
@@ -174,6 +166,8 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         {
             throw new InvalidOperationException("Email này đã được dùng.");
         }
+
+        await AccountPhone.EnsureUniqueAsync(db, phone, exceptPendingEmail: email);
 
         var now = DateTime.UtcNow;
         var pending = await db.PendingRegistrations.FirstOrDefaultAsync(row => row.Email == email);
@@ -259,6 +253,9 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
                 : "Mã OTP không đúng hoặc đã hết hạn.");
         }
 
+        var phone = AccountPhone.Require(pending.Phone);
+        await AccountPhone.EnsureUniqueAsync(db, phone, exceptPendingEmail: email);
+
         var memberRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == "MEMBER")
             ?? throw new InvalidOperationException("Chưa có vai trò học viên.");
         var user = new UserAccount
@@ -267,7 +264,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             Role = memberRole,
             FullName = pending.FullName,
             Email = email,
-            Phone = pending.Phone,
+            Phone = phone,
             PasswordHash = pending.PasswordHash,
             Status = "active",
             CreatedAt = DateTime.Now,
@@ -298,6 +295,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
     {
         await db.Database.ExecuteSqlRawAsync(
             """
+            SET QUOTED_IDENTIFIER ON;
             IF OBJECT_ID(N'dbo.pending_registration', N'U') IS NULL
             BEGIN
                 CREATE TABLE pending_registration (
@@ -311,6 +309,20 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
                     expires_at     DATETIME2(0)  NOT NULL,
                     CONSTRAINT PK_pending_registration PRIMARY KEY (email)
                 );
+            END
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.indexes
+                WHERE name = N'UQ_user_phone' AND object_id = OBJECT_ID(N'dbo.[user]'))
+            BEGIN
+                CREATE UNIQUE INDEX UQ_user_phone ON [user] (phone) WHERE phone IS NOT NULL;
+            END
+            IF OBJECT_ID(N'dbo.pending_registration', N'U') IS NOT NULL
+               AND NOT EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = N'UQ_pending_registration_phone' AND object_id = OBJECT_ID(N'dbo.pending_registration'))
+            BEGIN
+                CREATE UNIQUE INDEX UQ_pending_registration_phone
+                    ON pending_registration (phone) WHERE phone IS NOT NULL;
             END
             """);
     }
