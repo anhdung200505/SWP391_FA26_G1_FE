@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import arenaImg from '../assets/facilities/facility-arena-1024x683.webp';
+import { createEnrollmentConsultation } from '../api/managementApi';
 
 // DỮ LIỆU QUY TRÌNH 4 BƯỚC CHUẨN MẪU
 const processSteps = [
@@ -70,6 +71,7 @@ export default function AdmissionsPage() {
   const [selectedSport, setSelectedSport] = useState('Bơi lội');
   const [studentAge, setStudentAge] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     document.title = 'Tuyển sinh & Đăng ký - AnhDuy Sport';
@@ -77,6 +79,7 @@ export default function AdmissionsPage() {
   }, []);
 
   const openModal = (packageName = '') => {
+    setFormError('');
     setModalPackageName(packageName);
     setIsModalOpen(true);
   };
@@ -85,23 +88,36 @@ export default function AdmissionsPage() {
     setIsModalOpen(false);
   };
 
-  const handleSubmitConsult = (e) => {
+  const handleSubmitConsult = async (e) => {
     e.preventDefault();
-    if (!fullName || !phone) {
-      alert('Vui lòng nhập Họ tên và Số điện thoại!');
+    setFormError('');
+    if (!fullName.trim() || !phone.trim() || !email.trim()) {
+      setFormError('Vui lòng nhập họ tên, số điện thoại và email.');
       return;
     }
     setSubmitting(true);
-
-    setTimeout(() => {
-      setSubmitting(false);
-      alert(`Đăng ký tư vấn thành công! AnhDuy Sport sẽ liên hệ với ${fullName} qua SĐT ${phone} trong 24h.`);
+    try {
+      await createEnrollmentConsultation({
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        sports: selectedSport,
+        age: studentAge ? Number(studentAge) : null,
+        kind: 'dang-ky-tu-van',
+        note: modalPackageName,
+      });
       closeModal();
       setFullName('');
       setPhone('');
       setEmail('');
       setStudentAge('');
-    }, 800);
+      setFormError('');
+      window.alert('Đăng ký tư vấn đã được ghi nhận. Lễ tân sẽ liên hệ bạn.');
+    } catch (requestError) {
+      setFormError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -420,6 +436,9 @@ export default function AdmissionsPage() {
             </p>
 
             <form onSubmit={handleSubmitConsult} className="space-y-3.5">
+              {formError && (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-[#e31b23]">{formError}</p>
+              )}
               <div>
                 <input
                   type="text"
