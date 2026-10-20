@@ -51,6 +51,10 @@ if (!string.IsNullOrWhiteSpace(payOsClientId)
 {
     builder.Services.AddSingleton(new PayOSClient(payOsClientId, payOsApiKey, payOsChecksumKey));
 }
+else
+{
+    Console.WriteLine("payOS chưa có khóa. API vẫn chạy. Tạo mã QR sẽ báo thiếu PayOS:ClientId, PayOS:ApiKey, PayOS:ChecksumKey.");
+}
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
