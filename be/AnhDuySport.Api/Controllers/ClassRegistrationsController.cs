@@ -17,6 +17,12 @@ public class ClassRegistrationsController(ClassRegistrationFlowService registrat
     public async Task<ActionResult<ClassRegistrationDto>> Submit(CreateClassRegistrationRequest request) =>
         Ok(await registrations.SubmitRegistrationAsync(actor.UserId, request));
 
+    [HttpGet("mine")]
+    [EndpointSummary("Học viên xem các lớp đã đăng ký")]
+    [EndpointDescription("Học viên lấy từ token đăng nhập. Chỉ trả lớp đã ghi danh (enrolled), đăng ký mới nhất lên đầu. Không kèm lịch học.")]
+    public async Task<ActionResult<IReadOnlyList<EnrolledClassDto>>> AccessEnrolledClasses() =>
+        Ok(await registrations.AccessEnrolledClassesAsync(actor.UserId));
+
     [HttpGet("{paymentId}")]
     [EndpointSummary("Học viên xem trạng thái đơn đăng ký")]
     [EndpointDescription("Chỉ trả đơn của chính học viên đang đăng nhập, ngược lại trả 404. Message có lời cảm ơn khi đã thanh toán.")]

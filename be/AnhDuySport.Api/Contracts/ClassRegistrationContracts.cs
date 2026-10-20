@@ -66,6 +66,23 @@ public sealed record ClassDetailDto(
     bool IsOpenForRegistration,
     IReadOnlyList<ClassSlotDto> Slots);
 
+public sealed record EnrolledClassDto(
+    string ClassId,
+    string ClassName,
+    string ClassStatus,
+    DateTime EnrolledAt,
+    DateOnly? StartDate,
+    DateOnly? EndDate,
+    string SportId,
+    string SportName,
+    string CourseName,
+    string Level,
+    string CenterId,
+    string CenterName,
+    string RoomName,
+    string CoachName,
+    decimal Tuition);
+
 public sealed class PayRegistrationRequest
 {
     public string ClassId { get; set; } = "";
