@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnhDuySport.Api.Controllers;
 
-[Authorize(Roles = "MEMBER,RECEPTIONIST,ADMIN")]
+[AllowAnonymous]
 [ApiController]
 [FlowErrors]
 [Route("api/catalog")]
