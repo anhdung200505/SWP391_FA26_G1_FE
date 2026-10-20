@@ -39,14 +39,16 @@ builder.Services.AddScoped<PayOsPaymentService>();
 var payOsClientId = builder.Configuration["PayOS:ClientId"];
 var payOsApiKey = builder.Configuration["PayOS:ApiKey"];
 var payOsChecksumKey = builder.Configuration["PayOS:ChecksumKey"];
-if (string.IsNullOrWhiteSpace(payOsClientId)
-    || string.IsNullOrWhiteSpace(payOsApiKey)
-    || string.IsNullOrWhiteSpace(payOsChecksumKey))
+if (!string.IsNullOrWhiteSpace(payOsClientId)
+    && !string.IsNullOrWhiteSpace(payOsApiKey)
+    && !string.IsNullOrWhiteSpace(payOsChecksumKey))
 {
-    throw new InvalidOperationException("Thiếu cấu hình payOS. Đặt PayOS:ClientId, PayOS:ApiKey và PayOS:ChecksumKey trong user-secrets.");
+    builder.Services.AddSingleton(new PayOSClient(payOsClientId, payOsApiKey, payOsChecksumKey));
 }
-
-builder.Services.AddSingleton(new PayOSClient(payOsClientId, payOsApiKey, payOsChecksumKey));
+else
+{
+    Console.WriteLine("payOS chưa có khóa. API vẫn chạy. Tạo mã QR sẽ báo thiếu PayOS:ClientId, PayOS:ApiKey, PayOS:ChecksumKey.");
+}
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
