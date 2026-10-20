@@ -1,15 +1,9 @@
-import { readSession } from '../auth/session';
-
 async function request(path, options = {}) {
-  const token = readSession()?.token;
   let response;
   try {
     response = await fetch(`/api${path}`, {
       method: options.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: options.body,
     });
   } catch {

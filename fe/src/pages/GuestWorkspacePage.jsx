@@ -102,7 +102,7 @@ export default function GuestWorkspacePage() {
   }, [classId]);
 
   if (!user) {
-    return <Navigate to="/dang-ky" replace state={{ from: '/khach' }} />;
+    return <Navigate to="/dang-nhap" replace />;
   }
 
   if (user.roleId !== 'MEMBER') {
