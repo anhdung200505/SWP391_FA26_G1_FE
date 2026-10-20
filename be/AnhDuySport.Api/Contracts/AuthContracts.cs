@@ -16,6 +16,8 @@ public sealed record ForgotPasswordRequest(string Email);
 
 public sealed record ResetPasswordRequest(string Email, string Code, string NewPassword);
 
+public sealed record DeleteAccountRequest(string Password);
+
 public sealed record AuthUserDto(
     string Id,
     string FullName,
