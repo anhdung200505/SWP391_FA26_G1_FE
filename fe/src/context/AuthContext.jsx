@@ -60,8 +60,16 @@ export function AuthProvider({ children }) {
     return await sendRegisterOtpRequest(payload);
   };
 
-  // Xác nhận OTP Đăng ký
-  const confirmOtp = async (email, code) => {
+  // Xác nhận OTP Đăng ký (Hỗ trợ cả Object { email, code } và 2 tham số rời email, code)
+  const confirmOtp = async (emailOrPayload, codeParam) => {
+    let email = emailOrPayload;
+    let code = codeParam;
+
+    if (typeof emailOrPayload === 'object' && emailOrPayload !== null) {
+      email = emailOrPayload.email;
+      code = emailOrPayload.code;
+    }
+
     const result = await confirmRegisterOtpRequest(email, code);
     return store(result);
   };
