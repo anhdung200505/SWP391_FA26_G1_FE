@@ -367,8 +367,23 @@ CREATE TABLE payment (
     CONSTRAINT FK_payment_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_payment_course FOREIGN KEY (course_id) REFERENCES course (course_id),
     CONSTRAINT CK_payment_amount CHECK (amount >= 0),
-    CONSTRAINT CK_payment_status CHECK (status IN (N'pending', N'paid', N'failed', N'refunded'))
+    CONSTRAINT CK_payment_status CHECK (status IN (N'pending', N'paid', N'failed', N'refunded', N'cancel'))
 );
+GO
+
+CREATE TABLE payment_history (
+    payment_history_id INT IDENTITY(1,1) NOT NULL,
+    payment_id         INT            NOT NULL,
+    status             NVARCHAR(30)   NOT NULL,
+    note               NVARCHAR(300)  NULL,
+    created_at         DATETIME2(0)   NOT NULL CONSTRAINT DF_payment_history_created_at DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_payment_history PRIMARY KEY (payment_history_id),
+    CONSTRAINT FK_payment_history_payment FOREIGN KEY (payment_id) REFERENCES payment (payment_id),
+    CONSTRAINT CK_payment_history_status CHECK (status IN (N'pending', N'paid', N'cancel'))
+);
+GO
+
+CREATE INDEX IX_payment_history_payment_id ON payment_history (payment_id, created_at);
 GO
 
 CREATE TABLE membership (
