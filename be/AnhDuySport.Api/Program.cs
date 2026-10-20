@@ -35,6 +35,12 @@ builder.Services.AddScoped<SlotFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
 builder.Services.AddScoped<PayOsPaymentService>();
+builder.Services.AddHttpClient<GeminiWorkoutClient>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+    client.Timeout = TimeSpan.FromSeconds(100);
+});
+builder.Services.AddScoped<WorkoutRecommendationFlowService>();
 
 var payOsClientId = builder.Configuration["PayOS:ClientId"];
 var payOsApiKey = builder.Configuration["PayOS:ApiKey"];
@@ -117,6 +123,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
     await auth.EnsurePendingRegistrationTableAsync();
     await auth.EnsureBootstrapAdminPasswordAsync();
+    var workouts = scope.ServiceProvider.GetRequiredService<WorkoutRecommendationFlowService>();
+    await workouts.EnsureTablesAsync();
 }
 
 app.Run();
