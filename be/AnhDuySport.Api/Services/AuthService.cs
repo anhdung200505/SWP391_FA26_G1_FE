@@ -310,6 +310,70 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         return await IssueAsync(user);
     }
 
+    public async Task DeleteOwnAccountAsync(int userId, string? password)
+    {
+        var user = await db.UserAccounts.Include(account => account.Role)
+            .FirstOrDefaultAsync(account => account.UserId == userId)
+            ?? throw new UnauthorizedAccessException("Tài khoản không còn tồn tại.");
+
+        if (!passwords.Verify(password ?? "", user.PasswordHash))
+        {
+            throw new UnauthorizedAccessException("Mật khẩu không đúng.");
+        }
+
+        if (user.Role?.RoleCode == RoleCatalog.AdminCode || user.UserId == RoleCatalog.ActorUserId)
+        {
+            throw new InvalidOperationException("Tài khoản quản trị không tự xóa được.");
+        }
+
+        if (await db.Classes.AnyAsync(item => item.CoachUserId == user.UserId))
+        {
+            throw new InvalidOperationException("Tài khoản đang phụ trách lớp học nên không tự xóa được.");
+        }
+
+        var planCount = await db.Database
+            .SqlQuery<int>($"SELECT COUNT(*) AS Value FROM training_plan WHERE created_by_user_id = {user.UserId}")
+            .SingleAsync();
+        if (planCount > 0)
+        {
+            throw new InvalidOperationException("Tài khoản đang có giáo án nên không tự xóa được.");
+        }
+
+        var email = user.Email ?? "";
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = user.UserId,
+            Action = "Tự xóa tài khoản",
+            EntityName = "user",
+            EntityId = user.UserId,
+            Detail = $"Tài khoản {email} (user {user.UserId}) tự xóa.",
+            CreatedAt = DateTime.Now,
+        });
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM notification WHERE user_id = {user.UserId};
+            DELETE FROM attendance WHERE user_id = {user.UserId};
+            DELETE FROM slot_registration WHERE user_id = {user.UserId};
+            DELETE FROM class_enrollment WHERE user_id = {user.UserId};
+            DELETE FROM evaluation WHERE evaluator_user_id = {user.UserId} OR evaluated_user_id = {user.UserId};
+            UPDATE evaluation SET reviewer_user_id = NULL WHERE reviewer_user_id = {user.UserId};
+            DELETE FROM support_request WHERE member_user_id = {user.UserId};
+            UPDATE support_request SET assigned_to_user_id = NULL WHERE assigned_to_user_id = {user.UserId};
+            UPDATE consultation_request SET received_by_user_id = NULL WHERE received_by_user_id = {user.UserId};
+            UPDATE audit_log SET user_id = NULL WHERE user_id = {user.UserId};
+            DELETE FROM membership WHERE user_id = {user.UserId}
+                OR payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
+            DELETE FROM payment_history WHERE payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
+            DELETE FROM payment WHERE user_id = {user.UserId};
+            DELETE FROM invoice WHERE user_id = {user.UserId};
+            DELETE FROM pending_registration WHERE email = {email};
+            DELETE FROM [user] WHERE user_id = {user.UserId};
+            """);
+        await transaction.CommitAsync();
+    }
+
     public Task<int> DeleteUnconfirmedRegistrationsAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
