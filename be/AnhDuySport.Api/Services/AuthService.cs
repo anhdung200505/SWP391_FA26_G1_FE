@@ -84,6 +84,30 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         return await IssueAsync(user);
     }
 
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        var currentPassword = request.CurrentPassword ?? "";
+        var newPassword = request.NewPassword ?? "";
+
+        var user = await db.UserAccounts.FirstOrDefaultAsync(account => account.UserId == userId && account.Status == "active")
+            ?? throw new InvalidOperationException("Không tìm thấy tài khoản đang hoạt động.");
+
+        if (!passwords.Verify(currentPassword, user.PasswordHash))
+        {
+            throw new InvalidOperationException("Mật khẩu hiện tại không đúng.");
+        }
+
+        if (newPassword == currentPassword)
+        {
+            throw new InvalidOperationException("Mật khẩu mới phải khác mật khẩu hiện tại.");
+        }
+
+        PasswordHasher.EnsureAcceptable(newPassword);
+
+        user.PasswordHash = passwords.Hash(newPassword);
+        await db.SaveChangesAsync();
+    }
+
     public async Task<LoginResponse> RegisterGuestAsync(RegisterGuestRequest request)
     {
         var fullName = request.FullName?.Trim() ?? "";
