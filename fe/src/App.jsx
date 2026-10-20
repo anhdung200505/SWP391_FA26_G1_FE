@@ -5,9 +5,10 @@ import FacilitiesPage from './pages/FacilitiesPage';
 import CoachPage from './pages/CoachPage';
 import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
+import AdmissionsPage from './pages/AdmissionsPage'; // Import trang Tuyển sinh
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage'; // 1. Import trang Hồ sơ cá nhân
+import ProfilePage from './pages/ProfilePage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
 import UserAccountPage from './pages/management/UserAccountPage';
@@ -35,11 +36,14 @@ export default function App() {
             <Route path="/khoa-hoc" element={<CoursesPage />} />
             <Route path="/khoa-hoc/:courseSlug" element={<CourseDetailPage />} />
 
+            {/* Route Tuyển sinh mới */}
+            <Route path="/tuyen-sinh" element={<AdmissionsPage />} />
+
             {/* Khai báo route Đăng nhập & Đăng ký */}
             <Route path="/dang-nhap" element={<LoginPage />} />
             <Route path="/dang-ky" element={<RegisterPage />} />
 
-            {/* 2. Khai báo Route Hồ sơ cá nhân (Chỉ cho phép khi đã đăng nhập) */}
+            {/* Route Hồ sơ cá nhân */}
             <Route path="/ho-so" element={<Protected><ProfilePage /></Protected>} />
 
             {/* Khai báo các route Quản lý */}

@@ -22,7 +22,7 @@ const navItems = [
   { name: 'KHÓA HỌC', path: '/khoa-hoc', hasDropdown: true },
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
-  { name: 'TUYỂN SINH', path: '#' },
+  { name: 'TUYỂN SINH', path: '/tuyen-sinh' }, // Gắn đường dẫn /tuyen-sinh
 ];
 
 export default function Header({ forceWhite = false }) {
@@ -72,12 +72,14 @@ export default function Header({ forceWhite = false }) {
       path === '/home' ||
       path === '/co-so-vat-chat' ||
       path === '/hlv' ||
+      path === '/tuyen-sinh' ||
       path.startsWith('/khoa-hoc')
     ) {
-      window.location.href = path;
+      navigate(path);
+      window.scrollTo(0, 0);
     } else if (path.startsWith('#')) {
       if (location.pathname !== '/home') {
-        window.location.href = `/home${path}`;
+        navigate(`/home${path}`);
       } else {
         const elem = document.querySelector(path);
         if (elem) elem.scrollIntoView({ behavior: 'smooth' });

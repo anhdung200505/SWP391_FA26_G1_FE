@@ -94,15 +94,20 @@ export function confirmRegisterOtp(email, code) {
 }
 
 // ==========================================
-// API DÂN CƯ & DANH MỤC (CATALOG)
+// API DANH MỤC & KHÓA HỌC (CATALOG)
 // ==========================================
 
 export function getCenters() {
   return request('/catalog/centers');
 }
 
-export function getSports(centerId) {
+export function getSports(centerId = '1') {
   return request(`/catalog/centers/${centerId}/sports`);
+}
+
+// Alias bổ sung cho getSports để tương thích các component cũ/mới
+export function getSportsByCenter(centerId = '1') {
+  return getSports(centerId);
 }
 
 export function getClasses(centerId, sportId) {
