@@ -25,7 +25,7 @@ public class CustomerServiceFlowService(
             Description = description,
             SystemCategory = category,
             ClassificationReason = $"Học viên chọn loại {TypeLabel(requestType)}.",
-            Status = category == "financial_discount" ? "pending_manager" : "pending_receptionist",
+            Status = "pending_receptionist",
             CreatedAt = now,
         };
         var log = new ActivityLog
@@ -33,7 +33,7 @@ public class CustomerServiceFlowService(
             ActorUserId = member.UserId,
             Action = "Tạo yêu cầu hỗ trợ",
             EntityName = "support_request",
-            Detail = $"{TypeLabel(requestType)} → {RouteLabel(category)}",
+            Detail = $"{TypeLabel(requestType)} → lễ tân",
             CreatedAt = now,
         };
         db.SupportRequests.Add(item);
@@ -42,7 +42,108 @@ public class CustomerServiceFlowService(
         log.EntityId = item.SupportRequestId;
         await db.SaveChangesAsync();
 
-        return new SupportRequestCreatedDto(ClassificationMessage(category), await ToDtoAsync(item.SupportRequestId));
+        return new SupportRequestCreatedDto(
+            "Yêu cầu đã chuyển tới lễ tân.",
+            await ToDtoAsync(item.SupportRequestId));
+    }
+
+    public async Task<SupportRequestCreatedDto> CreateEnrollmentConsultationAsync(CreateEnrollmentConsultationRequest request)
+    {
+        var kind = request.Kind?.Trim().ToLowerInvariant() ?? "";
+        var title = kind switch
+        {
+            "tu-van-ghi-danh" => "Tư vấn ghi danh",
+            "dang-ky-tu-van" => "Đăng ký tư vấn",
+            _ => throw new InvalidOperationException("Loại form không hợp lệ."),
+        };
+        var fullName = RequireText(request.FullName, "Nhập họ và tên.", 200);
+        var phone = AccountPhone.Require(request.Phone);
+        var email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+        if (email is { Length: > 200 } || (email is not null && !email.Contains('@')))
+        {
+            throw new InvalidOperationException("Email không hợp lệ.");
+        }
+
+        if (request.Age is < 1 or > 99)
+        {
+            throw new InvalidOperationException("Độ tuổi học viên từ 1 đến 99.");
+        }
+
+        var sports = string.IsNullOrWhiteSpace(request.Sports) ? null : request.Sports.Trim();
+        if (sports is { Length: > 500 })
+        {
+            throw new InvalidOperationException("Danh sách môn học quá dài.");
+        }
+
+        var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+        if (note is { Length: > 200 })
+        {
+            throw new InvalidOperationException("Ghi chú quá dài.");
+        }
+
+        var member = await FindConsultationMemberAsync(email);
+        var description = string.Join(
+            Environment.NewLine,
+            new[]
+            {
+                $"Họ tên: {fullName}",
+                $"Số điện thoại: {phone}",
+                $"Email: {email ?? member.Email}",
+                $"Môn: {sports ?? "Chưa chọn"}",
+                $"Độ tuổi: {(request.Age is int age ? age.ToString() : "Chưa nhập")}",
+                note is null ? null : $"Gói quan tâm: {note}",
+            }.Where(line => line is not null));
+        var now = DateTime.Now;
+        var item = new SupportRequest
+        {
+            MemberUserId = member.UserId,
+            Title = title,
+            Description = description,
+            SystemCategory = "consultation_account",
+            ClassificationReason = $"Khách gửi form {title}.",
+            Status = "pending_receptionist",
+            CreatedAt = now,
+        };
+        db.SupportRequests.Add(item);
+        var log = new ActivityLog
+        {
+            ActorUserId = member.UserId,
+            Action = "Tạo yêu cầu hỗ trợ",
+            EntityName = "support_request",
+            Detail = $"{title} → lễ tân",
+            CreatedAt = now,
+        };
+        db.ActivityLogs.Add(log);
+        await db.SaveChangesAsync();
+        log.EntityId = item.SupportRequestId;
+        await db.SaveChangesAsync();
+        return new SupportRequestCreatedDto("Yêu cầu tư vấn đã chuyển tới lễ tân.", await ToDtoAsync(item.SupportRequestId));
+    }
+
+    private async Task<UserAccount> FindConsultationMemberAsync(string? email)
+    {
+        if (actor.UserId != 0)
+        {
+            var current = await db.UserAccounts.Include(user => user.Role)
+                .FirstOrDefaultAsync(user => user.UserId == actor.UserId);
+            if (current?.Role?.RoleCode == "MEMBER" && current.Status == "active")
+            {
+                return current;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var normalized = email.ToLowerInvariant();
+            var byEmail = await db.UserAccounts.Include(user => user.Role)
+                .FirstOrDefaultAsync(user => user.Email != null && user.Email.ToLower() == normalized);
+            if (byEmail?.Role?.RoleCode == "MEMBER" && byEmail.Status == "active")
+            {
+                return byEmail;
+            }
+        }
+
+        throw new InvalidOperationException("Hãy đăng nhập tài khoản học viên, hoặc nhập email của tài khoản học viên, để gửi yêu cầu tư vấn.");
     }
 
     public async Task<IReadOnlyList<SupportRequestDto>> AccessMemberRequestsAsync(string memberUserId)
@@ -57,8 +158,17 @@ public class CustomerServiceFlowService(
         return await LoadDtosAsync(ids);
     }
 
-    public Task<IReadOnlyList<SupportRequestDto>> AccessFinancialRequestsAsync() =>
-        AccessByCategoryAsync("financial_discount");
+    public async Task<IReadOnlyList<SupportRequestDto>> AccessFinancialRequestsAsync()
+    {
+        var ids = await db.SupportRequests
+            .AsNoTracking()
+            .Where(item => item.Status == "pending_manager" || (item.Status == "resolved" && item.Decision != null))
+            .OrderBy(item => item.Status == "resolved")
+            .ThenByDescending(item => item.CreatedAt)
+            .Select(item => item.SupportRequestId)
+            .ToListAsync();
+        return await LoadDtosAsync(ids);
+    }
 
     public async Task<SupportRequestResultDto> DecideFinancialRequestAsync(string requestId, FinancialDecisionRequest request)
     {
@@ -72,17 +182,52 @@ public class CustomerServiceFlowService(
         var verb = decision == "approved" ? "chấp nhận" : "từ chối";
         return await SaveResultAsync(
             requestId,
-            "financial_discount",
+            expectedCategory: null,
             expectedStatus: "pending_manager",
             expectedReceptionistCategory: null,
             decision: decision,
             receptionistCategory: null,
             result: $"Quản trị trung tâm {verb} yêu cầu. {note}",
-            action: "Quyết định yêu cầu tài chính");
+            action: "Quyết định yêu cầu ngoài phạm vi lễ tân");
     }
 
-    public Task<IReadOnlyList<SupportRequestDto>> AccessServiceRequestsAsync() =>
-        AccessByCategoryAsync("consultation_account");
+    public async Task<IReadOnlyList<SupportRequestDto>> AccessServiceRequestsAsync()
+    {
+        var ids = await db.SupportRequests
+            .AsNoTracking()
+            .Where(item => item.Status == "pending_receptionist" || item.Status == "classified")
+            .OrderBy(item => item.Status == "classified")
+            .ThenByDescending(item => item.CreatedAt)
+            .Select(item => item.SupportRequestId)
+            .ToListAsync();
+        return await LoadDtosAsync(ids);
+    }
+
+    public async Task<SupportRequestDto> EscalateToManagerAsync(string requestId, EscalateSupportRequest request)
+    {
+        var reason = RequireText(request.Reason, "Nhập lý do chuyển lên quản trị trung tâm.", 500);
+        var item = await FindRequestAsync(requestId);
+        if (item.Status is not ("pending_receptionist" or "classified"))
+        {
+            throw new InvalidOperationException("Chỉ chuyển được yêu cầu đang ở hàng chờ lễ tân.");
+        }
+
+        var handlerId = RequireActor();
+        item.Status = "pending_manager";
+        item.AssignedToUserId = handlerId;
+        item.ClassificationReason = $"Lễ tân chuyển lên vì ngoài phạm vi: {reason}";
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = handlerId,
+            Action = "Chuyển yêu cầu lên quản trị trung tâm",
+            EntityName = "support_request",
+            EntityId = item.SupportRequestId,
+            Detail = reason,
+            CreatedAt = DateTime.Now,
+        });
+        await db.SaveChangesAsync();
+        return await ToDtoAsync(item.SupportRequestId);
+    }
 
     public async Task<SupportRequestDto> ClassifyServiceRequestAsync(string requestId, ClassifySupportRequest request)
     {
@@ -95,7 +240,7 @@ public class CustomerServiceFlowService(
         var item = await FindRequestAsync(requestId);
         if (item.SystemCategory != "consultation_account")
         {
-            throw new InvalidOperationException("Yêu cầu này không thuộc hàng chờ lễ tân.");
+            throw new InvalidOperationException("Yêu cầu này ngoài phạm vi lễ tân. Hãy chuyển lên quản trị trung tâm.");
         }
 
         if (item.Status is not ("pending_receptionist" or "classified"))
@@ -124,7 +269,7 @@ public class CustomerServiceFlowService(
         var note = RequireText(request.Note, "Nhập cách xử lý sự cố tài khoản.", 2000);
         return SaveResultAsync(
             requestId,
-            "consultation_account",
+            expectedCategory: "consultation_account",
             expectedStatus: "classified",
             expectedReceptionistCategory: "account_issue",
             decision: null,
@@ -138,7 +283,7 @@ public class CustomerServiceFlowService(
         var note = RequireText(request.Note, "Nhập nội dung tư vấn.", 2000);
         return SaveResultAsync(
             requestId,
-            "consultation_account",
+            expectedCategory: "consultation_account",
             expectedStatus: "classified",
             expectedReceptionistCategory: "consultation",
             decision: null,
@@ -147,21 +292,9 @@ public class CustomerServiceFlowService(
             action: "Tư vấn học viên");
     }
 
-    private async Task<IReadOnlyList<SupportRequestDto>> AccessByCategoryAsync(string category)
-    {
-        var ids = await db.SupportRequests
-            .AsNoTracking()
-            .Where(item => item.SystemCategory == category)
-            .OrderBy(item => item.Status == "resolved")
-            .ThenByDescending(item => item.CreatedAt)
-            .Select(item => item.SupportRequestId)
-            .ToListAsync();
-        return await LoadDtosAsync(ids);
-    }
-
     private async Task<SupportRequestResultDto> SaveResultAsync(
         string requestId,
-        string expectedCategory,
+        string? expectedCategory,
         string expectedStatus,
         string? expectedReceptionistCategory,
         string? decision,
@@ -170,7 +303,7 @@ public class CustomerServiceFlowService(
         string action)
     {
         var item = await FindRequestAsync(requestId);
-        if (item.SystemCategory != expectedCategory)
+        if (expectedCategory is not null && item.SystemCategory != expectedCategory)
         {
             throw new InvalidOperationException("Yêu cầu không thuộc hàng chờ này.");
         }
@@ -345,11 +478,6 @@ public class CustomerServiceFlowService(
     private static string Classify(string requestType) =>
         requestType is "financial" or "discount" ? "financial_discount" : "consultation_account";
 
-    private static string ClassificationMessage(string category) =>
-        category == "financial_discount"
-            ? "Hệ thống phân loại Tài chính / Giảm giá và chuyển quản trị trung tâm."
-            : "Hệ thống phân loại Tư vấn / Tài khoản và chuyển lễ tân.";
-
     private static string TypeLabel(string requestType) => requestType switch
     {
         "financial" => "Tài chính",
@@ -358,9 +486,6 @@ public class CustomerServiceFlowService(
         "account" => "Tài khoản",
         _ => requestType,
     };
-
-    private static string RouteLabel(string category) =>
-        category == "financial_discount" ? "Quản trị trung tâm" : "Lễ tân";
 
     private static string RequireText(string? value, string message, int max)
     {
