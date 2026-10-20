@@ -7,10 +7,9 @@ import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { register, sendOtp, confirmOtp } = useAuth();
+  const { sendOtp, confirmOtp } = useAuth();
 
-  const [useOtp, setUseOtp] = useState(true);
-  const [step, setStep] = useState('fill');
+  const [step, setStep] = useState('fill'); // 'fill' | 'otp'
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -18,13 +17,15 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Submit Bước 1
+  // Submit Bước 1: Gửi thông tin nhận OTP
   const handleSubmitInfo = async (event) => {
     event.preventDefault();
     if (saving) return;
     setError('');
+    setSuccessMsg('');
 
     if (!fullName.trim() || !email.trim() || !phone.trim() || !password) {
       setError('Vui lòng điền đầy đủ các thông tin bắt buộc.');
@@ -45,28 +46,21 @@ export default function RegisterPage() {
     };
 
     try {
-      if (useOtp) {
-        // Gửi OTP tới Backend
-        await sendOtp(payload);
-        setStep('otp');
-      } else {
-        // Đăng ký trực tiếp vào Database
-        await register(payload);
-        alert('Đăng ký tài khoản thành công!');
-        navigate('/home');
-      }
+      await sendOtp(payload);
+      setStep('otp');
     } catch (requestError) {
-      setError(requestError.message || 'Đăng ký không thành công.');
+      setError(requestError.message || 'Không thể gửi mã OTP. Vui lòng kiểm tra lại thông tin.');
     } finally {
       setSaving(false);
     }
   };
 
-  // Submit Bước 2 (Xác nhận OTP)
+  // Submit Bước 2: Xác nhận OTP -> Tự động Đăng nhập & Chuyển hướng
   const handleConfirmOtp = async (event) => {
     event.preventDefault();
     if (saving) return;
     setError('');
+    setSuccessMsg('');
 
     if (!otpCode.trim()) {
       setError('Vui lòng nhập mã OTP.');
@@ -75,22 +69,16 @@ export default function RegisterPage() {
 
     setSaving(true);
 
-    // Gửi đầy đủ thông tin kèm code OTP lên Backend để hoàn tất lưu DB
-    const payloadConfirm = {
-      email: email.trim(),
-      code: otpCode.trim(),
-      fullName: fullName.trim(),
-      phone: phone.trim(),
-      password,
-    };
-
     try {
-      await confirmOtp(payloadConfirm);
-      alert('Xác nhận OTP thành công! Tài khoản đã được kích hoạt.');
-      navigate('/home');
+      // confirmOtp sẽ trả về token và lưu session đăng nhập tự động
+      await confirmOtp({ email: email.trim(), code: otpCode.trim() });
+      setSuccessMsg('Xác nhận OTP thành công! Đang tự động đăng nhập...');
+
+      setTimeout(() => {
+        navigate('/hoc-vien-dashboard');
+      }, 1200);
     } catch (requestError) {
       setError(requestError.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
-    } finally {
       setSaving(false);
     }
   };
@@ -147,7 +135,7 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      {/* FORM ĐĂNG KÝ BÊN PHẢI */}
+      {/* FORM BÊN PHẢI */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 bg-[#12141d] relative z-10 my-auto">
         <div className="w-full max-w-md bg-[#181d2a] rounded-2xl p-8 sm:p-10 border border-gray-800 shadow-2xl">
           <div className="lg:hidden mb-6 flex justify-center">
@@ -232,19 +220,6 @@ export default function RegisterPage() {
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="useOtp"
-                  checked={useOtp}
-                  onChange={(e) => setUseOtp(e.target.checked)}
-                  className="w-4 h-4 rounded accent-[#e31b23] cursor-pointer"
-                />
-                <label htmlFor="useOtp" className="text-xs font-semibold text-gray-300 cursor-pointer select-none">
-                  Xác minh bằng mã OTP qua Email
-                </label>
-              </div>
-
               {error && (
                 <div className="rounded-xl bg-red-950/60 border border-red-800/80 px-4 py-2.5 text-xs font-semibold text-red-300">
                   ⚠️ {error}
@@ -256,7 +231,7 @@ export default function RegisterPage() {
                 disabled={saving}
                 className="w-full rounded-xl bg-[#e31b23] hover:bg-[#c4131a] px-4 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-red-900/40 cursor-pointer disabled:opacity-60 transition-all transform active:scale-[0.99] mt-2"
               >
-                {saving ? 'Đang kết nối API...' : useOtp ? 'Gửi mã OTP xác nhận' : 'Đăng ký ngay'}
+                {saving ? 'Đang gửi mã OTP...' : 'Tiếp tục (Nhận OTP)'}
               </button>
             </form>
           ) : (
@@ -274,9 +249,16 @@ export default function RegisterPage() {
                 />
               </div>
 
+              {/* KHỐI THÔNG BÁO LỖI VÀ THÀNH CÔNG CHUẨN UI */}
               {error && (
                 <div className="rounded-xl bg-red-950/60 border border-red-800/80 px-4 py-2.5 text-xs font-semibold text-red-300">
                   ⚠️ {error}
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="rounded-xl bg-emerald-950/70 border border-emerald-700/80 px-4 py-3 text-xs font-bold text-emerald-300 flex items-center gap-2">
+                  <span>✓</span> {successMsg}
                 </div>
               )}
 
@@ -290,7 +272,7 @@ export default function RegisterPage() {
 
               <button
                 type="button"
-                onClick={() => { setStep('fill'); setError(''); }}
+                onClick={() => { setStep('fill'); setError(''); setSuccessMsg(''); }}
                 className="w-full text-xs font-bold text-gray-400 hover:text-white transition-colors"
               >
                 ← Quay lại sửa thông tin

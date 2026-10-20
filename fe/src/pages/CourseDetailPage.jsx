@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 export default function CourseDetailPage() {
   const { courseSlug } = useParams();
   const courseStatic = fontDetails[courseSlug];
-  const { user } = useAuth(); // Kiểm tra trạng thái đăng nhập
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [classes, setClasses] = useState([]);
@@ -23,12 +23,11 @@ export default function CourseDetailPage() {
     }
   }, [courseSlug, courseStatic]);
 
-  // Chỉ fetch dữ liệu lớp học khi người dùng ĐÃ ĐĂNG NHẬP
   useEffect(() => {
     let active = true;
 
     async function fetchClassesData() {
-      if (!user) return; // Guest -> Không fetch
+      if (!user) return;
       try {
         setLoadingClasses(true);
         const sportsList = await getSportsByCenter('1');
@@ -57,6 +56,11 @@ export default function CourseDetailPage() {
       active = false;
     };
   }, [courseSlug, courseStatic, user]);
+
+  // Chuyển hướng sang trang xác nhận thông tin đăng ký
+  const handleRegisterClass = (classItem) => {
+    navigate(`/dang-ky-khoa-hoc?classId=${classItem.id}`);
+  };
 
   if (!courseStatic) {
     return <Navigate to="/khoa-hoc" replace />;
@@ -172,31 +176,33 @@ export default function CourseDetailPage() {
         </div>
       </section>
 
-      {/* BANNER TẬP LUYỆN -> DẪN SANG TRANG TUYỂN SINH */}
-      <section className="relative z-20 w-full bg-[#121622] border-y border-gray-800/80 py-16 px-6 text-center overflow-hidden">
-        <div className="max-w-4xl mx-auto relative z-10">
-          <h2 className="text-3xl sm:text-5xl font-black text-white uppercase tracking-tight mb-4">
-            TẬP LUYỆN CÙNG HLV {headCoach.name}
-          </h2>
+      {/* BANNER TẬP LUYỆN -> DẪN SANG TRANG TUYỂN SINH (CHỈ HIỂN THỊ DÀNH CHO GUEST Chưa Đăng Nhập) */}
+      {!user && (
+        <section className="relative z-20 w-full bg-[#121622] border-y border-gray-800/80 py-16 px-6 text-center overflow-hidden">
+          <div className="max-w-4xl mx-auto relative z-10">
+            <h2 className="text-3xl sm:text-5xl font-black text-white uppercase tracking-tight mb-4">
+              TẬP LUYỆN CÙNG HLV {headCoach.name}
+            </h2>
 
-          <p className="text-sm sm:text-base font-semibold text-gray-300 max-w-xl mx-auto mb-8">
-            Xem học phí, chọn lộ trình phù hợp và đặt lịch tư vấn cho bộ môn {courseStatic.title}.
-          </p>
+            <p className="text-sm sm:text-base font-semibold text-gray-300 max-w-xl mx-auto mb-8">
+              Xem học phí, chọn lộ trình phù hợp và đặt lịch tư vấn cho bộ môn {courseStatic.title}.
+            </p>
 
-          <button
-            onClick={() => {
-              navigate('/tuyen-sinh');
-              window.scrollTo(0, 0);
-            }}
-            className="inline-flex items-center gap-2 bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-black text-xs uppercase tracking-wider px-8 py-4 rounded-lg shadow-xl shadow-blue-900/40 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-          >
-            <span>ĐĂNG KÝ TUYỂN SINH NGAY</span>
-            <span>→</span>
-          </button>
-        </div>
-      </section>
+            <button
+              onClick={() => {
+                navigate('/tuyen-sinh');
+                window.scrollTo(0, 0);
+              }}
+              className="inline-flex items-center gap-2 bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-black text-xs uppercase tracking-wider px-8 py-4 rounded-lg shadow-xl shadow-blue-900/40 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+            >
+              <span>ĐĂNG KÝ TUYỂN SINH NGAY</span>
+              <span>→</span>
+            </button>
+          </div>
+        </section>
+      )}
 
-      {/* CHỈ HIỂN THỊ BẢNG LỚP HỌC KHI ĐÃ ĐĂNG NHẬP, GUEST SẼ KHÔNG HIỂN THỊ GÌ */}
+      {/* BẢNG LỚP HỌC CHI TIẾT (CHỈ HIỂN THỊ KHI NGƯỜI DÙNG ĐÃ ĐĂNG NHẬP) */}
       {user && (
         <section className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 py-16">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 pb-4 border-b border-gray-800">
@@ -267,7 +273,7 @@ export default function CourseDetailPage() {
 
                     <button
                       type="button"
-                      onClick={() => alert(`Đã ghi nhận đăng ký lớp: ${item.name}`)}
+                      onClick={() => handleRegisterClass(item)}
                       className="w-full inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl shadow-lg transition-all cursor-pointer"
                     >
                       Đăng ký học ngay →
