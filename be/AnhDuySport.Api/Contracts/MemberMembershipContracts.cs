@@ -30,7 +30,32 @@ public sealed record ConsultationContactDto(
     string Email,
     string Message);
 
-public sealed record RenewMembershipRequest(string PackageId, string PaymentMethod);
+// Thanh toán qua payOS nên không cần chọn phương thức thanh toán.
+public sealed record RenewMembershipRequest(string PackageId);
+
+// Select Membership Package → Process Payment: link / mã QR payOS cho gói vừa chọn
+public sealed record MembershipCheckoutDto(
+    string PaymentId,
+    string MembershipId,
+    string InvoiceCode,
+    string PackageId,
+    string PlanName,
+    string RenewalType,
+    int Amount,
+    string PaymentStatus,
+    string? CheckoutUrl,
+    string? QrCode,
+    string Message);
+
+// Display Success Message + Receive Updated Membership Info
+// Kết quả kiểm tra thanh toán. Membership chỉ chuyển active khi payment đã paid.
+public sealed record MembershipPaymentResultDto(
+    string PaymentId,
+    string PaymentStatus,
+    MembershipDto Membership,
+    DateOnly? MembershipEndDate,
+    string Message,
+    ActivityLogDto? Log);
 
 public sealed record MembershipDto(
     string Id,
@@ -50,10 +75,3 @@ public sealed record MembershipManagementDto(
     DateOnly? MembershipEndDate,
     IReadOnlyList<MembershipDto> History,
     IReadOnlyList<PackageDto> Packages);
-
-// Display Success Message + Receive Updated Membership Info
-public sealed record MembershipRenewalResponse(
-    MembershipDto Membership,
-    DateOnly MembershipEndDate,
-    string Message,
-    ActivityLogDto Log);
