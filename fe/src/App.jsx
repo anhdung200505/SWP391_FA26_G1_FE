@@ -35,7 +35,6 @@ export default function App() {
             <Route path="/home" element={<HomePage />} />
             <Route path="/co-so-vat-chat" element={<FacilitiesPage />} />
             <Route path="/hlv" element={<CoachPage />} />
-            
             <Route path="/khoa-hoc" element={<CoursesPage />} />
             <Route path="/khoa-hoc/:courseSlug" element={<CourseDetailPage />} />
 
