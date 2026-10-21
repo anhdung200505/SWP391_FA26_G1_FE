@@ -132,6 +132,11 @@ public class UserAccountFlowService(
     public async Task<UserMutationResponse> ModifyRoleAsync(string userId, string roleCode)
     {
         var user = await FindEditableUserAsync(userId);
+        if (roleCode == RoleCatalog.AdminCode)
+        {
+            throw new InvalidOperationException("Không cấp vai trò quản trị qua chức năng đổi vai trò.");
+        }
+
         var nextRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == roleCode)
             ?? throw new InvalidOperationException("Vai trò không hợp lệ.");
         if (user.RoleId == nextRole.RoleId)
