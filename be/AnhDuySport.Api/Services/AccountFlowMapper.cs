@@ -26,7 +26,7 @@ public static class AccountFlowMapper
             package.ValidityMonths,
             SplitBenefits(package.Benefits),
             package.UpdatedAt ?? package.CreatedAt,
-            package.ClassDiscountPercent);
+            package.UpgradeDiscountPercent);
 
     public static IReadOnlyList<string> SplitBenefits(string? text)
     {
