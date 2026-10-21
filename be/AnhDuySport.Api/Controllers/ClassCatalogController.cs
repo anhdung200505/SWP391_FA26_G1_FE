@@ -7,6 +7,7 @@ namespace AnhDuySport.Api.Controllers;
 
 [AllowAnonymous]
 [ApiController]
+[FlowErrors]
 [Route("api/catalog")]
 public class ClassCatalogController(ClassRegistrationFlowService registrations) : ControllerBase
 {
@@ -15,11 +16,15 @@ public class ClassCatalogController(ClassRegistrationFlowService registrations) 
         Ok(await registrations.AccessCentersAsync());
 
     [HttpGet("centers/{centerId}/sports")]
-    public async Task<ActionResult<IReadOnlyList<SportDto>>> AccessSports(string centerId)
+    public async Task<ActionResult<IReadOnlyList<SportDto>>> AccessSports(string centerId) =>
+        Ok(await registrations.AccessSportsAsync(centerId));
+
+    [HttpGet("sports/{sportId}/coaches")]
+    public async Task<ActionResult<IReadOnlyList<CoachOptionDto>>> AccessCoaches(string sportId)
     {
         try
         {
-            return Ok(await registrations.AccessSportsAsync(centerId));
+            return Ok(await registrations.AccessCoachesAsync(sportId));
         }
         catch (KeyNotFoundException exception)
         {
@@ -30,32 +35,10 @@ public class ClassCatalogController(ClassRegistrationFlowService registrations) 
     [HttpGet("classes")]
     public async Task<ActionResult<IReadOnlyList<ClassSummaryDto>>> AccessUpcomingClasses(
         [FromQuery] string? centerId,
-        [FromQuery] string? sportId)
-    {
-        try
-        {
-            return Ok(await registrations.AccessUpcomingClassesAsync(centerId, sportId));
-        }
-        catch (KeyNotFoundException exception)
-        {
-            return NotFound(new { message = exception.Message });
-        }
-        catch (InvalidOperationException exception)
-        {
-            return BadRequest(new { message = exception.Message });
-        }
-    }
+        [FromQuery] string? sportId) =>
+        Ok(await registrations.AccessUpcomingClassesAsync(centerId, sportId));
 
     [HttpGet("classes/{classId}")]
-    public async Task<ActionResult<ClassDetailDto>> SelectClass(string classId)
-    {
-        try
-        {
-            return Ok(await registrations.SelectClassAsync(classId));
-        }
-        catch (KeyNotFoundException exception)
-        {
-            return NotFound(new { message = exception.Message });
-        }
-    }
+    public async Task<ActionResult<ClassDetailDto>> SelectClass(string classId) =>
+        Ok(await registrations.SelectClassAsync(classId));
 }

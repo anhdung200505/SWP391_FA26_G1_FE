@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // Import ảnh 8 môn thể thao chủ đạo từ assets
 import swimmingImg from '../assets/sports/swimming-1024x576.png';
@@ -11,20 +12,21 @@ import tennisImg from '../assets/sports/tennis-1024x576.png';
 import taekwondoImg from '../assets/sports/taekwondo-1024x576.png';
 
 const coursesData = [
-  { id: 'basketball', name: 'Bóng rổ', img: basketballImg },
-  { id: 'swimming', name: 'Bơi lội', img: swimmingImg },
-  { id: 'golf', name: 'Golf 3D', img: golfImg },
-  { id: 'tennis', name: 'Quần vợt', img: tennisImg },
-  { id: 'tabletennis', name: 'Bóng bàn', img: tabletennisImg },
-  { id: 'badminton', name: 'Cầu lông', img: badmintonImg },
-  { id: 'taekwondo', name: 'Taekwondo', img: taekwondoImg },
-  { id: 'soccer', name: 'Bóng đá', img: soccerImg },
+  { id: 'bong-ro', name: 'Bóng rổ', img: basketballImg, path: '/khoa-hoc/bong-ro' },
+  { id: 'boi-loi', name: 'Bơi lội', img: swimmingImg, path: '/khoa-hoc/boi-loi' },
+  { id: 'golf-3d', name: 'Golf 3D', img: golfImg, path: '/khoa-hoc/golf-3d' },
+  { id: 'quan-vot', name: 'Quần vợt', img: tennisImg, path: '/khoa-hoc/quan-vot' },
+  { id: 'bong-ban', name: 'Bóng bàn', img: tabletennisImg, path: '/khoa-hoc/bong-ban' },
+  { id: 'cau-long', name: 'Cầu lông', img: badmintonImg, path: '/khoa-hoc/cau-long' },
+  { id: 'taekwondo', name: 'Taekwondo', img: taekwondoImg, path: '/khoa-hoc/taekwondo' },
+  { id: 'bong-da', name: 'Bóng đá', img: soccerImg, path: '/khoa-hoc/bong-da' },
 ];
 
 export default function CoursesSection() {
   const [activeCourse, setActiveCourse] = useState(coursesData[0]);
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -46,6 +48,12 @@ export default function CoursesSection() {
       }
     };
   }, []);
+
+  // Xử lý khi người dùng nhấp chuột vào nút môn thể thao
+  const handleCourseClick = (course) => {
+    navigate(course.path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <section
@@ -89,7 +97,7 @@ export default function CoursesSection() {
           </h2>
         </div>
 
-        {/* 3. KHỐI NÚT DỐC NGHIÊNG (-skew-x-[20deg]) Bố cục 8 nút đẹp mắt */}
+        {/* 3. KHỐI NÚT DỐC NGHIÊNG (-skew-x-[20deg]) */}
         <div className="transform -skew-x-[20deg] origin-left w-full max-w-[320px] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[640px] mb-6 md:mb-14">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-3.5">
             {coursesData.map((course) => {
@@ -98,7 +106,7 @@ export default function CoursesSection() {
                 <button
                   key={course.id}
                   onMouseEnter={() => setActiveCourse(course)}
-                  onClick={() => setActiveCourse(course)}
+                  onClick={() => handleCourseClick(course)}
                   className={`group relative h-12 sm:h-13 md:h-[54px] w-full transition-all duration-200 border-0 flex items-center justify-center cursor-pointer rounded-none shadow-md ${
                     isActive
                       ? 'bg-[#e31b23] text-white shadow-xl z-10 scale-[1.02]'

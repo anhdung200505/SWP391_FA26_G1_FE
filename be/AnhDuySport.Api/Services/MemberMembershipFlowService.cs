@@ -36,7 +36,7 @@ public class MemberMembershipFlowService(AppDbContext db)
         // ---- Validate ----
         var fullName = RequireText(request.FullName, "Nhập họ tên.", 200);
         var email = NormalizeEmail(request.Email);
-        var phone = NormalizePhone(request.Phone);
+        var phone = AccountPhone.Require(request.Phone);
         var gender = NormalizeGender(request.Gender);
         ValidateDateOfBirth(request.DateOfBirth);
 
@@ -44,6 +44,11 @@ public class MemberMembershipFlowService(AppDbContext db)
         if (emailTaken)
         {
             throw new InvalidOperationException("Email đã được tài khoản khác sử dụng.");
+        }
+
+        if (AccountPhone.Digits(member.Phone) != phone)
+        {
+            await AccountPhone.EnsureUniqueAsync(db, phone, member.UserId);
         }
 
         var changes = new List<string>();
@@ -326,18 +331,6 @@ public class MemberMembershipFlowService(AppDbContext db)
         }
 
         return email;
-    }
-
-    private static string NormalizePhone(string? value)
-    {
-        // Bỏ khoảng trắng, dấu chấm, gạch nối: "0912 000 001" → "0912000001"
-        var phone = new string((value ?? "").Where(char.IsDigit).ToArray());
-        if (phone.Length != 10 || !phone.StartsWith('0'))
-        {
-            throw new InvalidOperationException("Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0.");
-        }
-
-        return phone;
     }
 
     private static string? NormalizeGender(string? value)
