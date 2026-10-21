@@ -205,7 +205,6 @@ export default function Header({ forceWhite = false }) {
               </div>
             );
           })}
-
           {/* KHU VỰC ĐĂNG NHẬP / AVATAR HỒ SƠ */}
           {!user ? (
             <a

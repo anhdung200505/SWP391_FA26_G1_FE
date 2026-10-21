@@ -31,6 +31,7 @@ builder.Services.AddScoped<UserAccountFlowService>();
 builder.Services.AddScoped<MembershipPackageFlowService>();
 builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
+builder.Services.AddScoped<ReceptionFlowService>();
 builder.Services.AddScoped<SlotFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
@@ -127,6 +128,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     await auth.EnsureBootstrapAdminPasswordAsync();
     var workouts = scope.ServiceProvider.GetRequiredService<WorkoutRecommendationFlowService>();
     await workouts.EnsureTablesAsync();
+    await scope.ServiceProvider.GetRequiredService<ReceptionFlowService>().EnsureSchemaAsync();
 }
 
 app.Run();

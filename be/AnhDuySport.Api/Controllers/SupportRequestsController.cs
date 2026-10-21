@@ -95,9 +95,25 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
         Ok(await flow.AccessEnrollmentRequestsAsync());
 
     [Authorize(Roles = "RECEPTIONIST")]
+    [HttpPut("enrollment/{requestId}")]
+    [EndpointSummary("Lễ tân chỉnh sửa hoặc giải quyết đơn tư vấn khách")]
+    [EndpointDescription("Chỉ đơn tư vấn khách. Không áp dụng cho support request của học viên. Gửi resolutionNote để giải quyết đơn. Bỏ trống trường nào thì giữ nguyên.")]
+    public async Task<ActionResult<SupportRequestDto>> UpdateEnrollment(string requestId, UpdateEnrollmentConsultationRequest request)
+    {
+        try
+        {
+            return Ok(await flow.UpdateEnrollmentConsultationAsync(requestId, request));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
+    [Authorize(Roles = "RECEPTIONIST")]
     [HttpPost("{requestId}/classify")]
     [EndpointSummary("Lễ tân phân loại yêu cầu")]
-    [EndpointDescription("category: account_issue hoặc consultation, chỉ với yêu cầu trong phạm vi lễ tân. Việc ngoài phạm vi dùng escalate.")]
+    [EndpointDescription("category: account_issue hoặc consultation. Chỉ đơn support request của học viên. Đơn tư vấn khách dùng PUT enrollment/{id}.")]
     public async Task<ActionResult<SupportRequestDto>> Classify(string requestId, ClassifySupportRequest request)
     {
         try
