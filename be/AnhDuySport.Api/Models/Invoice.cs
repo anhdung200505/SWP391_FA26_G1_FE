@@ -66,6 +66,12 @@ public class Payment
     [Column("qr_code")]
     public string? QrCode { get; set; }
 
+    [Column("registered_by_user_id")]
+    public int? RegisteredByUserId { get; set; }
+
+    [Column("requested_slot_id")]
+    public int? RequestedSlotId { get; set; }
+
     public Invoice? Invoice { get; set; }
     public TrainingClass? Class { get; set; }
 }
