@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
 import arenaImg from '../assets/facilities/facility-arena-1024x683.webp';
@@ -20,6 +20,33 @@ export default function RegisterPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // State quản lý đếm ngược gửi lại OTP
+  const [countdown, setCountdown] = useState(0);
+
+  // Effect đếm ngược thời gian chờ gửi lại OTP (60s)
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  // Hàm gửi thông tin tạo/gửi lại mã OTP
+  const requestOtp = async () => {
+    const payload = {
+      fullName: fullName.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      password,
+    };
+
+    await sendOtp(payload);
+    setCountdown(60); // Đặt thời gian chờ 60s
+  };
+
   // Submit Bước 1: Gửi thông tin nhận OTP
   const handleSubmitInfo = async (event) => {
     event.preventDefault();
@@ -38,18 +65,28 @@ export default function RegisterPage() {
     }
 
     setSaving(true);
-    const payload = {
-      fullName: fullName.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      password,
-    };
-
     try {
-      await sendOtp(payload);
+      await requestOtp();
       setStep('otp');
     } catch (requestError) {
       setError(requestError.message || 'Không thể gửi mã OTP. Vui lòng kiểm tra lại thông tin.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Xử lý gửi lại mã OTP ở Bước 2
+  const handleResendOtp = async () => {
+    if (countdown > 0 || saving) return;
+    setError('');
+    setSuccessMsg('');
+    setSaving(true);
+
+    try {
+      await requestOtp();
+      setSuccessMsg('Đã gửi lại mã OTP mới tới email của bạn.');
+    } catch (requestError) {
+      setError(requestError.message || 'Chưa thể gửi lại OTP. Vui lòng thử lại sau.');
     } finally {
       setSaving(false);
     }
@@ -237,9 +274,22 @@ export default function RegisterPage() {
           ) : (
             <form className="space-y-4" onSubmit={handleConfirmOtp}>
               <div>
-                <label className="block text-xs font-extrabold uppercase tracking-wider text-gray-300 mb-1.5">
-                  Nhập mã OTP từ Email
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-gray-300">
+                    Nhập mã OTP từ Email
+                  </label>
+
+                  {/* NÚT GỬI LẠI MÃ OTP WITH COUNTDOWN */}
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={countdown > 0 || saving}
+                    className="text-[11px] font-bold text-[#e31b23] hover:underline disabled:text-gray-500 disabled:no-underline cursor-pointer transition-colors"
+                  >
+                    {countdown > 0 ? `Gửi lại mã (${countdown}s)` : 'Gửi lại mã OTP'}
+                  </button>
+                </div>
+
                 <input
                   type="text"
                   value={otpCode}
@@ -249,7 +299,7 @@ export default function RegisterPage() {
                 />
               </div>
 
-              {/* KHỐI THÔNG BÁO LỖI VÀ THÀNH CÔNG CHUẨN UI */}
+              {/* KHỐI THÔNG BÁO LỖI VÀ THÀNH CÔNG */}
               {error && (
                 <div className="rounded-xl bg-red-950/60 border border-red-800/80 px-4 py-2.5 text-xs font-semibold text-red-300">
                   ⚠️ {error}
@@ -272,8 +322,12 @@ export default function RegisterPage() {
 
               <button
                 type="button"
-                onClick={() => { setStep('fill'); setError(''); setSuccessMsg(''); }}
-                className="w-full text-xs font-bold text-gray-400 hover:text-white transition-colors"
+                onClick={() => {
+                  setStep('fill');
+                  setError('');
+                  setSuccessMsg('');
+                }}
+                className="w-full text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer"
               >
                 ← Quay lại sửa thông tin
               </button>
