@@ -10,7 +10,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import HocVienDashboardPage from './pages/HocVienDashboardPage';
-import ClassRegistrationPage from './pages/ClassRegistrationPage'; // Import trang Đăng ký khóa học mới
+import ClassRegistrationPage from './pages/ClassRegistrationPage';
+import ReceptionistDashboardPage from './pages/receptionist/ReceptionistDashboardPage'; // Import trang Lễ tân
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
 import UserAccountPage from './pages/management/UserAccountPage';
@@ -34,7 +35,6 @@ export default function App() {
             <Route path="/home" element={<HomePage />} />
             <Route path="/co-so-vat-chat" element={<FacilitiesPage />} />
             <Route path="/hlv" element={<CoachPage />} />
-            
             <Route path="/khoa-hoc" element={<CoursesPage />} />
             <Route path="/khoa-hoc/:courseSlug" element={<CourseDetailPage />} />
 
@@ -58,12 +58,22 @@ export default function App() {
               } 
             />
 
-            {/* Route Xác nhận Đăng ký & Thanh toán Khóa học */}
+            {/* Route Xác nhận Đăng ký Khóa học */}
             <Route 
               path="/dang-ky-khoa-hoc" 
               element={
                 <Protected allowedRoles={['MEMBER', 'ADMIN']}>
                   <ClassRegistrationPage />
+                </Protected>
+              } 
+            />
+
+            {/* Route LỄ TÂN DASHBOARD (Không chứa Header/Footer chung) */}
+            <Route 
+              path="/le-tan" 
+              element={
+                <Protected allowedRoles={['RECEPTIONIST', 'STAFF', 'ADMIN']}>
+                  <ReceptionistDashboardPage />
                 </Protected>
               } 
             />

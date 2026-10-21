@@ -286,8 +286,12 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
             PaymentMethod = "payos",
             Status = "pending",
             Invoice = invoice,
+            RegisteredByUserId = member.UserId,
         };
         db.Payments.Add(payment);
+        ClassRegistrationLogs.Add(
+            db, member.UserId, trainingClass.ClassId, ClassRegistrationLogs.Register,
+            new RegistrationActor(member.UserId, "MEMBER"), DateTime.Now, payment, classAssignedBy: "MEMBER");
         await db.SaveChangesAsync();
         payment.PayosOrderCode = payment.PaymentId;
         db.ActivityLogs.Add(new ActivityLog
