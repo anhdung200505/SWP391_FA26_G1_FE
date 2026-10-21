@@ -15,6 +15,16 @@ public sealed record CreateEnrollmentConsultationRequest(
     string Title,
     string? Note);
 
+public sealed record UpdateEnrollmentConsultationRequest(
+    string? Title,
+    string? FullName,
+    string? Phone,
+    string? Email,
+    string? Sports,
+    int? Age,
+    string? Note,
+    string? ResolutionNote);
+
 public sealed record ClassifySupportRequest(string Category);
 
 public sealed record EscalateSupportRequest(string Reason);
