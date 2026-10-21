@@ -27,8 +27,8 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
 
     [AllowAnonymous]
     [HttpPost("enrollment")]
-    [EndpointSummary("Khách gửi tư vấn ghi danh hoặc đăng ký tư vấn")]
-    [EndpointDescription("kind: tu-van-ghi-danh hoặc dang-ky-tu-van. Gắn với học viên đang đăng nhập, hoặc học viên có cùng email. Yêu cầu vào hàng chờ lễ tân.")]
+    [EndpointSummary("Khách gửi tư vấn ghi danh")]
+    [EndpointDescription("title là tiêu đề đơn, ví dụ Tư vấn ghi danh hoặc Đăng ký tư vấn. Gắn với học viên đang đăng nhập, hoặc học viên có cùng email.")]
     public async Task<ActionResult<SupportRequestCreatedDto>> CreateEnrollment(CreateEnrollmentConsultationRequest request)
     {
         try
@@ -82,9 +82,17 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
 
     [Authorize(Roles = "RECEPTIONIST")]
     [HttpGet("service")]
-    [EndpointSummary("Lễ tân xem yêu cầu học viên gửi")]
+    [EndpointSummary("Lễ tân xem đơn support request của học viên")]
+    [EndpointDescription("Đơn học viên tạo qua POST /api/support-requests. Không gồm tư vấn ghi danh.")]
     public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> AccessServiceRequests() =>
         Ok(await flow.AccessServiceRequestsAsync());
+
+    [Authorize(Roles = "RECEPTIONIST")]
+    [HttpGet("enrollment")]
+    [EndpointSummary("Lễ tân xem đơn tư vấn ghi danh")]
+    [EndpointDescription("Đơn khách gửi từ form tư vấn ghi danh và đăng ký tư vấn.")]
+    public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> AccessEnrollmentRequests() =>
+        Ok(await flow.AccessEnrollmentRequestsAsync());
 
     [Authorize(Roles = "RECEPTIONIST")]
     [HttpPost("{requestId}/classify")]

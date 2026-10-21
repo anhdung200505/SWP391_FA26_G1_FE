@@ -12,7 +12,7 @@ public sealed record CreateEnrollmentConsultationRequest(
     string? Email,
     string? Sports,
     int? Age,
-    string Kind,
+    string Title,
     string? Note);
 
 public sealed record ClassifySupportRequest(string Category);

@@ -101,7 +101,7 @@ export default function Footer() {
         email: formData.email.trim(),
         sports: formData.selectedSports.join(', '),
         age: formData.age ? Number(formData.age) : null,
-        kind: 'tu-van-ghi-danh',
+        title: 'Tư vấn ghi danh',
       });
       setIsSuccess(true);
     } catch (requestError) {
