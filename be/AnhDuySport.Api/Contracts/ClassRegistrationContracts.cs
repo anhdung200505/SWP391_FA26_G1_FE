@@ -112,9 +112,13 @@ public sealed record RegistrationPaymentResponse(
     AuthUserDto? User,
     RegisteredByDto? RegisteredBy);
 
+// Bắt buộc chọn môn. Không chọn lớp thì hệ thống chọn lớp còn chỗ bắt đầu sớm nhất của môn đó;
+// chỉ chọn slot thì lấy lớp của slot. Slot chỉ là nguyện vọng, lễ tân đăng ký slot hoặc dời slot sau khi thanh toán.
 // Các trường hồ sơ đều tùy chọn: có gửi thì ghi đè hồ sơ học viên khi tạo đơn mới.
 public sealed record CreateClassRegistrationRequest(
-    string ClassId,
+    string SportId,
+    string? ClassId = null,
+    string? SlotId = null,
     [StringLength(200, MinimumLength = 1)] string? FullName = null,
     [RegularExpression(@"^\+?[0-9 ]{8,20}$")] string? Phone = null,
     DateOnly? DateOfBirth = null,
@@ -131,7 +135,17 @@ public sealed record ClassRegistrationDto(
     string Status,
     string PaymentUrl,
     bool IsExisting,
-    RegisteredByDto? RegisteredBy);
+    RegisteredByDto? RegisteredBy,
+    RequestedSlotDto? RequestedSlot);
+
+// Slot học viên mong muốn. Remaining = 0 nghĩa là slot đã đầy, lễ tân sẽ dời sang slot khác.
+public sealed record RequestedSlotDto(
+    string Id,
+    DateOnly Date,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    string Title,
+    int Remaining);
 
 public sealed record RegistrationStatusDto(
     string PaymentId,
@@ -143,4 +157,5 @@ public sealed record RegistrationStatusDto(
     string InvoiceStatus,
     string? EnrollmentStatus,
     string Message,
-    RegisteredByDto? RegisteredBy);
+    RegisteredByDto? RegisteredBy,
+    RequestedSlotDto? RequestedSlot);
