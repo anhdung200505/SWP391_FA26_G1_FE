@@ -47,7 +47,7 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
             PackageName = name,
             Fee = decimal.Round(request.Fee, 0),
             ValidityMonths = request.ValidityMonths,
-            ClassDiscountPercent = NormalizeDiscount(request.ClassDiscountPercent),
+            UpgradeDiscountPercent = NormalizeDiscount(request.UpgradeDiscountPercent),
             Benefits = AccountFlowMapper.JoinBenefits(benefits),
             Status = "active",
             CreatedAt = now,
@@ -56,7 +56,7 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
         db.MembershipPackages.Add(package);
         await db.SaveChangesAsync();
         var actor = await ActorNameAsync();
-        var detail = $"Phí {Money(package.Fee)}, thời hạn {package.ValidityMonths} tháng, giảm học phí {package.ClassDiscountPercent:0.##}%, {benefits.Count} quyền lợi.";
+        var detail = $"Phí {Money(package.Fee)}, thời hạn {package.ValidityMonths} tháng, giảm khi lên cấp kèm lớp {package.UpgradeDiscountPercent:0.##}%, {benefits.Count} quyền lợi.";
         var log = AddLog($"Tạo gói {package.PackageName}", package.MembershipPackageId, detail, now);
         await db.SaveChangesAsync();
         return new PackageMutationResponse(
@@ -76,11 +76,11 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
         var benefits = NormalizeBenefits(request.Benefits);
         ValidateSetting(request.Fee, request.ValidityMonths, benefits);
         var nextFee = decimal.Round(request.Fee, 0);
-        var nextDiscount = NormalizeDiscount(request.ClassDiscountPercent);
+        var nextDiscount = NormalizeDiscount(request.UpgradeDiscountPercent);
         var currentBenefits = AccountFlowMapper.SplitBenefits(package.Benefits);
         var unchanged = package.Fee == nextFee
             && package.ValidityMonths == request.ValidityMonths
-            && package.ClassDiscountPercent == nextDiscount
+            && package.UpgradeDiscountPercent == nextDiscount
             && currentBenefits.SequenceEqual(benefits);
         if (unchanged)
         {
@@ -89,14 +89,14 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
 
         var previousFee = package.Fee;
         var previousMonths = package.ValidityMonths;
-        var previousDiscount = package.ClassDiscountPercent;
+        var previousDiscount = package.UpgradeDiscountPercent;
         package.Fee = nextFee;
         package.ValidityMonths = request.ValidityMonths;
-        package.ClassDiscountPercent = nextDiscount;
+        package.UpgradeDiscountPercent = nextDiscount;
         package.Benefits = AccountFlowMapper.JoinBenefits(benefits);
         package.UpdatedAt = DateTime.Now;
         var actor = await ActorNameAsync();
-        var detail = $"Phí {Money(previousFee)} → {Money(package.Fee)}. Thời hạn {previousMonths} tháng → {package.ValidityMonths} tháng. Giảm học phí {previousDiscount:0.##}% → {package.ClassDiscountPercent:0.##}%. {benefits.Count} quyền lợi.";
+        var detail = $"Phí {Money(previousFee)} → {Money(package.Fee)}. Thời hạn {previousMonths} tháng → {package.ValidityMonths} tháng. Giảm khi lên cấp kèm lớp {previousDiscount:0.##}% → {package.UpgradeDiscountPercent:0.##}%. {benefits.Count} quyền lợi.";
         var log = AddLog(Trim($"Sửa thiết lập gói {package.PackageName}", 100), package.MembershipPackageId, detail, package.UpdatedAt.Value);
         await db.SaveChangesAsync();
         return new PackageMutationResponse(AccountFlowMapper.ToDto(package), ToLogDto(log, actor, package.PackageName));
@@ -113,7 +113,7 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
     {
         if (percent < 0 || percent > 100)
         {
-            throw new InvalidOperationException("Phần trăm giảm học phí từ 0 đến 100.");
+            throw new InvalidOperationException("Phần trăm giảm khi lên cấp từ 0 đến 100.");
         }
 
         return decimal.Round(percent, 2);

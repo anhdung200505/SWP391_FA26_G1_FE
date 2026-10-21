@@ -19,7 +19,9 @@ $scripts = @(
     '09_class_slots.sql',
     '10_password_reset.sql',
     '11_membership_pending.sql',
-    '12_membership_package_discount.sql'
+    '12_membership_package_discount.sql',
+    '13_class_registration_log.sql',
+    '14_class_membership_bonus.sql'
 )
 
 & $sqlcmd -S $server -E -b -I -f 65001 -i (Join-Path $root '01_schema.sql')
