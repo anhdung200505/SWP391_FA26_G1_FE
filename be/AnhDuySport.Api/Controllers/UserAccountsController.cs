@@ -17,6 +17,22 @@ public class UserAccountsController(UserAccountFlowService accounts) : Controlle
         [FromQuery] string? status) =>
         Ok(await accounts.AccessUserAccountListAsync(search, roleId, status));
 
+    [HttpPost]
+    [EndpointSummary("Quản trị trung tâm tạo lễ tân hoặc huấn luyện viên")]
+    [EndpointDescription("Chỉ tài khoản ADMIN. roleId nhận RECEPTIONIST hoặc COACH. Mật khẩu từ 6 ký tự và có @, # hoặc !.")]
+    public async Task<ActionResult<UserMutationResponse>> CreateStaff(CreateStaffRequest request)
+    {
+        try
+        {
+            var result = await accounts.CreateStaffAccountAsync(request);
+            return CreatedAtAction(nameof(SelectAccount), new { userId = result.User.Id }, result);
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
     [HttpGet("{userId}")]
     public async Task<ActionResult<UserAccountDto>> SelectAccount(string userId)
     {
@@ -56,6 +72,7 @@ public class UserAccountsController(UserAccountFlowService accounts) : Controlle
         {
             KeyNotFoundException keyNotFound => NotFound(new { message = keyNotFound.Message }),
             InvalidOperationException invalid => BadRequest(new { message = invalid.Message }),
+            UnauthorizedAccessException denied => StatusCode(StatusCodes.Status403Forbidden, new { message = denied.Message }),
             _ => null,
         };
         return result is not null;

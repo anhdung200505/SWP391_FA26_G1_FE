@@ -1,8 +1,11 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useAuth } from './AuthContext';
 import {
   createPackage as createPackageRequest,
-  getDashboard,
+  createStaffAccount as createStaffAccountRequest,
+  getPackages as getPackagesRequest,
+  getUserAccounts,
   updateAccountStatus as updateAccountStatusRequest,
   updatePackageSetting as updatePackageSettingRequest,
   updateUserRole as updateUserRoleRequest,
@@ -18,59 +21,77 @@ export function AccountManagementProvider({ children }) {
   const [loading, setLoading] = useState(user?.roleId === 'ADMIN');
   const [error, setError] = useState('');
 
-  const applyDashboard = (dashboard) => {
-    setState({
-      users: dashboard.users ?? [],
-      packages: dashboard.packages ?? [],
-      logs: dashboard.logs ?? [],
-      roles: dashboard.roles ?? [],
-    });
-    setError('');
-  };
-
   useEffect(() => {
     if (!user || user.roleId !== 'ADMIN') return undefined;
     let active = true;
-    getDashboard()
-      .then((dashboard) => {
-        if (active) applyDashboard(dashboard);
-      })
-      .catch((requestError) => {
-        if (active) setError(requestError.message);
+
+    setLoading(true);
+
+    Promise.allSettled([getUserAccounts(), getPackagesRequest()])
+      .then(([usersRes, packagesRes]) => {
+        if (!active) return;
+
+        const usersData = usersRes.status === 'fulfilled' ? usersRes.value : [];
+        const packagesData = packagesRes.status === 'fulfilled' ? packagesRes.value : [];
+
+        if (usersRes.status === 'rejected' && packagesRes.status === 'rejected') {
+          setError(usersRes.reason?.message || 'Không thể tải dữ liệu từ máy chủ.');
+        } else {
+          setError('');
+        }
+
+        setState((prev) => ({
+          ...prev,
+          users: Array.isArray(usersData) ? usersData : [],
+          packages: Array.isArray(packagesData) ? packagesData : [],
+        }));
       })
       .finally(() => {
         if (active) setLoading(false);
       });
+
     return () => {
       active = false;
     };
   }, [user]);
 
+  const createStaffAccount = async (payload) => {
+    const result = await createStaffAccountRequest(payload);
+    flushSync(() => {
+      setState((current) => ({
+        ...current,
+        users: [...current.users, result.user].sort((left, right) => Number(left.id) - Number(right.id)),
+        logs: [result.log, ...current.logs],
+      }));
+    });
+    return result.user;
+  };
+
   const updateUserRole = async (userId, roleId) => {
     const result = await updateUserRoleRequest(userId, roleId);
     setState((current) => ({
       ...current,
-      users: current.users.map((user) => (user.id === userId ? result.user : user)),
-      logs: [result.log, ...current.logs],
+      users: current.users.map((user) => (user.id === userId ? (result?.user || user) : user)),
+      logs: result?.log ? [result.log, ...current.logs] : current.logs,
     }));
-    return result.log;
+    return result?.log;
   };
 
   const updateAccountStatus = async (userId, status) => {
     const result = await updateAccountStatusRequest(userId, status);
     setState((current) => ({
       ...current,
-      users: current.users.map((user) => (user.id === userId ? result.user : user)),
-      logs: [result.log, ...current.logs],
+      users: current.users.map((user) => (user.id === userId ? (result?.user || user) : user)),
+      logs: result?.log ? [result.log, ...current.logs] : current.logs,
     }));
-    return result.log;
+    return result?.log;
   };
 
   const createPackage = async (payload) => {
     const result = await createPackageRequest(payload);
     setState((current) => ({
       ...current,
-      packages: [...current.packages, result.package].sort((left, right) => left.code.localeCompare(right.code)),
+      packages: [...current.packages, result.package].sort((left, right) => (left.code || '').localeCompare(right.code || '')),
       logs: [result.log, ...current.logs],
     }));
     return result.log;
@@ -95,6 +116,7 @@ export function AccountManagementProvider({ children }) {
         roles: state.roles,
         loading,
         error,
+        createStaffAccount,
         updateUserRole,
         updateAccountStatus,
         createPackage,
@@ -106,7 +128,6 @@ export function AccountManagementProvider({ children }) {
   );
 }
 
-// Hook đi cùng provider nên file này cố ý xuất cả hai.
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAccountManagement() {
   const context = useContext(AccountManagementContext);
