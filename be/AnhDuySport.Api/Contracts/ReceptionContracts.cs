@@ -52,13 +52,16 @@ public sealed record ReceptionClassDto(
     DateOnly? StartDate,
     DateOnly? EndDate);
 
+// Amount = Tuition + MembershipPackage.Price.
 public sealed record ReceptionPaymentDto(
     string PaymentId,
     string InvoiceCode,
     decimal Amount,
     string Method,
     string Status,
-    DateTime? PaidAt);
+    DateTime? PaidAt,
+    decimal Tuition,
+    MembershipPackageQuoteDto? MembershipPackage);
 
 // Source: SYSTEM (hệ thống tự xếp lớp), RECEPTIONIST, ADMIN, COACH, MEMBER (học viên tự chọn lớp).
 public sealed record ClassAssignedByDto(

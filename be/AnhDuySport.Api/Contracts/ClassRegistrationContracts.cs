@@ -98,8 +98,8 @@ public sealed class PayRegistrationRequest
     public string FullName { get; set; } = "";
     public string Phone { get; set; } = "";
     public string PaymentMethod { get; set; } = "";
-    // Lên cấp ngay cùng lúc đăng ký lớp (id gói Bạc/Vàng). Bỏ trống → được tặng Hạng Đồng.
-    public string? UpgradePackageId { get; set; }
+    // Gói hội viên mua kèm lớp (id gói Bạc/Vàng), giá đã giảm được cộng vào hóa đơn. Bỏ trống hoặc Hạng Đồng → tặng Hạng Đồng.
+    public string? MembershipPackageId { get; set; }
 }
 
 public sealed record RegistrationPaymentResponse(
@@ -110,7 +110,10 @@ public sealed record RegistrationPaymentResponse(
     string? InvoiceCode,
     string? Token,
     AuthUserDto? User,
-    RegisteredByDto? RegisteredBy);
+    RegisteredByDto? RegisteredBy,
+    decimal Amount,
+    decimal Tuition,
+    MembershipPackageQuoteDto? MembershipPackage);
 
 // Bắt buộc chọn môn. Không chọn lớp thì hệ thống chọn lớp còn chỗ bắt đầu sớm nhất của môn đó;
 // chỉ chọn slot thì lấy lớp của slot. Slot chỉ là nguyện vọng, lễ tân đăng ký slot hoặc dời slot sau khi thanh toán.
@@ -123,9 +126,10 @@ public sealed record CreateClassRegistrationRequest(
     [RegularExpression(@"^\+?[0-9 ]{8,20}$")] string? Phone = null,
     DateOnly? DateOfBirth = null,
     [RegularExpression("^(Nam|Nữ|Khác)$")] string? Gender = null,
-    // Lên cấp ngay cùng lúc đăng ký lớp (id gói Bạc/Vàng). Bỏ trống → được tặng Hạng Đồng.
-    string? UpgradePackageId = null);
+    // Gói hội viên mua kèm lớp (id gói Bạc/Vàng), giá đã giảm được cộng vào hóa đơn. Bỏ trống hoặc Hạng Đồng → tặng Hạng Đồng.
+    string? MembershipPackageId = null);
 
+// Amount = Tuition + MembershipPackage.Price.
 public sealed record ClassRegistrationDto(
     string PaymentId,
     string InvoiceCode,
@@ -136,7 +140,19 @@ public sealed record ClassRegistrationDto(
     string PaymentUrl,
     bool IsExisting,
     RegisteredByDto? RegisteredBy,
-    RequestedSlotDto? RequestedSlot);
+    RequestedSlotDto? RequestedSlot,
+    decimal Tuition,
+    MembershipPackageQuoteDto? MembershipPackage);
+
+// Gói nhận kèm lớp. IsFree = true: Hạng Đồng tặng kèm, Price = 0.
+public sealed record MembershipPackageQuoteDto(
+    string Id,
+    string Name,
+    decimal OriginalFee,
+    decimal DiscountPercent,
+    decimal Price,
+    int ValidityMonths,
+    bool IsFree);
 
 // Slot học viên mong muốn. Remaining = 0 nghĩa là slot đã đầy, lễ tân sẽ dời sang slot khác.
 public sealed record RequestedSlotDto(
@@ -158,4 +174,6 @@ public sealed record RegistrationStatusDto(
     string? EnrollmentStatus,
     string Message,
     RegisteredByDto? RegisteredBy,
-    RequestedSlotDto? RequestedSlot);
+    RequestedSlotDto? RequestedSlot,
+    decimal Tuition,
+    MembershipPackageQuoteDto? MembershipPackage);
