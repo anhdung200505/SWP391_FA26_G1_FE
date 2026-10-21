@@ -118,9 +118,6 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             })
             .ToListAsync();
 
-        // Học viên đăng nhập có gói active → giá đã giảm; khách chưa đăng nhập → giá gốc.
-        var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, actor.UserId);
-
         return classes
             .Select(item => new ClassSummaryDto(
                 item.ClassId.ToString(),
@@ -136,7 +133,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 item.Capacity,
                 item.EnrolledCount,
                 AvailableSeats(item.Capacity, item.EnrolledCount + item.HeldCount),
-                MembershipDiscount.Apply(item.Price, discount),
+                item.Price,
                 item.NextSlot is null
                     ? null
                     : new ClassSlotDto(
@@ -144,9 +141,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                         item.NextSlot.SlotDate,
                         item.NextSlot.StartTime,
                         item.NextSlot.EndTime,
-                        item.NextSlot.Title ?? ""),
-                item.Price,
-                discount))
+                        item.NextSlot.Title ?? "")))
             .ToList();
     }
 
@@ -195,7 +190,6 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         var today = DateOnly.FromDateTime(DateTime.Now);
         var availableSeats = AvailableSeats(item.Capacity, item.EnrolledCount + item.HeldCount);
         var isOpen = IsOpenForRegistration(item.Status, item.EndDate, item.CourseStatus, availableSeats, today);
-        var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, actor.UserId);
 
         return new ClassDetailDto(
             item.ClassId.ToString(),
@@ -216,7 +210,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             item.Capacity,
             item.EnrolledCount,
             availableSeats,
-            MembershipDiscount.Apply(item.Tuition, discount),
+            item.Tuition,
             isOpen,
             item.Slots
                 .Select(slot => new ClassSlotDto(
@@ -225,9 +219,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                     slot.StartTime,
                     slot.EndTime,
                     slot.Title ?? ""))
-                .ToList(),
-            item.Tuition,
-            discount);
+                .ToList());
     }
 
     public async Task<IReadOnlyList<CoachOptionDto>> AccessCoachesAsync(string sportId)
@@ -291,9 +283,10 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             throw new RegistrationException("Hồ sơ chưa có email, cần bổ sung trước khi đăng ký.");
         }
 
-        var (classId, autoAssigned) = await ResolveClassAsync(member.UserId, request);
-        var classAssignedBy = autoAssigned ? ClassRegistrationLogs.SystemAssigned : registeredBy.RoleCode;
-        var requestedSlot = await ResolveRequestedSlotAsync(classId, request.SlotId);
+        if (!int.TryParse(request.ClassId, out var classId))
+        {
+            throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        }
 
         var item = await db.Classes
             .AsNoTracking()
@@ -326,18 +319,19 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             throw new RegistrationException("Lớp học không còn nhận đăng ký.");
         }
 
+        var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.UpgradePackageId);
         var pending = await FindPendingPaymentAsync(member.UserId, classId);
+        if (pending is not null && pending.UpgradePackageId == upgrade.Package?.MembershipPackageId)
+        {
+            return await ToRegistrationDtoAsync(pending, item.ClassName, true);
+        }
+
         if (pending is not null)
         {
-            if (requestedSlot is not null && pending.RequestedSlotId != requestedSlot.SlotId)
-            {
-                await db.Payments
-                    .Where(payment => payment.PaymentId == pending.PaymentId)
-                    .ExecuteUpdateAsync(setters => setters.SetProperty(payment => payment.RequestedSlotId, requestedSlot.SlotId));
-                pending.RequestedSlotId = requestedSlot.SlotId;
-            }
-
-            return await ToRegistrationDtoAsync(pending, item.ClassName, true);
+            // Đổi lựa chọn lên cấp: hủy đơn cũ để chỉ mục UX_payment_pending_per_class cho tạo đơn mới.
+            pending.Status = "failed";
+            pending.Invoice!.Status = "cancelled";
+            await db.SaveChangesAsync();
         }
 
         // shortcut: giới hạn mềm, hai request cùng lúc ở hai lớp khác nhau có thể vượt 1 đơn; đủ cho chặn spam giữ chỗ.
@@ -348,10 +342,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
 
         try
         {
-            var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, member.UserId);
-            var tuition = MembershipDiscount.Apply(item.Tuition, discount);
-            var created = await CreatePendingPaymentAsync(
-                member, request, classId, item.ClassName, tuition, registeredBy, requestedSlot?.SlotId, classAssignedBy);
+            var created = await CreatePendingPaymentAsync(member, request, classId, item.ClassName, item.Tuition, upgrade, registeredBy);
             return await ToRegistrationDtoAsync(created, item.ClassName, false);
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
@@ -541,6 +532,13 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 : $"Đã thu {payment.Amount:N0} (hóa đơn {payment.Invoice?.InvoiceCode}) nhưng lớp đầy, chưa ghi danh. Cần hoàn tiền.",
             CreatedAt = now,
         });
+
+        // Lớp đầy (chờ hoàn tiền) thì không cấp gói.
+        if (payment.ClassId is not null && hasSeat)
+        {
+            await ClassMembershipBonus.GrantAsync(db, payment, now);
+        }
+
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         return await BuildStatusAsync(payment);
@@ -666,14 +664,14 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
 
         var now = DateTime.Now;
-        var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, user.UserId);
+        var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.UpgradePackageId);
         await using var transaction = await db.Database.BeginTransactionAsync();
         var invoice = new Invoice
         {
             UserId = user.UserId,
             InvoiceCode = $"HD{now:yyyyMMddHHmmss}{user.UserId}",
             IssuedAt = now,
-            TotalAmount = MembershipDiscount.Apply(trainingClass.Course?.Price ?? 0, discount),
+            TotalAmount = (trainingClass.Course?.Price ?? 0) + upgrade.Price,
             Status = "paid",
         };
         db.Invoices.Add(invoice);
@@ -689,11 +687,13 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             PaidAt = now,
             Status = "paid",
             RegisteredByUserId = user.UserId,
+            UpgradePackageId = upgrade.Package?.MembershipPackageId,
+            UpgradeAmount = upgrade.Price,
         };
         db.Payments.Add(payment);
         ClassRegistrationLogs.Add(
             db, user.UserId, trainingClass.ClassId, ClassRegistrationLogs.Register,
-            new RegistrationActor(user.UserId, "MEMBER"), now, payment, classAssignedBy: "MEMBER");
+            new RegistrationActor(user.UserId, "MEMBER"), now, payment);
         db.ClassEnrollments.Add(new ClassEnrollment
         {
             ClassId = trainingClass.ClassId,
@@ -713,6 +713,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             CreatedAt = now,
         });
         await db.SaveChangesAsync();
+        await ClassMembershipBonus.GrantAsync(db, payment, now);
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = user.UserId,
@@ -762,149 +763,6 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         return member;
     }
 
-    // Lớp theo thứ tự: classId gửi lên, lớp của slotId, lớp học viên đang giữ chỗ, lớp còn chỗ bắt đầu sớm nhất của môn.
-    // AutoAssigned = true khi người đăng ký không chọn lớp hay slot và hệ thống tự xếp lớp.
-    private async Task<(int ClassId, bool AutoAssigned)> ResolveClassAsync(int memberUserId, CreateClassRegistrationRequest request)
-    {
-        if (!int.TryParse(request.SportId, out var sportId) || !await db.Sports.AnyAsync(sport => sport.SportId == sportId))
-        {
-            throw new KeyNotFoundException("Không tìm thấy môn thể thao.");
-        }
-
-        int? chosen = null;
-        if (!string.IsNullOrWhiteSpace(request.ClassId))
-        {
-            chosen = int.TryParse(request.ClassId, out var classId)
-                ? classId
-                : throw new KeyNotFoundException("Không tìm thấy lớp học.");
-        }
-        else if (!string.IsNullOrWhiteSpace(request.SlotId))
-        {
-            chosen = int.TryParse(request.SlotId, out var slotId)
-                ? await db.ClassSlots.Where(slot => slot.SlotId == slotId).Select(slot => (int?)slot.ClassId).FirstOrDefaultAsync()
-                : null;
-            if (chosen is null)
-            {
-                throw new KeyNotFoundException("Không tìm thấy slot.");
-            }
-        }
-
-        if (chosen is int picked)
-        {
-            var classSport = await db.Classes
-                .Where(item => item.ClassId == picked)
-                .Select(item => (int?)item.Course!.SportId)
-                .FirstOrDefaultAsync()
-                ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
-            if (classSport != sportId)
-            {
-                throw new RegistrationException(string.IsNullOrWhiteSpace(request.ClassId)
-                    ? "Slot không thuộc môn thể thao đã chọn."
-                    : "Lớp không thuộc môn thể thao đã chọn.");
-            }
-
-            return (picked, false);
-        }
-
-        var held = await LiveHolds()
-            .Where(hold => hold.UserId == memberUserId && hold.Class!.Course!.SportId == sportId)
-            .Select(hold => hold.ClassId)
-            .FirstOrDefaultAsync();
-        if (held is int heldClassId)
-        {
-            return (heldClassId, true);
-        }
-
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        var candidates = await OpenClasses(today)
-            .Where(item => item.Course!.SportId == sportId
-                && !item.Enrollments.Any(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled"))
-            .OrderBy(item => item.StartDate == null)
-            .ThenBy(item => item.StartDate)
-            .ThenBy(item => item.ClassId)
-            .Select(item => new
-            {
-                item.ClassId,
-                item.Capacity,
-                Enrolled = item.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
-            })
-            .ToListAsync();
-        foreach (var candidate in candidates)
-        {
-            var heldByOthers = await LiveHolds().CountAsync(hold => hold.ClassId == candidate.ClassId && hold.UserId != memberUserId);
-            if (AvailableSeats(candidate.Capacity, candidate.Enrolled + heldByOthers) is null or > 0)
-            {
-                return (candidate.ClassId, true);
-            }
-        }
-
-        var studying = await db.Classes
-            .Where(item => item.Course!.SportId == sportId)
-            .SelectMany(item => item.Enrollments)
-            .AnyAsync(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled");
-        throw new RegistrationException(studying && candidates.Count == 0
-            ? "Bạn đã đăng ký lớp của môn này."
-            : "Môn này hiện chưa có lớp còn chỗ.");
-    }
-
-    private async Task<ClassSlot?> ResolveRequestedSlotAsync(int classId, string? slotId)
-    {
-        if (string.IsNullOrWhiteSpace(slotId))
-        {
-            return null;
-        }
-
-        if (!int.TryParse(slotId, out var id))
-        {
-            throw new KeyNotFoundException("Không tìm thấy slot.");
-        }
-
-        var slot = await db.ClassSlots.AsNoTracking().FirstOrDefaultAsync(item => item.SlotId == id)
-            ?? throw new KeyNotFoundException("Không tìm thấy slot.");
-        if (slot.ClassId != classId)
-        {
-            throw new RegistrationException("Slot không thuộc lớp đã chọn.");
-        }
-
-        if (slot.SlotDate < DateOnly.FromDateTime(DateTime.Now))
-        {
-            throw new RegistrationException("Slot đã qua ngày học.");
-        }
-
-        return slot;
-    }
-
-    internal async Task<RequestedSlotDto?> RequestedSlotAsync(int? slotId)
-    {
-        if (slotId is null)
-        {
-            return null;
-        }
-
-        var slot = await db.ClassSlots.AsNoTracking()
-            .Where(item => item.SlotId == slotId)
-            .Select(item => new
-            {
-                item.SlotId,
-                item.SlotDate,
-                item.StartTime,
-                item.EndTime,
-                item.Title,
-                item.RegistrationLimit,
-                Registered = item.Registrations.Count(registration => registration.Status == "registered"),
-            })
-            .FirstOrDefaultAsync();
-        return slot is null
-            ? null
-            : new RequestedSlotDto(
-                slot.SlotId.ToString(),
-                slot.SlotDate,
-                slot.StartTime,
-                slot.EndTime,
-                slot.Title ?? "",
-                Math.Max(slot.RegistrationLimit - slot.Registered, 0));
-    }
-
     // Chỉ lấy đơn pending còn hạn giữ chỗ: đơn quá hạn không được trả lại cho học viên.
     private Task<Payment?> FindPendingPaymentAsync(int userId, int classId) =>
         LiveHolds()
@@ -917,9 +775,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         int classId,
         string className,
         decimal tuition,
-        RegistrationActor registeredBy,
-        int? requestedSlotId,
-        string classAssignedBy)
+        (MembershipPackage? Package, decimal Price) upgrade,
+        RegistrationActor registeredBy)
     {
         var userId = member.UserId;
         // Số lấy từ SEQUENCE nên hai đơn tạo cùng lúc không bao giờ trùng mã.
@@ -986,7 +843,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             UserId = userId,
             InvoiceCode = $"INV-{now.Year}-{number:D4}",
             IssuedAt = now,
-            TotalAmount = tuition,
+            TotalAmount = tuition + upgrade.Price,
             Status = "issued",
         };
         var payment = new Payment
@@ -994,17 +851,20 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             Invoice = invoice,
             UserId = userId,
             ClassId = classId,
-            Amount = tuition,
+            Amount = tuition + upgrade.Price,
             PaymentMethod = "payos",
             Status = "pending",
             RegisteredByUserId = registeredBy.UserId,
-            RequestedSlotId = requestedSlotId,
+            UpgradePackageId = upgrade.Package?.MembershipPackageId,
+            UpgradeAmount = upgrade.Price,
         };
         db.Payments.Add(payment);
-        ClassRegistrationLogs.Add(db, userId, classId, ClassRegistrationLogs.Register, registeredBy, now, payment,
-            classAssignedBy: classAssignedBy, slotId: requestedSlotId);
+        ClassRegistrationLogs.Add(db, userId, classId, ClassRegistrationLogs.Register, registeredBy, now, payment);
         await db.SaveChangesAsync();
 
+        var upgradeText = upgrade.Package is null
+            ? ""
+            : $", lên cấp {upgrade.Package.PackageName} {upgrade.Price:N0}";
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = registeredBy.UserId,
@@ -1012,8 +872,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             EntityName = "payment",
             EntityId = payment.PaymentId,
             Detail = registeredBy.UserId == userId
-                ? $"Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}"
-                : $"Đăng ký giùm {member.FullName} ({registeredBy.RoleCode}). Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}",
+                ? $"Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}{upgradeText}"
+                : $"Đăng ký giùm {member.FullName} ({registeredBy.RoleCode}). Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}{upgradeText}",
             CreatedAt = now,
         });
         await db.SaveChangesAsync();
@@ -1031,8 +891,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             payment.Status,
             "",
             isExisting,
-            await ClassRegistrationLogs.RegisteredByPaymentAsync(db, payment.PaymentId),
-            await RequestedSlotAsync(payment.RequestedSlotId));
+            await ClassRegistrationLogs.RegisteredByPaymentAsync(db, payment.PaymentId));
 
     // Người gọi phải Include(Invoice), nếu không InvoiceCode và InvoiceStatus sẽ rỗng.
     private static RegistrationStatusDto ToRegistrationStatusDto(
@@ -1040,8 +899,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         string className,
         string? enrollmentStatus,
         string message,
-        RegisteredByDto? registeredBy,
-        RequestedSlotDto? requestedSlot) =>
+        RegisteredByDto? registeredBy) =>
         new RegistrationStatusDto(
             payment.PaymentId.ToString(),
             payment.Invoice?.InvoiceCode ?? "",
@@ -1052,8 +910,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             payment.Invoice?.Status ?? "",
             enrollmentStatus,
             message,
-            registeredBy,
-            requestedSlot);
+            registeredBy);
 
     // Đơn có thể không gắn lớp (thanh toán gói hội viên): khi đó không có tên lớp và trạng thái ghi danh.
     private async Task<RegistrationStatusDto> BuildStatusAsync(Payment payment)
@@ -1073,12 +930,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             ? null
             : await ClassRegistrationLogs.RegisteredByPaymentAsync(db, payment.PaymentId);
         return ToRegistrationStatusDto(
-            payment,
-            className,
-            enrollmentStatus,
-            StatusMessage(payment.Status, enrollmentStatus, className),
-            registeredBy,
-            await RequestedSlotAsync(payment.RequestedSlotId));
+            payment, className, enrollmentStatus, StatusMessage(payment.Status, enrollmentStatus, className), registeredBy);
     }
 
     private static string StatusMessage(string paymentStatus, string? enrollmentStatus, string className) =>

@@ -22,9 +22,9 @@ public class MembershipPackage
     [Column("validity_months")]
     public int ValidityMonths { get; set; }
 
-    // % giảm học phí lớp cho học viên đang có gói (0 - 100)
-    [Column("class_discount_percent")]
-    public decimal ClassDiscountPercent { get; set; }
+    // % giảm khi chọn lên hạng này cùng lúc đăng ký lớp (0 - 100). Đồng = 0.
+    [Column("upgrade_discount_percent")]
+    public decimal UpgradeDiscountPercent { get; set; }
 
     [Column("benefits")]
     public string? Benefits { get; set; }

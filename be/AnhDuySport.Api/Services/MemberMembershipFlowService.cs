@@ -106,6 +106,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     {
         var member = await FindActiveMemberAsync(memberUserId);
         var today = DateOnly.FromDateTime(DateTime.Now);
+        await ClassMembershipBonus.PromoteAsync(db, member.UserId, today);
 
         var memberships = await db.Memberships
             .AsNoTracking()
@@ -118,8 +119,9 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
 
         var current = history.FirstOrDefault(item =>
             item.Status == "active" && item.StartDate <= today && item.EndDate >= today);
+        // Tính cả gói nhận kèm lớp đang chờ (scheduled) vì nó nối tiếp gói hiện tại.
         var endDate = history
-            .Where(item => item.Status == "active" && item.EndDate >= today)
+            .Where(item => item.Status is "active" or "scheduled" && item.EndDate >= today)
             .Select(item => (DateOnly?)item.EndDate)
             .Max();
 
@@ -167,6 +169,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
 
         var now = DateTime.Now;
         var today = DateOnly.FromDateTime(now);
+        await ClassMembershipBonus.PromoteAsync(db, member.UserId, today);
 
         // ---- Đơn gói đang chờ: mỗi học viên chỉ giữ 1 đơn ----
         // Hỏi lại payOS trước: đơn cũ đã trả tiền thì kích hoạt, không hủy nhầm.
@@ -302,7 +305,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
 
         var endDate = await db.Memberships
             .AsNoTracking()
-            .Where(item => item.UserId == member.UserId && item.Status == "active" && item.EndDate >= today)
+            .Where(item => item.UserId == member.UserId
+                && (item.Status == "active" || item.Status == "scheduled") && item.EndDate >= today)
             .Select(item => (DateOnly?)item.EndDate)
             .MaxAsync();
 
@@ -330,6 +334,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     private async Task<ActivityLog> ActivateAsync(UserAccount member, Membership membership, Payment payment, DateTime now)
     {
         var today = DateOnly.FromDateTime(now);
+        await ClassMembershipBonus.PromoteAsync(db, member.UserId, today);
         var package = await db.MembershipPackages.FirstOrDefaultAsync(item => item.MembershipPackageId == membership.MembershipPackageId)
             ?? throw new KeyNotFoundException("Không tìm thấy gói hội viên của đơn này.");
         var plan = await PlanRenewalAsync(member.UserId, package, today, blockDowngrade: false);
@@ -355,6 +360,20 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         membership.StartDate = plan.StartDate;
         membership.EndDate = plan.EndDate;
         membership.Status = "active";
+
+        // Gói nhận kèm lớp đang chờ (scheduled) lùi ra sau ngày hết hạn mới, giữ nguyên số ngày.
+        var queued = await db.Memberships
+            .Where(item => item.UserId == member.UserId && item.Status == "scheduled")
+            .OrderBy(item => item.StartDate)
+            .ToListAsync();
+        var cursor = plan.EndDate;
+        foreach (var item in queued)
+        {
+            var days = item.EndDate.DayNumber - item.StartDate.DayNumber;
+            item.StartDate = cursor.AddDays(1);
+            item.EndDate = item.StartDate.AddDays(days);
+            cursor = item.EndDate;
+        }
 
         var log = new ActivityLog
         {
@@ -744,7 +763,10 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             membership.EndDate,
             // Trong DB vẫn là active nhưng đã qua ngày hết hạn thì hiển thị expired.
             membership.Status == "active" && membership.EndDate < today ? "expired" : membership.Status,
-            membership.Payment?.Amount ?? 0,
+            // Gói lên cấp kèm lớp gắn với payment của lớp: chỉ tính phần tiền gói.
+            membership.Payment is { ClassId: not null } classPayment
+                ? classPayment.UpgradeAmount
+                : membership.Payment?.Amount ?? 0,
             membership.Payment?.Invoice?.InvoiceCode ?? "",
             membership.Payment?.PaymentMethod ?? "");
 
