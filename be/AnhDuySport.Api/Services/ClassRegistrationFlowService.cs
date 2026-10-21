@@ -318,7 +318,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             throw new RegistrationException("Lớp học không còn nhận đăng ký.");
         }
 
-        var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.UpgradePackageId);
+        var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.MembershipPackageId);
         var pending = await FindPendingPaymentAsync(member.UserId, classId);
         if (pending is not null && pending.UpgradePackageId == upgrade.Package?.MembershipPackageId)
         {
@@ -672,7 +672,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
 
         var now = DateTime.Now;
-        var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.UpgradePackageId);
+        var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.MembershipPackageId);
         await using var transaction = await db.Database.BeginTransactionAsync();
         var invoice = new Invoice
         {
@@ -743,7 +743,10 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             invoice.InvoiceCode,
             session.Token,
             session.User,
-            new RegisteredByDto(user.UserId.ToString(), user.FullName, "MEMBER"));
+            new RegisteredByDto(user.UserId.ToString(), user.FullName, "MEMBER"),
+            payment.Amount,
+            payment.Amount - payment.UpgradeAmount,
+            await ClassMembershipBonus.QuoteOfPaymentAsync(db, payment));
     }
 
     internal static readonly Dictionary<string, string> PaymentMethods = new(StringComparer.OrdinalIgnoreCase)
@@ -1047,7 +1050,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             "",
             isExisting,
             await ClassRegistrationLogs.RegisteredByPaymentAsync(db, payment.PaymentId),
-            await RequestedSlotAsync(payment.RequestedSlotId));
+            await RequestedSlotAsync(payment.RequestedSlotId),
+            payment.Amount - payment.UpgradeAmount,
+            await ClassMembershipBonus.QuoteOfPaymentAsync(db, payment));
 
     // Người gọi phải Include(Invoice), nếu không InvoiceCode và InvoiceStatus sẽ rỗng.
     private static RegistrationStatusDto ToRegistrationStatusDto(
@@ -1056,7 +1061,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         string? enrollmentStatus,
         string message,
         RegisteredByDto? registeredBy,
-        RequestedSlotDto? requestedSlot) =>
+        RequestedSlotDto? requestedSlot,
+        MembershipPackageQuoteDto? membershipPackage) =>
         new RegistrationStatusDto(
             payment.PaymentId.ToString(),
             payment.Invoice?.InvoiceCode ?? "",
@@ -1068,7 +1074,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             enrollmentStatus,
             message,
             registeredBy,
-            requestedSlot);
+            requestedSlot,
+            payment.Amount - payment.UpgradeAmount,
+            membershipPackage);
 
     // Đơn có thể không gắn lớp (thanh toán gói hội viên): khi đó không có tên lớp và trạng thái ghi danh.
     private async Task<RegistrationStatusDto> BuildStatusAsync(Payment payment)
@@ -1093,7 +1101,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             enrollmentStatus,
             StatusMessage(payment.Status, enrollmentStatus, className),
             registeredBy,
-            await RequestedSlotAsync(payment.RequestedSlotId));
+            await RequestedSlotAsync(payment.RequestedSlotId),
+            await ClassMembershipBonus.QuoteOfPaymentAsync(db, payment));
     }
 
     private static string StatusMessage(string paymentStatus, string? enrollmentStatus, string className) =>
