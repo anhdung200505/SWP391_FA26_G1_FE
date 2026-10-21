@@ -103,7 +103,7 @@ export default function AdmissionsPage() {
         email: email.trim(),
         sports: selectedSport,
         age: studentAge ? Number(studentAge) : null,
-        kind: 'dang-ky-tu-van',
+        title: 'Đăng ký tư vấn',
         note: modalPackageName,
       });
       closeModal();
