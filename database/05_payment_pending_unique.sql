@@ -7,6 +7,7 @@
        Payment da paid/failed/refunded khong bi rang buoc.
     2. invoice_code_seq: bo dem cap so cho ma hoa don INV-{nam}-{so}.
        Hai request dong thoi luon nhan 2 so khac nhau. So khong reset theo nam.
+       Bat dau sau so lon nhat dang co trong invoice.invoice_code.
 
     Chay sau 04_support_request.sql. Script chay lai nhieu lan khong loi.
 
@@ -39,8 +40,20 @@ BEGIN
 END
 GO
 
+-- Sequence phai bat dau sau so lon nhat cua ma INV-{nam}-{so} dang co (seed da co INV-2026-0001).
+-- Neu sequence da ton tai nhung dang thap hon thi dat lai. Chay lai khong doi gi them.
+-- START WITH / RESTART WITH can hang so nen dung SQL dong, chi ghep mot so nguyen.
+DECLARE @next INT = ISNULL((
+    SELECT MAX(TRY_CAST(SUBSTRING(invoice_code, 10, 20) AS INT))
+    FROM invoice
+    WHERE invoice_code LIKE N'INV-[0-9][0-9][0-9][0-9]-[0-9]%'
+), 0) + 1;
+DECLARE @sql NVARCHAR(200) = NULL;
+
 IF OBJECT_ID(N'dbo.invoice_code_seq', N'SO') IS NULL
-BEGIN
-    CREATE SEQUENCE dbo.invoice_code_seq AS INT START WITH 1 INCREMENT BY 1;
-END
+    SET @sql = N'CREATE SEQUENCE dbo.invoice_code_seq AS INT START WITH ' + CAST(@next AS NVARCHAR(12)) + N' INCREMENT BY 1';
+ELSE IF (SELECT CAST(current_value AS BIGINT) FROM sys.sequences WHERE name = N'invoice_code_seq') < @next
+    SET @sql = N'ALTER SEQUENCE dbo.invoice_code_seq RESTART WITH ' + CAST(@next AS NVARCHAR(12));
+
+IF @sql IS NOT NULL EXEC (@sql);
 GO

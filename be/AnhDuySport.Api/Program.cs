@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PayOS;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +22,8 @@ var connectionString = builder.Configuration["connectionString"]
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddHostedService<PendingRegistrationCleanupService>();
 builder.Services.AddScoped<CurrentActor>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailNotificationService>();
@@ -31,6 +34,27 @@ builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<SlotFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
+builder.Services.AddScoped<PayOsPaymentService>();
+builder.Services.AddHttpClient<GeminiWorkoutClient>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+    client.Timeout = TimeSpan.FromSeconds(100);
+});
+builder.Services.AddScoped<WorkoutRecommendationFlowService>();
+
+var payOsClientId = builder.Configuration["PayOS:ClientId"];
+var payOsApiKey = builder.Configuration["PayOS:ApiKey"];
+var payOsChecksumKey = builder.Configuration["PayOS:ChecksumKey"];
+if (!string.IsNullOrWhiteSpace(payOsClientId)
+    && !string.IsNullOrWhiteSpace(payOsApiKey)
+    && !string.IsNullOrWhiteSpace(payOsChecksumKey))
+{
+    builder.Services.AddSingleton(new PayOSClient(payOsClientId, payOsApiKey, payOsChecksumKey));
+}
+else
+{
+    Console.WriteLine("payOS chưa có khóa. API vẫn chạy. Tạo mã QR sẽ báo thiếu PayOS:ClientId, PayOS:ApiKey, PayOS:ChecksumKey.");
+}
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -99,7 +123,10 @@ app.MapControllers();
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
+    await auth.EnsurePendingRegistrationTableAsync();
     await auth.EnsureBootstrapAdminPasswordAsync();
+    var workouts = scope.ServiceProvider.GetRequiredService<WorkoutRecommendationFlowService>();
+    await workouts.EnsureTablesAsync();
 }
 
 app.Run();
