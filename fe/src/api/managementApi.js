@@ -48,7 +48,6 @@ async function request(path, options = {}) {
 // API XÁC THỰC (AUTHENTICATION)
 // ==========================================
 
-// POST /api/auth/login - Đăng nhập Quản trị & Lễ tân
 export function loginStaff(email, password, portal = 'staff') {
   return request('/auth/login', {
     method: 'POST',
@@ -57,7 +56,6 @@ export function loginStaff(email, password, portal = 'staff') {
   });
 }
 
-// POST /api/auth/member-login - Đăng nhập Học viên
 export function loginMember(email, password, portal = 'member') {
   return request('/auth/member-login', {
     method: 'POST',
@@ -66,7 +64,6 @@ export function loginMember(email, password, portal = 'member') {
   });
 }
 
-// POST /api/auth/register - Đăng ký trực tiếp
 export function registerGuest(payload) {
   return request('/auth/register', {
     method: 'POST',
@@ -75,7 +72,6 @@ export function registerGuest(payload) {
   });
 }
 
-// POST /api/auth/register/otp - Gửi mã OTP đăng ký
 export function sendRegisterOtp(payload) {
   return request('/auth/register/otp', {
     method: 'POST',
@@ -84,7 +80,6 @@ export function sendRegisterOtp(payload) {
   });
 }
 
-// POST /api/auth/register/confirm - Xác nhận mã OTP đăng ký
 export function confirmRegisterOtp(email, code) {
   return request('/auth/register/confirm', {
     method: 'POST',
@@ -105,7 +100,6 @@ export function getSports(centerId = '1') {
   return request(`/catalog/centers/${centerId}/sports`);
 }
 
-// Alias bổ sung cho getSports để tương thích các component cũ/mới
 export function getSportsByCenter(centerId = '1') {
   return getSports(centerId);
 }
@@ -114,7 +108,7 @@ export function getClasses(centerId, sportId) {
   const params = new URLSearchParams();
   if (centerId) params.append('centerId', centerId);
   if (sportId) params.append('sportId', sportId);
-  
+
   const queryString = params.toString();
   return request(`/catalog/classes${queryString ? `?${queryString}` : ''}`);
 }
@@ -124,21 +118,20 @@ export function getClassDetail(classId) {
 }
 
 // ==========================================
-// API ĐĂNG KÝ LỚP HỌC (CLASS REGISTRATIONS)
+// API ĐĂNG KÝ & THANH TOÁN (REGISTRATIONS & PAYMENTS)
 // ==========================================
 
-// POST /api/class-registrations - Học viên đăng ký lớp học
-export function registerClass(classId, extraInfo = {}) {
+export function registerClass(payload) {
   return request('/class-registrations', {
     method: 'POST',
-    body: JSON.stringify({
-      classId,
-      ...extraInfo,
-    }),
+    body: JSON.stringify(payload),
   });
 }
 
-// GET /api/class-registrations/{paymentId} - Xem trạng thái đơn đăng ký
+export function getMyClassRegistrations() {
+  return request('/class-registrations/mine');
+}
+
 export function getClassRegistrationStatus(paymentId) {
   return request(`/class-registrations/${paymentId}`);
 }
@@ -147,6 +140,13 @@ export function payRegistration(payload) {
   return request('/registrations/pay', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+// HÀM HỦY ĐƠN PENDING (GIÚP TẠO ĐƠN MỚI KHÔNG BỊ KHÓA TRÙNG)
+export function cancelPayment(paymentId) {
+  return request(`/payments/${paymentId}/cancel`, {
+    method: 'POST',
   });
 }
 
@@ -221,8 +221,20 @@ export function updateMemberProfile(memberUserId, payload) {
   });
 }
 
+// ==========================================
+// API YÊU CẦU HỖ TRỢ & TƯ VẤN (SUPPORT REQUESTS)
+// ==========================================
+
 export function createEnrollmentConsultation(payload) {
   return request('/support-requests/enrollment', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createSupportRequest(payload) {
+  return request('/support-requests', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

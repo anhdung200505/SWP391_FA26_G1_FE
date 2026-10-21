@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { registrationOnly, registrationOnlyMessage } from '../auth/destination';
 import { useAuth } from '../context/AuthContext';
+import { createEnrollmentConsultation } from '../api/managementApi';
 
 export default function FacilityTourSection({ formRef }) {
   const { user } = useAuth();
@@ -47,7 +48,7 @@ export default function FacilityTourSection({ formRef }) {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (registrationOnly(user)) {
       setActionNotice(registrationOnlyMessage);
@@ -75,10 +76,31 @@ export default function FacilityTourSection({ formRef }) {
     setErrors({});
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // Gom nhóm các thông tin tham quan vào note
+      const tourNoteDetails = [
+        formData.date ? `Ngày dự kiến: ${formData.date}` : '',
+        formData.groupSize ? `Số lượng: ${formData.groupSize} người` : '',
+        formData.notes ? `Nhu cầu: ${formData.notes}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+      await createEnrollmentConsultation({
+        fullName: formData.fullName.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim(),
+        sports: 'Đăng ký Tham quan Cơ sở',
+        title: 'Đăng ký tham quan cơ sở vật chất',
+        note: tourNoteDetails,
+      });
+
       setIsSuccess(true);
-    }, 1500);
+    } catch (requestError) {
+      setActionNotice(requestError.message || 'Gửi đăng ký tham quan thất bại. Vui lòng thử lại.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -259,7 +281,10 @@ export default function FacilityTourSection({ formRef }) {
                       type="text"
                       placeholder="Nguyễn Văn A"
                       value={formData.fullName}
-                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, fullName: e.target.value });
+                        if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: '' }));
+                      }}
                       className="w-full bg-[#f2f4f8] text-gray-900 placeholder-gray-400 px-4 py-3 text-sm font-medium border border-transparent focus:bg-white focus:border-gray-400 focus:outline-none"
                     />
                     {errors.fullName && (
