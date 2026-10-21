@@ -114,6 +114,83 @@ public class CustomerServiceFlowService(
         return new SupportRequestCreatedDto("Yêu cầu tư vấn đã chuyển tới lễ tân.", await ToDtoAsync(item.SupportRequestId));
     }
 
+    public async Task<SupportRequestDto> UpdateEnrollmentConsultationAsync(string requestId, UpdateEnrollmentConsultationRequest request)
+    {
+        var item = await FindRequestAsync(requestId);
+        EnsureEnrollment(item);
+        if (item.Status is not ("pending_receptionist" or "classified"))
+        {
+            throw new InvalidOperationException("Chỉ chỉnh sửa được đơn tư vấn khách đang ở hàng chờ lễ tân.");
+        }
+
+        var hasEdit = request.Title is not null
+            || request.FullName is not null
+            || request.Phone is not null
+            || request.Email is not null
+            || request.Sports is not null
+            || request.Age is not null
+            || request.Note is not null;
+        var resolving = !string.IsNullOrWhiteSpace(request.ResolutionNote);
+        if (!hasEdit && !resolving)
+        {
+            throw new InvalidOperationException("Nhập nội dung cần chỉnh hoặc kết quả xử lý.");
+        }
+
+        var current = ReadEnrollment(item.Description);
+        var title = request.Title is null ? item.Title : RequireText(request.Title, "Nhập tiêu đề tư vấn ghi danh.", 200);
+        var fullName = request.FullName is null ? current.FullName : RequireText(request.FullName, "Nhập họ và tên.", 200);
+        var phone = request.Phone is null ? current.Phone : AccountPhone.Require(request.Phone);
+        var email = request.Email is null ? current.Email : NormalizeOptionalEmail(request.Email);
+        var sports = request.Sports is null ? current.Sports : NormalizeSports(request.Sports);
+        var age = request.Age ?? current.Age;
+        if (age is < 1 or > 99)
+        {
+            throw new InvalidOperationException("Độ tuổi học viên từ 1 đến 99.");
+        }
+
+        var note = request.Note is null ? current.Note : NormalizeNote(request.Note);
+        var handlerId = RequireActor();
+        var now = DateTime.Now;
+        item.Title = title;
+        item.Description = BuildEnrollmentDescription(fullName, phone, email, sports, age, note);
+        item.AssignedToUserId = handlerId;
+        string action = "Chỉnh sửa đơn tư vấn khách";
+        string detail = title;
+        if (resolving)
+        {
+            var resolution = RequireText(request.ResolutionNote, "Nhập kết quả xử lý tư vấn khách.", 2000);
+            var result = $"Lễ tân đã xử lý tư vấn khách hàng. {resolution}";
+            var member = item.Member ?? throw new KeyNotFoundException("Không tìm thấy học viên.");
+            var emailNotice = await emailNotifications.SendSupportResultEmailAsync(member, title, result);
+            item.Status = "resolved";
+            item.ReceptionistCategory = "consultation";
+            item.ResolutionNote = result;
+            item.ResolvedAt = now;
+            db.Notifications.Add(new AccountNotification
+            {
+                UserId = member.UserId,
+                Title = emailNotice.Subject,
+                Content = emailNotice.Body,
+                IsRead = false,
+                CreatedAt = now,
+            });
+            action = "Giải quyết đơn tư vấn khách";
+            detail = result;
+        }
+
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = handlerId,
+            Action = action,
+            EntityName = "support_request",
+            EntityId = item.SupportRequestId,
+            Detail = detail,
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        return await ToDtoAsync(item.SupportRequestId);
+    }
+
     private async Task<UserAccount> FindConsultationMemberAsync(string? email)
     {
         if (actor.UserId != 0)
@@ -195,6 +272,7 @@ public class CustomerServiceFlowService(
     {
         var reason = RequireText(request.Reason, "Nhập lý do chuyển lên quản trị trung tâm.", 500);
         var item = await FindRequestAsync(requestId);
+        EnsureMemberRequest(item);
         if (item.Status is not ("pending_receptionist" or "classified"))
         {
             throw new InvalidOperationException("Chỉ chuyển được yêu cầu đang ở hàng chờ lễ tân.");
@@ -226,6 +304,7 @@ public class CustomerServiceFlowService(
         }
 
         var item = await FindRequestAsync(requestId);
+        EnsureMemberRequest(item);
         if (item.SystemCategory != "consultation_account")
         {
             throw new InvalidOperationException("Yêu cầu này ngoài phạm vi lễ tân. Hãy chuyển lên quản trị trung tâm.");
@@ -282,6 +361,107 @@ public class CustomerServiceFlowService(
 
     private const string EnrollmentSource = "Khách gửi form tư vấn ghi danh.";
 
+    private static void EnsureEnrollment(SupportRequest item)
+    {
+        if (item.ClassificationReason is null || !item.ClassificationReason.StartsWith(EnrollmentSource))
+        {
+            throw new InvalidOperationException("Đây là đơn của học viên. Hãy xử lý bằng luồng support request của học viên.");
+        }
+    }
+
+    private static void EnsureMemberRequest(SupportRequest item)
+    {
+        if (item.ClassificationReason is not null && item.ClassificationReason.StartsWith(EnrollmentSource))
+        {
+            throw new InvalidOperationException("Đây là đơn tư vấn khách hàng. Hãy chỉnh và giải quyết bằng PUT /api/support-requests/enrollment/{id}.");
+        }
+    }
+
+    private static string BuildEnrollmentDescription(string fullName, string phone, string email, string? sports, int? age, string? note)
+    {
+        return string.Join(
+            Environment.NewLine,
+            new[]
+            {
+                $"Họ tên: {fullName}",
+                $"Số điện thoại: {phone}",
+                $"Email: {email}",
+                $"Môn: {sports ?? "Chưa chọn"}",
+                $"Độ tuổi: {(age is int value ? value.ToString() : "Chưa nhập")}",
+                note is null ? null : $"Gói quan tâm: {note}",
+            }.Where(line => line is not null));
+    }
+
+    private static (string FullName, string Phone, string Email, string? Sports, int? Age, string? Note) ReadEnrollment(string description)
+    {
+        var lines = description.Replace("\r", "").Split('\n');
+        string? Read(string prefix) => lines
+            .FirstOrDefault(line => line.StartsWith(prefix, StringComparison.Ordinal))
+            ?[prefix.Length..]
+            .Trim();
+
+        var fullName = Read("Họ tên:");
+        var phone = Read("Số điện thoại:");
+        var email = Read("Email:");
+        if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(phone) || string.IsNullOrWhiteSpace(email))
+        {
+            throw new InvalidOperationException("Không đọc được nội dung đơn tư vấn khách.");
+        }
+
+        var sports = Read("Môn:");
+        if (sports is null or "" or "Chưa chọn")
+        {
+            sports = null;
+        }
+
+        var ageText = Read("Độ tuổi:");
+        int? age = int.TryParse(ageText, out var parsed) ? parsed : null;
+        return (fullName, phone, email, sports, age, Read("Gói quan tâm:"));
+    }
+
+    private static string NormalizeOptionalEmail(string? email)
+    {
+        var text = email?.Trim() ?? "";
+        if (text.Length is 0 or > 200 || !text.Contains('@'))
+        {
+            throw new InvalidOperationException("Email không hợp lệ.");
+        }
+
+        return text;
+    }
+
+    private static string? NormalizeSports(string? sports)
+    {
+        var text = sports?.Trim() ?? "";
+        if (text.Length == 0)
+        {
+            return null;
+        }
+
+        if (text.Length > 500)
+        {
+            throw new InvalidOperationException("Danh sách môn học quá dài.");
+        }
+
+        return text;
+    }
+
+    private static string? NormalizeNote(string? note)
+    {
+        var text = note?.Trim() ?? "";
+        if (text.Length == 0)
+        {
+            return null;
+        }
+
+        if (text.Length > 200)
+        {
+            throw new InvalidOperationException("Ghi chú quá dài.");
+        }
+
+        return text;
+    }
+
     private async Task<IReadOnlyList<SupportRequestDto>> LoadReceptionistQueueAsync(bool enrollment)
     {
         var ids = await db.SupportRequests
@@ -308,6 +488,7 @@ public class CustomerServiceFlowService(
         string action)
     {
         var item = await FindRequestAsync(requestId);
+        EnsureMemberRequest(item);
         if (expectedCategory is not null && item.SystemCategory != expectedCategory)
         {
             throw new InvalidOperationException("Yêu cầu không thuộc hàng chờ này.");
