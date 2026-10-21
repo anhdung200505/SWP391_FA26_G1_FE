@@ -386,8 +386,12 @@ public class ReceptionFlowService(
                 payment.Status,
                 payment.PaidAt,
                 payment.RequestedSlotId,
+                payment.UpgradePackageId,
+                payment.UpgradeAmount,
             })
             .ToListAsync();
+        var packages = await db.MembershipPackages.AsNoTracking().ToListAsync();
+        var bronze = packages.FirstOrDefault(item => item.PackageCode == ClassMembershipBonus.BronzeCode);
         var slotRegistrations = await db.SlotRegistrations.AsNoTracking()
             .Where(item => memberIds.Contains(item.UserId) && classIds.Contains(item.Slot!.ClassId))
             .Select(item => new { item.UserId, item.Slot!.ClassId, item.SlotId, item.Status })
@@ -431,7 +435,13 @@ public class ReceptionFlowService(
                             payment.Amount,
                             payment.PaymentMethod,
                             payment.Status,
-                            payment.PaidAt),
+                            payment.PaidAt,
+                            payment.Amount - payment.UpgradeAmount,
+                            (payment.UpgradePackageId is int packageId
+                                ? packages.FirstOrDefault(item => item.MembershipPackageId == packageId)
+                                : bronze) is { } package
+                                ? ClassMembershipBonus.ToQuote(package, payment.UpgradePackageId is null, payment.UpgradeAmount)
+                                : null),
                     register is null ? null : ToPerformerDto(register.Log, register.PerformerName),
                     assigned is null ? null : ToClassAssignedDto(assigned.Log, assigned.PerformerName),
                     requestedSlotId is int requested ? slotDetails.GetValueOrDefault(requested) : null,
