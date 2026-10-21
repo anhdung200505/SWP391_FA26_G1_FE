@@ -20,13 +20,12 @@ const sportsList = [
 ];
 
 export default function Footer() {
-  const { user } = useAuth(); // Kiểm tra trạng thái đăng nhập
-  const location = useLocation(); // Lấy đường dẫn hiện tại của trang
+  const { user } = useAuth();
+  const location = useLocation();
 
-  // Kiểm tra xem có đang ở trang HocVienDashboard hay không
   const isDashboardPage = location.pathname === '/hoc-vien-dashboard';
 
-  // ------------ STATE CỦA FORM TƯ VẤN GHI DANH (GUEST) ------------
+  // ------------ STATE CỦA FORM TƯ VẤN GHI DANH (GUEST FORM) ------------
   const [actionNotice, setActionNotice] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -62,6 +61,7 @@ export default function Footer() {
     const value = e.target.value.replace(/\D/g, '');
     if (value.length <= 2) {
       setFormData({ ...formData, age: value });
+      if (errors.age) setErrors((prev) => ({ ...prev, age: '' }));
     }
   };
 
@@ -78,7 +78,7 @@ export default function Footer() {
     });
   };
 
-  // Submit Form Tư vấn ghi danh (API /api/support-requests/enrollment)
+  // Submit Form Tư vấn ghi danh (Khách vãng lai / Guest)
   const handleSubmitEnrollment = async (e) => {
     e.preventDefault();
     setActionNotice('');
@@ -95,6 +95,19 @@ export default function Footer() {
       newErrors.phone = 'Số điện thoại không hợp lệ';
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email.trim()) {
+      newErrors.email = 'Vui lòng nhập email';
+    } else if (!emailRegex.test(formData.email.trim())) {
+      newErrors.email = 'Email không hợp lệ';
+    }
+
+    if (!formData.age.trim()) {
+      newErrors.age = 'Vui lòng nhập độ tuổi';
+    } else if (Number(formData.age) <= 0) {
+      newErrors.age = 'Độ tuổi không hợp lệ';
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       setIsSuccess(false);
@@ -103,25 +116,28 @@ export default function Footer() {
 
     setErrors({});
     setIsLoading(true);
+
+    const payload = {
+      fullName: formData.fullName.trim(),
+      phone: formData.phone.trim(),
+      email: formData.email.trim(),
+      sports: formData.selectedSports.length > 0 ? formData.selectedSports.join(', ') : 'Chưa chọn',
+      age: Number(formData.age),
+      title: 'Tư vấn ghi danh',
+      note: 'Khách gửi tư vấn ghi danh từ website',
+    };
+
     try {
-      await createEnrollmentConsultation({
-        fullName: formData.fullName.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        sports: formData.selectedSports.join(', '),
-        age: formData.age ? Number(formData.age) : null,
-        title: 'Tư vấn ghi danh',
-        note: '',
-      });
+      await createEnrollmentConsultation(payload);
       setIsSuccess(true);
     } catch (requestError) {
-      setActionNotice(requestError.message || 'Gửi yêu cầu thất bại.');
+      setActionNotice(requestError.message || 'Gửi yêu cầu thất bại. Vui lòng thử lại sau.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Submit Form Tạo Yêu cầu Hỗ trợ Lễ tân (API /api/support-requests)
+  // Submit Form Tạo Yêu cầu Hỗ trợ Lễ tân
   const handleSubmitSupport = async (e) => {
     e.preventDefault();
     setHelpNotice({ type: '', msg: '' });
@@ -161,13 +177,12 @@ export default function Footer() {
     <>
       <footer id="footer-section" className="relative w-full bg-[#12151e] text-white font-sans select-none overflow-hidden">
         <div className="relative w-full min-h-[420px] flex flex-col lg:flex-row">
-          {/* ================= 1. KHỐI BÊN TRÁI: LOGO + LIÊN HỆ ================= */}
+          {/* ================= 1. KHỐI BÊN TRÁI ================= */}
           <div
             className={`w-full ${
               user ? 'lg:w-full max-w-7xl mx-auto px-6 sm:px-12 py-12' : 'lg:w-[50%] xl:w-[48%] px-8 sm:px-12 md:px-16 lg:pl-16 lg:pr-8 py-10 md:py-14'
             } flex flex-col justify-between z-10`}
           >
-            {/* LOGO & SOCIAL */}
             <div>
               <div className="flex items-center space-x-2.5 mb-5 cursor-pointer">
                 <img
@@ -243,7 +258,6 @@ export default function Footer() {
                     Bạn đang đăng nhập với tư cách học viên <strong className="text-white">{user.fullName || user.userName}</strong>.
                   </p>
                   
-                  {/* CHỈ HIỂN THỊ NÚT KHI KHÔNG Ở TRANG HỌC VIÊN DASHBOARD */}
                   {!isDashboardPage && (
                     <a
                       href="/hoc-vien-dashboard"
@@ -257,7 +271,7 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* ================= 2. KHỐI BÊN PHẢI: FORM TƯ VẤN GHI DANH (CHỈ HIỂN THỊ KHI CHƯA ĐĂNG NHẬP) ================= */}
+          {/* ================= 2. KHỐI BÊN PHẢI: FORM TƯ VẤN GHI DANH (GUEST FORM) ================= */}
           {!user && (
             <div
               className="relative w-full lg:w-[50%] xl:w-[52%] bg-[#e31b23] px-6 sm:px-10 lg:pl-16 lg:pr-12 py-10 md:py-12 flex flex-col justify-center min-h-[500px]"
@@ -296,7 +310,7 @@ export default function Footer() {
                 ) : (
                   <form onSubmit={handleSubmitEnrollment} noValidate className="space-y-1">
                     {actionNotice && (
-                      <p className="mb-3 bg-white px-3 py-2 text-center text-xs font-bold text-[#12141d]">{actionNotice}</p>
+                      <p className="mb-3 bg-white px-3 py-2 text-center text-xs font-bold text-red-600 rounded">{actionNotice}</p>
                     )}
 
                     {/* 1. Họ và tên */}
@@ -343,15 +357,27 @@ export default function Footer() {
                       </div>
                     </div>
 
-                    {/* 3. Email */}
-                    <div className="pb-4">
+                    {/* 3. Email (BẮT BUỘC - REQUIRED) */}
+                    <div className="relative">
                       <input
                         type="email"
-                        placeholder="Email"
+                        placeholder="Email *"
                         value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-[#181d29] text-white placeholder-gray-300 px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-sm shadow-inner"
+                        onChange={(e) => {
+                          setFormData({ ...formData, email: e.target.value });
+                          if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+                        }}
+                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-sm shadow-inner ${
+                          errors.email ? 'ring-2 ring-yellow-300' : ''
+                        }`}
                       />
+                      <div className="h-4 flex items-center justify-center">
+                        {errors.email && (
+                          <p className="text-yellow-200 text-[11px] font-semibold">
+                            ⚠️ {errors.email}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {/* 4. Môn học */}
@@ -393,17 +419,26 @@ export default function Footer() {
                       )}
                     </div>
 
-                    {/* 5. Độ tuổi học viên */}
-                    <div className="pb-2">
+                    {/* 5. Độ tuổi học viên (BẮT BUỘC - REQUIRED) */}
+                    <div className="relative">
                       <input
                         type="text"
                         inputMode="numeric"
                         maxLength={2}
-                        placeholder="Độ tuổi học viên"
+                        placeholder="Độ tuổi học viên *"
                         value={formData.age}
                         onChange={handleAgeChange}
-                        className="w-full bg-[#181d29] text-white placeholder-gray-300 px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-sm shadow-inner"
+                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-sm shadow-inner ${
+                          errors.age ? 'ring-2 ring-yellow-300' : ''
+                        }`}
                       />
+                      <div className="h-4 flex items-center justify-center">
+                        {errors.age && (
+                          <p className="text-yellow-200 text-[11px] font-semibold">
+                            ⚠️ {errors.age}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {/* NÚT ĐĂNG KÝ NGAY */}
