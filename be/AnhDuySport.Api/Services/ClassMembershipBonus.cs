@@ -1,3 +1,4 @@
+using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Data;
 using AnhDuySport.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,11 @@ public static class ClassMembershipBonus
             .AsNoTracking()
             .FirstOrDefaultAsync(item => item.MembershipPackageId == id && item.Status == "active")
             ?? throw new KeyNotFoundException("Không tìm thấy gói lên cấp.");
+        if (package.PackageCode == BronzeCode)
+        {
+            return (null, 0);
+        }
+
         if (package.UpgradeDiscountPercent <= 0)
         {
             throw new RegistrationException("Gói này không có ưu đãi lên cấp khi đăng ký lớp.");
@@ -38,6 +44,32 @@ public static class ClassMembershipBonus
         var price = decimal.Round(package.Fee * (100 - package.UpgradeDiscountPercent) / 100, 0, MidpointRounding.AwayFromZero);
         return (package, price);
     }
+
+    // Gói đơn lớp này nhận khi thanh toán: gói mua kèm, hoặc Hạng Đồng tặng kèm.
+    public static async Task<MembershipPackageQuoteDto?> QuoteOfPaymentAsync(AppDbContext db, Payment payment)
+    {
+        if (payment.ClassId is null)
+        {
+            return null;
+        }
+
+        var isFree = payment.UpgradePackageId is null;
+        var package = await db.MembershipPackages.AsNoTracking()
+            .FirstOrDefaultAsync(item => isFree
+                ? item.PackageCode == BronzeCode
+                : item.MembershipPackageId == payment.UpgradePackageId);
+        return package is null ? null : ToQuote(package, isFree, payment.UpgradeAmount);
+    }
+
+    public static MembershipPackageQuoteDto ToQuote(MembershipPackage package, bool isFree, decimal upgradeAmount) =>
+        new(
+            package.MembershipPackageId.ToString(),
+            package.PackageName,
+            package.Fee,
+            isFree ? 100 : package.UpgradeDiscountPercent,
+            isFree ? 0 : upgradeAmount,
+            package.ValidityMonths,
+            isFree);
 
     // Tới ngày thì 'scheduled' → 'active'; gói đã quá hạn → 'expired'. Mỗi lúc chỉ 1 gói active.
     public static async Task PromoteAsync(AppDbContext db, int userId, DateOnly today)
