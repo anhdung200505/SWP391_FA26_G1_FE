@@ -33,7 +33,8 @@ public sealed record PackageDto(
     decimal Fee,
     int ValidityMonths,
     IReadOnlyList<string> Benefits,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    decimal ClassDiscountPercent);
 
 public sealed record DashboardDto(
     int TotalAccounts,
@@ -73,6 +74,7 @@ public sealed class CreatePackageRequest
     public string Name { get; set; } = "";
     public decimal Fee { get; set; }
     public int ValidityMonths { get; set; }
+    public decimal ClassDiscountPercent { get; set; }
     public List<string> Benefits { get; set; } = [];
 }
 
@@ -80,5 +82,6 @@ public sealed class UpdatePackageSettingRequest
 {
     public decimal Fee { get; set; }
     public int ValidityMonths { get; set; }
+    public decimal ClassDiscountPercent { get; set; }
     public List<string> Benefits { get; set; } = [];
 }

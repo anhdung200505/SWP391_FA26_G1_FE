@@ -41,7 +41,9 @@ public sealed record ClassSummaryDto(
     int EnrolledCount,
     int? AvailableSeats,
     decimal Tuition,
-    ClassSlotDto? NextSlot);
+    ClassSlotDto? NextSlot,
+    decimal OriginalTuition,
+    decimal DiscountPercent);
 
 public sealed record ClassDetailDto(
     string Id,
@@ -64,7 +66,33 @@ public sealed record ClassDetailDto(
     int? AvailableSeats,
     decimal Tuition,
     bool IsOpenForRegistration,
-    IReadOnlyList<ClassSlotDto> Slots);
+    IReadOnlyList<ClassSlotDto> Slots,
+    decimal OriginalTuition,
+    decimal DiscountPercent);
+
+public sealed record EnrolledClassDto(
+    string ClassId,
+    string ClassName,
+    string ClassStatus,
+    DateTime EnrolledAt,
+    DateOnly? StartDate,
+    DateOnly? EndDate,
+    string SportId,
+    string SportName,
+    string CourseName,
+    string Level,
+    string CenterId,
+    string CenterName,
+    string RoomName,
+    string CoachName,
+    decimal Tuition,
+    RegisteredByDto? RegisteredBy);
+
+// Người đã đăng ký (hoặc đăng ký học lại) cho học viên. Role là vai trò lúc thao tác; UserId null nếu tài khoản đó đã xóa.
+public sealed record RegisteredByDto(
+    string? UserId,
+    string? FullName,
+    string Role);
 
 public sealed class PayRegistrationRequest
 {
@@ -83,11 +111,16 @@ public sealed record RegistrationPaymentResponse(
     string? Commitment,
     string? InvoiceCode,
     string? Token,
-    AuthUserDto? User);
+    AuthUserDto? User,
+    RegisteredByDto? RegisteredBy);
 
+// Bắt buộc chọn môn. Không chọn lớp thì hệ thống chọn lớp còn chỗ bắt đầu sớm nhất của môn đó;
+// chỉ chọn slot thì lấy lớp của slot. Slot chỉ là nguyện vọng, lễ tân đăng ký slot hoặc dời slot sau khi thanh toán.
 // Các trường hồ sơ đều tùy chọn: có gửi thì ghi đè hồ sơ học viên khi tạo đơn mới.
 public sealed record CreateClassRegistrationRequest(
-    string ClassId,
+    string SportId,
+    string? ClassId = null,
+    string? SlotId = null,
     [StringLength(200, MinimumLength = 1)] string? FullName = null,
     [RegularExpression(@"^\+?[0-9 ]{8,20}$")] string? Phone = null,
     DateOnly? DateOfBirth = null,
@@ -101,7 +134,18 @@ public sealed record ClassRegistrationDto(
     decimal Amount,
     string Status,
     string PaymentUrl,
-    bool IsExisting);
+    bool IsExisting,
+    RegisteredByDto? RegisteredBy,
+    RequestedSlotDto? RequestedSlot);
+
+// Slot học viên mong muốn. Remaining = 0 nghĩa là slot đã đầy, lễ tân sẽ dời sang slot khác.
+public sealed record RequestedSlotDto(
+    string Id,
+    DateOnly Date,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    string Title,
+    int Remaining);
 
 public sealed record RegistrationStatusDto(
     string PaymentId,
@@ -112,4 +156,6 @@ public sealed record RegistrationStatusDto(
     string PaymentStatus,
     string InvoiceStatus,
     string? EnrollmentStatus,
-    string Message);
+    string Message,
+    RegisteredByDto? RegisteredBy,
+    RequestedSlotDto? RequestedSlot);

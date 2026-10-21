@@ -11,12 +11,19 @@ using PayOS.Models.Webhooks;
 
 namespace AnhDuySport.Api.Services;
 
-public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfiguration configuration)
+public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, IServiceProvider services)
 {
     private const int CheckoutAmount = 10_000;
-    public async Task<PayOsPaymentDto> CreateAsync(CreatePayOsPaymentRequest request)
+
+    private PayOSClient? PayOsClient => services.GetService<PayOSClient>();
+
+    private PayOSClient RequirePayOs() =>
+        PayOsClient ?? throw new InvalidOperationException(
+            "Máy này chưa cấu hình payOS nên chưa tạo được mã QR. API vẫn chạy. Đặt PayOS:ClientId, PayOS:ApiKey và PayOS:ChecksumKey bằng lệnh dotnet user-secrets.");
+    public async Task<PayOsPaymentDto> CreateAsync(CreatePayOsPaymentRequest request, int memberUserId)
     {
-        var member = await FindOrCreateCustomerAsync(request);
+        RequirePayOs();
+        var member = await FindRegisteredMemberAsync(memberUserId);
         var trainingClass = await FindPayableClassAsync(request.ClassId);
 
         var alreadyPaid = await db.Payments.AnyAsync(item =>
@@ -64,9 +71,9 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         return ToDto(payment);
     }
 
-    public async Task<PayOsPaymentDto> AccessAsync(string paymentId)
+    public async Task<PayOsPaymentDto> AccessAsync(string paymentId, int memberUserId)
     {
-        var payment = await FindPaymentAsync(paymentId);
+        var payment = await FindOwnPaymentAsync(paymentId, memberUserId);
         if (payment.Status == "pending")
         {
             await TryConfirmFromPayOsAsync(payment);
@@ -75,9 +82,9 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         return ToDto(payment);
     }
 
-    public async Task<PayOsPaymentDto> CancelAsync(string paymentId)
+    public async Task<PayOsPaymentDto> CancelAsync(string paymentId, int memberUserId)
     {
-        var payment = await FindPaymentAsync(paymentId);
+        var payment = await FindOwnPaymentAsync(paymentId, memberUserId);
         if (payment.Status == "paid")
         {
             throw new InvalidOperationException("Đơn đã thanh toán, không hủy.");
@@ -101,7 +108,7 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         WebhookData data;
         try
         {
-            data = await payOs.Webhooks.VerifyAsync(webhook);
+            data = await RequirePayOs().Webhooks.VerifyAsync(webhook);
         }
         catch (WebhookException)
         {
@@ -132,6 +139,11 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
     private async Task TryConfirmFromPayOsAsync(Payment payment)
     {
         if (payment.PayosOrderCode is not long orderCode)
+        {
+            return;
+        }
+
+        if (PayOsClient is not PayOSClient payOs)
         {
             return;
         }
@@ -212,7 +224,7 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             return;
         }
 
-        if (payment.PayosOrderCode is long orderCode)
+        if (payment.PayosOrderCode is long orderCode && PayOsClient is PayOSClient payOs)
         {
             try
             {
@@ -274,8 +286,12 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             PaymentMethod = "payos",
             Status = "pending",
             Invoice = invoice,
+            RegisteredByUserId = member.UserId,
         };
         db.Payments.Add(payment);
+        ClassRegistrationLogs.Add(
+            db, member.UserId, trainingClass.ClassId, ClassRegistrationLogs.Register,
+            new RegistrationActor(member.UserId, "MEMBER"), DateTime.Now, payment, classAssignedBy: "MEMBER");
         await db.SaveChangesAsync();
         payment.PayosOrderCode = payment.PaymentId;
         db.ActivityLogs.Add(new ActivityLog
@@ -302,13 +318,13 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         var description = invoiceCode.Length <= 25 ? invoiceCode : invoiceCode[..25];
         try
         {
-            var link = await payOs.PaymentRequests.CreateAsync(new CreatePaymentLinkRequest
+            var link = await RequirePayOs().PaymentRequests.CreateAsync(new CreatePaymentLinkRequest
             {
                 OrderCode = orderCode,
                 Amount = decimal.ToInt32(payment.Amount),
                 Description = description,
-                ReturnUrl = RequireUrl("PayOS:ReturnUrl"),
-                CancelUrl = RequireUrl("PayOS:CancelUrl"),
+                ReturnUrl = PayOsUrl("PayOS:ReturnUrl", "http://localhost:5173/payment/result"),
+                CancelUrl = PayOsUrl("PayOS:CancelUrl", "http://localhost:5173/payment/cancel"),
             });
             payment.CheckoutUrl = link.CheckoutUrl;
             payment.PaymentLinkId = link.PaymentLinkId;
@@ -346,15 +362,10 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         return $"INV-{DateTime.Now.Year}-{value:D4}";
     }
 
-    private string RequireUrl(string key)
+    private string PayOsUrl(string key, string fallback)
     {
         var url = configuration[key];
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            throw new InvalidOperationException($"Thiếu cấu hình {key}.");
-        }
-
-        return url;
+        return string.IsNullOrWhiteSpace(url) ? fallback : url;
     }
 
     private void AddHistory(Payment payment, string status, string note)
@@ -411,52 +422,25 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
         return new PayableClass(item.ClassId, item.ClassName, item.Price);
     }
 
-    private async Task<UserAccount> FindOrCreateCustomerAsync(CreatePayOsPaymentRequest request)
+    private async Task<Payment> FindOwnPaymentAsync(string paymentId, int memberUserId)
     {
-        var name = request.FullName?.Trim() ?? "";
-        var phone = request.Phone?.Trim() ?? "";
-        var email = request.Email?.Trim() ?? "";
-        if (name.Length < 2)
+        var payment = await FindPaymentAsync(paymentId);
+        if (payment.UserId != memberUserId)
         {
-            throw new InvalidOperationException("Nhập họ tên học viên.");
+            throw new KeyNotFoundException("Không tìm thấy thanh toán.");
         }
 
-        if (!System.Text.RegularExpressions.Regex.IsMatch(phone, "^0\\d{9}$"))
-        {
-            throw new InvalidOperationException("Số điện thoại phải có 10 số và bắt đầu bằng 0.");
-        }
+        return payment;
+    }
 
-        if (email.Contains(' ') || !email.Contains('@') || email.StartsWith('@') || email.EndsWith('@'))
-        {
-            throw new InvalidOperationException("Email phải có ký tự @.");
-        }
-
+    private async Task<UserAccount> FindRegisteredMemberAsync(int memberUserId)
+    {
         var member = await db.UserAccounts
             .Include(user => user.Role)
-            .FirstOrDefaultAsync(user => user.Email == email);
-        if (member is null)
+            .FirstOrDefaultAsync(user => user.UserId == memberUserId);
+        if (member is null || member.Role?.RoleCode != "MEMBER")
         {
-            var roleId = await db.Roles
-                .Where(role => role.RoleCode == "MEMBER")
-                .Select(role => role.RoleId)
-                .FirstAsync();
-            member = new UserAccount
-            {
-                RoleId = roleId,
-                FullName = name,
-                Email = email,
-                Phone = phone,
-                Status = "active",
-                CreatedAt = DateTime.Now,
-            };
-            db.UserAccounts.Add(member);
-            await db.SaveChangesAsync();
-            return member;
-        }
-
-        if (member.Role?.RoleCode != "MEMBER")
-        {
-            throw new InvalidOperationException("Email này không thuộc học viên.");
+            throw new InvalidOperationException("Đăng ký học cần tài khoản học viên. Hãy tạo tài khoản trước.");
         }
 
         if (member.Status != "active")
@@ -464,8 +448,22 @@ public class PayOsPaymentService(AppDbContext db, PayOSClient payOs, IConfigurat
             throw new InvalidOperationException("Tài khoản học viên không hoạt động.");
         }
 
-        member.FullName = name;
-        member.Phone = phone;
+        if (string.IsNullOrWhiteSpace(member.FullName) || member.FullName.Trim().Length < 2)
+        {
+            throw new InvalidOperationException("Hồ sơ cần có họ tên.");
+        }
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(member.Phone ?? "", "^0\\d{9}$"))
+        {
+            throw new InvalidOperationException("Hồ sơ cần số điện thoại 10 số và bắt đầu bằng 0.");
+        }
+
+        var email = member.Email ?? "";
+        if (email.Contains(' ') || !email.Contains('@') || email.StartsWith('@') || email.EndsWith('@'))
+        {
+            throw new InvalidOperationException("Hồ sơ cần email có ký tự @.");
+        }
+
         return member;
     }
 

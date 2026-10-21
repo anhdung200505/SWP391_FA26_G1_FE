@@ -47,6 +47,7 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
             PackageName = name,
             Fee = decimal.Round(request.Fee, 0),
             ValidityMonths = request.ValidityMonths,
+            ClassDiscountPercent = NormalizeDiscount(request.ClassDiscountPercent),
             Benefits = AccountFlowMapper.JoinBenefits(benefits),
             Status = "active",
             CreatedAt = now,
@@ -55,7 +56,7 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
         db.MembershipPackages.Add(package);
         await db.SaveChangesAsync();
         var actor = await ActorNameAsync();
-        var detail = $"Phí {Money(package.Fee)}, thời hạn {package.ValidityMonths} tháng, {benefits.Count} quyền lợi.";
+        var detail = $"Phí {Money(package.Fee)}, thời hạn {package.ValidityMonths} tháng, giảm học phí {package.ClassDiscountPercent:0.##}%, {benefits.Count} quyền lợi.";
         var log = AddLog($"Tạo gói {package.PackageName}", package.MembershipPackageId, detail, now);
         await db.SaveChangesAsync();
         return new PackageMutationResponse(
@@ -75,9 +76,11 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
         var benefits = NormalizeBenefits(request.Benefits);
         ValidateSetting(request.Fee, request.ValidityMonths, benefits);
         var nextFee = decimal.Round(request.Fee, 0);
+        var nextDiscount = NormalizeDiscount(request.ClassDiscountPercent);
         var currentBenefits = AccountFlowMapper.SplitBenefits(package.Benefits);
         var unchanged = package.Fee == nextFee
             && package.ValidityMonths == request.ValidityMonths
+            && package.ClassDiscountPercent == nextDiscount
             && currentBenefits.SequenceEqual(benefits);
         if (unchanged)
         {
@@ -86,12 +89,14 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
 
         var previousFee = package.Fee;
         var previousMonths = package.ValidityMonths;
+        var previousDiscount = package.ClassDiscountPercent;
         package.Fee = nextFee;
         package.ValidityMonths = request.ValidityMonths;
+        package.ClassDiscountPercent = nextDiscount;
         package.Benefits = AccountFlowMapper.JoinBenefits(benefits);
         package.UpdatedAt = DateTime.Now;
         var actor = await ActorNameAsync();
-        var detail = $"Phí {Money(previousFee)} → {Money(package.Fee)}. Thời hạn {previousMonths} tháng → {package.ValidityMonths} tháng. {benefits.Count} quyền lợi.";
+        var detail = $"Phí {Money(previousFee)} → {Money(package.Fee)}. Thời hạn {previousMonths} tháng → {package.ValidityMonths} tháng. Giảm học phí {previousDiscount:0.##}% → {package.ClassDiscountPercent:0.##}%. {benefits.Count} quyền lợi.";
         var log = AddLog(Trim($"Sửa thiết lập gói {package.PackageName}", 100), package.MembershipPackageId, detail, package.UpdatedAt.Value);
         await db.SaveChangesAsync();
         return new PackageMutationResponse(AccountFlowMapper.ToDto(package), ToLogDto(log, actor, package.PackageName));
@@ -104,6 +109,16 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+    private static decimal NormalizeDiscount(decimal percent)
+    {
+        if (percent < 0 || percent > 100)
+        {
+            throw new InvalidOperationException("Phần trăm giảm học phí từ 0 đến 100.");
+        }
+
+        return decimal.Round(percent, 2);
+    }
+
     private static void ValidateSetting(decimal fee, int validityMonths, IReadOnlyList<string> benefits)
     {
         if (fee <= 0 || fee > 100_000_000)
@@ -111,9 +126,9 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
             throw new InvalidOperationException("Phí gói phải lớn hơn 0 và không quá 100.000.000đ.");
         }
 
-        if (validityMonths is < 1 or > 36)
+        if (validityMonths != 1)
         {
-            throw new InvalidOperationException("Thời hạn gói từ 1 đến 36 tháng.");
+            throw new InvalidOperationException("Gói hội viên chỉ có thời hạn 1 tháng.");
         }
 
         if (benefits.Count is < 1 or > 12 || benefits.Any(benefit => benefit.Length > 200))

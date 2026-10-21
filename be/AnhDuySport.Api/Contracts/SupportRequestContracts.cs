@@ -6,7 +6,18 @@ public sealed record CreateSupportRequest(
     string Subject,
     string Content);
 
+public sealed record CreateEnrollmentConsultationRequest(
+    string FullName,
+    string Phone,
+    string? Email,
+    string? Sports,
+    int? Age,
+    string Title,
+    string? Note);
+
 public sealed record ClassifySupportRequest(string Category);
+
+public sealed record EscalateSupportRequest(string Reason);
 
 public sealed record FinancialDecisionRequest(string Decision, string Note);
 

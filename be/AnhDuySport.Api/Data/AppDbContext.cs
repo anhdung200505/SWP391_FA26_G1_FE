@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<PendingRegistration> PendingRegistrations => Set<PendingRegistration>();
+    public DbSet<PasswordReset> PasswordResets => Set<PasswordReset>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<MembershipPackage> MembershipPackages => Set<MembershipPackage>();
@@ -24,7 +25,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentHistory> PaymentHistories => Set<PaymentHistory>();
+    public DbSet<ClassRegistrationLog> ClassRegistrationLogs => Set<ClassRegistrationLog>();
     public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
+    public DbSet<TrainingPlan> TrainingPlans => Set<TrainingPlan>();
+    public DbSet<MemberBodyMetric> BodyMetrics => Set<MemberBodyMetric>();
+    public DbSet<AiWorkoutRecommendation> WorkoutRecommendations => Set<AiWorkoutRecommendation>();
+    public DbSet<AiWorkoutSession> WorkoutSessions => Set<AiWorkoutSession>();
+    public DbSet<PersonalExercise> PersonalExercises => Set<PersonalExercise>();
+    public DbSet<ClassAssignment> ClassAssignments => Set<ClassAssignment>();
+    public DbSet<ClassAttendance> ClassAttendances => Set<ClassAttendance>();
+    public DbSet<CoachEvaluation> CoachEvaluations => Set<CoachEvaluation>();
+    public DbSet<CoachTrainingHistory> CoachTrainingHistories => Set<CoachTrainingHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,6 +56,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<MembershipPackage>()
             .Property(package => package.Fee)
             .HasPrecision(18, 2);
+
+        modelBuilder.Entity<MembershipPackage>()
+            .Property(package => package.ClassDiscountPercent)
+            .HasPrecision(5, 2);
 
         modelBuilder.Entity<Room>()
             .HasOne(room => room.Center)
@@ -104,6 +119,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(payment => payment.Amount).HasPrecision(18, 2);
         });
 
+        modelBuilder.Entity<ClassRegistrationLog>()
+            .HasOne(item => item.Payment)
+            .WithMany()
+            .HasForeignKey(item => item.PaymentId)
+            .OnDelete(DeleteBehavior.NoAction);
+
         modelBuilder.Entity<SupportRequest>(entity =>
         {
             entity.HasOne(item => item.Member)
@@ -125,5 +146,38 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(item => item.PaymentId);
         });
+
+        modelBuilder.Entity<MemberBodyMetric>(entity =>
+        {
+            entity.Property(item => item.HeightCm).HasPrecision(5, 1);
+            entity.Property(item => item.WeightKg).HasPrecision(5, 1);
+            entity.Property(item => item.Bmi).HasPrecision(4, 1);
+        });
+
+        modelBuilder.Entity<AiWorkoutRecommendation>(entity =>
+        {
+            entity.HasOne(item => item.BodyMetric)
+                .WithMany()
+                .HasForeignKey(item => item.BodyMetricId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(item => item.TrainingPlan)
+                .WithMany()
+                .HasForeignKey(item => item.TrainingPlanId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasMany(item => item.Sessions)
+                .WithOne()
+                .HasForeignKey(session => session.RecommendationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PersonalExercise>()
+            .HasOne<AiWorkoutRecommendation>()
+            .WithMany()
+            .HasForeignKey(item => item.RecommendationId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<CoachEvaluation>()
+            .Property(item => item.Score)
+            .HasPrecision(4, 1);
     }
 }

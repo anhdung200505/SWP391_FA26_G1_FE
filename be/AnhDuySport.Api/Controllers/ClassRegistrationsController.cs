@@ -12,10 +12,16 @@ namespace AnhDuySport.Api.Controllers;
 public class ClassRegistrationsController(ClassRegistrationFlowService registrations, CurrentActor actor) : ControllerBase
 {
     [HttpPost]
-    [EndpointSummary("Học viên đăng ký lớp học theo nhóm")]
-    [EndpointDescription("Học viên lấy từ token đăng nhập. Có thể gửi kèm fullName, phone, dateOfBirth, gender để ghi đè hồ sơ (gender: Nam, Nữ, Khác). Hồ sơ cần có số điện thoại (gửi phone hoặc đã có sẵn) và email. Tạo hóa đơn và thanh toán ở trạng thái pending; nếu đã có đơn pending cho lớp này thì trả lại đơn cũ (isExisting = true).")]
+    [EndpointSummary("Học viên đăng ký khóa học theo môn thể thao")]
+    [EndpointDescription("Bắt buộc sportId. classId và slotId không bắt buộc: không có classId thì lấy lớp của slotId, không có cả hai thì hệ thống chọn lớp còn chỗ bắt đầu sớm nhất của môn. slotId chỉ là nguyện vọng, lễ tân đăng ký hoặc dời slot sau khi thanh toán. Học viên lấy từ token đăng nhập. Có thể gửi kèm fullName, phone, dateOfBirth, gender để ghi đè hồ sơ (gender: Nam, Nữ, Khác). Hồ sơ cần có số điện thoại (gửi phone hoặc đã có sẵn) và email. Tạo hóa đơn và thanh toán ở trạng thái pending; nếu đã có đơn pending cho lớp này thì trả lại đơn cũ (isExisting = true).")]
     public async Task<ActionResult<ClassRegistrationDto>> Submit(CreateClassRegistrationRequest request) =>
         Ok(await registrations.SubmitRegistrationAsync(actor.UserId, request));
+
+    [HttpGet("mine")]
+    [EndpointSummary("Học viên xem các lớp đã đăng ký")]
+    [EndpointDescription("Học viên lấy từ token đăng nhập. Chỉ trả lớp đã ghi danh (enrolled), đăng ký mới nhất lên đầu. Không kèm lịch học.")]
+    public async Task<ActionResult<IReadOnlyList<EnrolledClassDto>>> AccessEnrolledClasses() =>
+        Ok(await registrations.AccessEnrolledClassesAsync(actor.UserId));
 
     [HttpGet("{paymentId}")]
     [EndpointSummary("Học viên xem trạng thái đơn đăng ký")]

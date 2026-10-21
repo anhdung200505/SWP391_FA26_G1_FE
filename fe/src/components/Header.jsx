@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
-import { pathForRole, registrationOnly, registrationOnlyMessage } from '../auth/destination';
 import { useAuth } from '../context/AuthContext';
 
 // Danh sách các khóa học kèm đường dẫn chi tiết chuẩn slug
@@ -21,11 +20,9 @@ const navItems = [
   { name: 'TRANG CHỦ', path: '/home' },
   { name: 'VỀ CHÚNG TÔI', path: '#', hasDropdown: false },
   { name: 'KHÓA HỌC', path: '/khoa-hoc', hasDropdown: true },
-  { name: 'ĐĂNG KÝ', path: '/dang-ky' },
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
-  { name: 'TUYỂN SINH', path: '/dang-ky' },
-  { name: 'ĐĂNG NHẬP', path: '/dang-nhap' },
+  { name: 'TUYỂN SINH', path: '/tuyen-sinh' },
 ];
 
 export default function Header({ forceWhite = false }) {
@@ -33,10 +30,6 @@ export default function Header({ forceWhite = false }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const items = user?.roleId === 'MEMBER'
-    ? [...navItems.filter((item) => item.name !== 'ĐĂNG NHẬP'), { name: 'ĐĂNG KÝ LỚP', path: '/khach' }]
-    : navItems;
-  const limited = registrationOnly(user);
 
   useEffect(() => {
     if (forceWhite) {
@@ -79,12 +72,14 @@ export default function Header({ forceWhite = false }) {
       path === '/home' ||
       path === '/co-so-vat-chat' ||
       path === '/hlv' ||
+      path === '/tuyen-sinh' ||
       path.startsWith('/khoa-hoc')
     ) {
-      window.location.href = path;
+      navigate(path);
+      window.scrollTo(0, 0);
     } else if (path.startsWith('#')) {
       if (location.pathname !== '/home') {
-        window.location.href = `/home${path}`;
+        navigate(`/home${path}`);
       } else {
         const elem = document.querySelector(path);
         if (elem) elem.scrollIntoView({ behavior: 'smooth' });
@@ -100,11 +95,12 @@ export default function Header({ forceWhite = false }) {
     navigate('/dang-nhap');
   };
 
-  // Lấy chữ cái đầu tiên của tên để làm Avatar nếu không có ảnh
   const getInitial = (name) => {
     if (!name) return 'U';
     return name.charAt(0).toUpperCase();
   };
+
+  const userRole = user?.roleId || user?.role;
 
   return (
     <header
@@ -144,10 +140,11 @@ export default function Header({ forceWhite = false }) {
 
         {/* MENU ĐIỀU HƯỚNG */}
         <nav className="hidden lg:flex items-center space-x-1 xl:space-x-2">
-          {items.map((item, index) => {
-            const path = item.name === 'ĐĂNG NHẬP' && user ? pathForRole(user.roleId) : item.path;
-            const here = `${location.pathname}${location.search}`;
-            const isActive = path.includes('?') ? here === path : location.pathname === path;
+          {navItems.map((item, index) => {
+            const path = item.path;
+            const isActive =
+              location.pathname === path ||
+              (path !== '/home' && path !== '#' && location.pathname.startsWith(path));
 
             return (
               <div key={index} className="relative group">
@@ -210,7 +207,6 @@ export default function Header({ forceWhite = false }) {
           })}
           {/* KHU VỰC ĐĂNG NHẬP / AVATAR HỒ SƠ */}
           {!user ? (
-            /* Chưa đăng nhập */
             <a
               href="/dang-nhap"
               onClick={(e) => handleNavClick(e, '/dang-nhap')}
@@ -226,7 +222,6 @@ export default function Header({ forceWhite = false }) {
               ĐĂNG NHẬP
             </a>
           ) : (
-            /* Đã đăng nhập -> Hiển thị Avatar tròn + Dropdown khi Rê chuột */
             <div className="relative group ml-2">
               <button
                 type="button"
@@ -240,22 +235,31 @@ export default function Header({ forceWhite = false }) {
               {/* DROPDOWN AVATAR HOVER */}
               <div className="absolute right-0 top-full hidden group-hover:block pt-2 w-64 z-50">
                 <div className="bg-white rounded-xl shadow-2xl py-3 border border-gray-100 text-gray-900 animate-fadeIn">
-                  {/* Thông tin nhanh người dùng */}
+                  {/* Thông tin người dùng */}
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-sm font-black text-gray-900 truncate">
                       {user.fullName || user.userName || 'Học viên'}
                     </p>
                     <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                    {user.code && (
-                      <span className="mt-1 inline-block bg-red-50 text-[#e31b23] text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        Mã: {user.code}
-                      </span>
-                    )}
                   </div>
 
                   {/* Menu chức năng */}
                   <div className="py-1">
-                    {user.roleId === 'ADMIN' && (
+                    {/* KHÓA HỌC CỦA TÔI (CHO HỌC VIÊN / MEMBER) */}
+                    {(userRole === 'MEMBER' || userRole === 'STUDENT' || !userRole) && (
+                      <Link
+                        to="/hoc-vien-dashboard"
+                        className="flex items-center px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#e31b23]"
+                      >
+                        <svg className="w-4 h-4 mr-2 text-[#e31b23]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                        </svg>
+                        Khóa học của tôi
+                      </Link>
+                    )}
+
+                    {userRole === 'ADMIN' && (
                       <Link
                         to="/quan-ly"
                         className="flex items-center px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#e31b23]"
@@ -269,7 +273,7 @@ export default function Header({ forceWhite = false }) {
                     )}
 
                     <Link
-                      to={`/ho-so`}
+                      to="/ho-so"
                       className="flex items-center px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#e31b23]"
                     >
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -281,7 +285,7 @@ export default function Header({ forceWhite = false }) {
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full flex items-center px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 text-left"
+                      className="w-full flex items-center px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 text-left cursor-pointer"
                     >
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -295,11 +299,6 @@ export default function Header({ forceWhite = false }) {
           )}
         </nav>
       </div>
-      {limited && (
-        <p className="bg-[#12141d] px-6 py-2 text-center text-xs font-semibold text-white">
-          {registrationOnlyMessage}
-        </p>
-      )}
     </header>
   );
 }
