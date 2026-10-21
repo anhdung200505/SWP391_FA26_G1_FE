@@ -239,3 +239,54 @@ export function createSupportRequest(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// ==========================================
+// API QUẢN LÝ GÓI HỘI VIÊN & GIA HẠN PAYOS (MEMBERSHIP & RENEWALS)
+// ==========================================
+
+// 1. Lấy gói đang dùng, lịch sử & danh sách gói đang bán
+export function getMemberMembership(memberUserId) {
+  return request(`/members/${memberUserId}/membership`);
+}
+
+// 2. Lấy hotline tư vấn chăm sóc khách hàng
+export function getConsultationContact(memberUserId) {
+  return request(`/members/${memberUserId}/consultation-contact`);
+}
+
+// 3. Chọn gói & tạo liên kết/mã QR thanh toán PayOS
+export function createMembershipRenewal(memberUserId, packageId) {
+  return request(`/members/${memberUserId}/membership/renewals`, {
+    method: 'POST',
+    body: JSON.stringify({ packageId }),
+  });
+}
+
+// 4. Kiểm tra & xác nhận cập nhật hạn gói sau khi thanh toán PayOS
+export function confirmMembershipRenewal(memberUserId, paymentId) {
+  return request(`/members/${memberUserId}/membership/renewals/${paymentId}/confirm`, {
+    method: 'POST',
+  });
+}
+
+// ==========================================
+// API QUẢN TRỊ TRUNG TÂM XỬ LÝ ĐƠN HỖ TRỢ (ADMIN DECISION)
+// ==========================================
+
+// 1. Quản trị trung tâm lấy danh sách các yêu cầu Lễ tân chuyển lên
+export function getEscalatedSupportRequests() {
+  return request('/support-requests/financial');
+}
+
+// 2. Quản trị trung tâm ra quyết định phê duyệt (approved) hoặc từ chối (rejected)
+export function processSupportRequestDecision(requestId, { decision, note }) {
+  return request(`/support-requests/${requestId}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision, note }),
+  });
+}
+
+// Lấy danh sách Huấn luyện viên theo bộ môn
+export function getCoachesBySport(sportId) {
+  return request(`/catalog/sports/${sportId}/coaches`);
+}

@@ -3,9 +3,6 @@ import {
   getEnrollmentConsultations,
   getServiceSupportRequests,
   updateEnrollmentConsultation,
-  classifySupportRequest,
-  resolveAccountIssue,
-  provideConsultation,
   escalateSupportRequest,
 } from '../../api/receptionistSupportApi';
 
@@ -25,7 +22,7 @@ export default function ReceptionistPage() {
 
   // Modal xử lý đơn
   const [selectedItem, setSelectedItem] = useState(null);
-  const [modalType, setModalType] = useState(''); // 'edit_enrollment' | 'classify' | 'resolve_account' | 'provide_consult' | 'escalate'
+  const [modalType, setModalType] = useState(''); // 'edit_enrollment' | 'escalate'
   const [actionNote, setActionNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -63,7 +60,7 @@ export default function ReceptionistPage() {
     fetchData();
   }, []);
 
-  // Thông báo tự tắt sau 3 giây
+  // Thông báo tự tắt sau 3.5 giây
   const showNotice = (msg, isErr = false) => {
     if (isErr) setErrorNotice(msg);
     else setSuccessNotice(msg);
@@ -119,57 +116,7 @@ export default function ReceptionistPage() {
     }
   };
 
-  // 2. Xử lý Phân loại đơn Support của Học viên
-  const handleClassify = async (category) => {
-    if (!selectedItem) return;
-    setSubmitting(true);
-    try {
-      await classifySupportRequest(selectedItem.id, category);
-      showNotice(`Đã phân loại đơn thành công (${category === 'account_issue' ? 'Sự cố tài khoản' : 'Tư vấn'})!`);
-      closeModal();
-      fetchData();
-    } catch (err) {
-      showNotice(err.message, true);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // 3. Xử lý Sự cố tài khoản
-  const handleResolveAccount = async (e) => {
-    e.preventDefault();
-    if (!actionNote.trim()) return;
-    setSubmitting(true);
-    try {
-      await resolveAccountIssue(selectedItem.id, actionNote.trim());
-      showNotice('Đã xử lý sự cố tài khoản & tự động gửi email cho học viên!');
-      closeModal();
-      fetchData();
-    } catch (err) {
-      showNotice(err.message, true);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // 4. Xử lý Tư vấn giải đáp
-  const handleProvideConsult = async (e) => {
-    e.preventDefault();
-    if (!actionNote.trim()) return;
-    setSubmitting(true);
-    try {
-      await provideConsultation(selectedItem.id, actionNote.trim());
-      showNotice('Đã gửi phản hồi tư vấn cho học viên!');
-      closeModal();
-      fetchData();
-    } catch (err) {
-      showNotice(err.message, true);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // 5. Chuyển cấp Quản trị
+  // 2. Chuyển cấp Quản trị Trung tâm
   const handleEscalate = async (e) => {
     e.preventDefault();
     if (!actionNote.trim()) return;
@@ -226,7 +173,7 @@ export default function ReceptionistPage() {
           </button>
         </div>
 
-        {/* THÔNG BÁO FLOATING / ALERTS */}
+        {/* THÔNG BÁO ALERTS */}
         {errorNotice && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold animate-fadeIn">
             ⚠️ {errorNotice}
@@ -303,7 +250,7 @@ export default function ReceptionistPage() {
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider">
                     <th className="p-4">Khách hàng / Học viên</th>
                     <th className="p-4">Tiêu đề / Môn học</th>
-                    <th className="p-4">Phân loại & Nội dung</th>
+                    <th className="p-4">Nội dung yêu cầu</th>
                     <th className="p-4">Trạng thái</th>
                     <th className="p-4 text-right">Thao tác xử lý</th>
                   </tr>
@@ -339,17 +286,8 @@ export default function ReceptionistPage() {
                         </div>
                       </td>
 
-                      {/* PHÂN LOẠI & NỘI DUNG */}
+                      {/* NỘI DUNG YÊU CẦU */}
                       <td className="p-4 max-w-xs">
-                        {item.receptionistCategory && (
-                          <span className="inline-block bg-slate-100 text-slate-700 font-bold text-[10px] uppercase px-2 py-0.5 rounded mb-1">
-                            {item.receptionistCategory === 'account_issue'
-                              ? 'Sự cố tài khoản'
-                              : item.receptionistCategory === 'consultation'
-                              ? 'Tư vấn'
-                              : item.receptionistCategory}
-                          </span>
-                        )}
                         <p className="line-clamp-2 text-slate-600 italic">
                           "{item.description || item.note || 'Không có ghi chú'}"
                         </p>
@@ -380,7 +318,7 @@ export default function ReceptionistPage() {
                       </td>
 
                       {/* THAO TÁC */}
-                      <td className="p-4 text-right space-x-1.5 whitespace-nowrap">
+                      <td className="p-4 text-right whitespace-nowrap">
                         {activeTab === 'enrollment' ? (
                           <button
                             onClick={() => openActionModal(item, 'edit_enrollment')}
@@ -389,41 +327,12 @@ export default function ReceptionistPage() {
                             ✏️ Cập nhật & Giải quyết
                           </button>
                         ) : (
-                          <>
-                            {/* Nút Phân loại */}
-                            {!item.receptionistCategory && (
-                              <button
-                                onClick={() => openActionModal(item, 'classify')}
-                                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                              >
-                                🏷️ Phân loại
-                              </button>
-                            )}
-
-                            {/* Nút Xử lý Sự cố tài khoản */}
-                            <button
-                              onClick={() => openActionModal(item, 'resolve_account')}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                            >
-                              🔑 Sự cố TK
-                            </button>
-
-                            {/* Nút Tư vấn */}
-                            <button
-                              onClick={() => openActionModal(item, 'provide_consult')}
-                              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                            >
-                              💬 Phản hồi
-                            </button>
-
-                            {/* Nút Leo thang Quản trị */}
-                            <button
-                              onClick={() => openActionModal(item, 'escalate')}
-                              className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
-                            >
-                              ⬆️ Chuyển QTTT
-                            </button>
-                          </>
+                          <button
+                            onClick={() => openActionModal(item, 'escalate')}
+                            className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          >
+                            ⬆️ Chuyển QTTT
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -448,15 +357,11 @@ export default function ReceptionistPage() {
             
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-sm font-black text-slate-900 uppercase">
-                {modalType === 'edit_enrollment' && 'CẬP NHẬT ĐƠN TƯ VẤN KHÁCH HÀNG'}
-                {modalType === 'classify' && 'PHÂN LOẠI YÊU CẦU HỌC VIÊN'}
-                {modalType === 'resolve_account' && 'XỬ LÝ SỰ CỐ TÀI KHOẢN'}
-                {modalType === 'provide_consult' && 'GỬI PHẢN HỒI TƯ VẤN HỌC VIÊN'}
-                {modalType === 'escalate' && 'CHUYỂN YÊU CẦU LÊN QUẢN TRỊ TRUNG TÂM'}
+                {modalType === 'edit_enrollment' ? 'CẬP NHẬT ĐƠN TƯ VẤN KHÁCH HÀNG' : 'CHUYỂN YÊU CẦU LÊN QUẢN TRỊ TRUNG TÂM'}
               </h3>
               <button
                 onClick={closeModal}
-                className="text-slate-400 hover:text-slate-700 font-bold text-base p-1"
+                className="text-slate-400 hover:text-slate-700 font-bold text-base p-1 cursor-pointer"
               >
                 ✕
               </button>
@@ -527,53 +432,15 @@ export default function ReceptionistPage() {
               </form>
             )}
 
-            {/* FORM MODAL 2: CLASSIFY */}
-            {modalType === 'classify' && (
-              <div className="space-y-4 text-xs">
-                <p className="text-slate-600 font-medium">Chọn loại danh mục phân loại cho yêu cầu này:</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleClassify('account_issue')}
-                    disabled={submitting}
-                    className="p-4 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200 rounded-2xl text-slate-800 font-bold transition-all text-center cursor-pointer"
-                  >
-                    🔑 Sự cố tài khoản
-                  </button>
-                  <button
-                    onClick={() => handleClassify('consultation')}
-                    disabled={submitting}
-                    className="p-4 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-2xl text-slate-800 font-bold transition-all text-center cursor-pointer"
-                  >
-                    💬 Tư vấn chung
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* FORM MODAL 3, 4, 5: ACTION NOTE */}
-            {(modalType === 'resolve_account' || modalType === 'provide_consult' || modalType === 'escalate') && (
-              <form
-                onSubmit={
-                  modalType === 'resolve_account'
-                    ? handleResolveAccount
-                    : modalType === 'provide_consult'
-                    ? handleProvideConsult
-                    : handleEscalate
-                }
-                className="space-y-3 text-xs"
-              >
+            {/* FORM MODAL 2: ESCALATE */}
+            {modalType === 'escalate' && (
+              <form onSubmit={handleEscalate} className="space-y-3 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    {modalType === 'escalate' ? 'Lý do chuyển Quản trị *' : 'Ghi chú giải quyết / Phản hồi *'}
-                  </label>
+                  <label className="block font-bold text-slate-700 mb-1">Lý do chuyển Quản trị *</label>
                   <textarea
                     rows={4}
                     required
-                    placeholder={
-                      modalType === 'escalate'
-                        ? 'Nhập rõ lý do vượt quá thẩm quyền của lễ tân...'
-                        : 'Nội dung phản hồi này sẽ được tự động gửi qua Email cho học viên...'
-                    }
+                    placeholder="Nhập rõ lý do vượt quá thẩm quyền của lễ tân..."
                     value={actionNote}
                     onChange={(e) => setActionNote(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none resize-none"
@@ -585,7 +452,7 @@ export default function ReceptionistPage() {
                   disabled={submitting || !actionNote.trim()}
                   className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
                 >
-                  {submitting ? 'ĐANG GỬI...' : 'XÁC NHẬN XỬ LÝ →'}
+                  {submitting ? 'ĐANG GỬI...' : 'XÁC NHẬN CHUYỂN QTTT →'}
                 </button>
               </form>
             )}
