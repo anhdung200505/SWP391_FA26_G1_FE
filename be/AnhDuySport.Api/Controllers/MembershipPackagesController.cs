@@ -10,10 +10,11 @@ namespace AnhDuySport.Api.Controllers;
 [Route("api/packages")]
 public class MembershipPackagesController(MembershipPackageFlowService packages) : ControllerBase
 {
+    [AllowAnonymous]
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<PackageDto>>> AccessList() =>
         Ok(await packages.AccessPackageListAsync());
-
+    [AllowAnonymous]
     [HttpGet("{packageId}")]
     public async Task<ActionResult<PackageDto>> SelectExisting(string packageId)
     {
@@ -34,7 +35,7 @@ public class MembershipPackagesController(MembershipPackageFlowService packages)
             return BadRequest(new { message = exception.Message });
         }
     }
-
+    
     [HttpPut("{packageId}")]
     public async Task<ActionResult<PackageMutationResponse>> SaveSetting(string packageId, UpdatePackageSettingRequest request)
     {
