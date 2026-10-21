@@ -19,9 +19,16 @@ public class ClassRegistrationLog
     [Column("payment_id")]
     public int? PaymentId { get; set; }
 
-    // register, move_out, re_enroll
+    // register, move_out, re_enroll, confirm_payment, slot_register, slot_move
     [Column("action")]
     public string Action { get; set; } = "";
+
+    [Column("slot_id")]
+    public int? SlotId { get; set; }
+
+    // Ai xếp học viên vào lớp: SYSTEM khi hệ thống tự chọn lớp, còn lại là vai trò người chọn lớp. Chỉ có ở register, re_enroll.
+    [Column("class_assigned_by")]
+    public string? ClassAssignedBy { get; set; }
 
     [Column("reason")]
     public string? Reason { get; set; }
