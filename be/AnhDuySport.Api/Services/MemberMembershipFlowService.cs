@@ -334,13 +334,23 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             ?? throw new KeyNotFoundException("Không tìm thấy gói hội viên của đơn này.");
         var plan = await PlanRenewalAsync(member.UserId, package, today, blockDowngrade: false);
 
-        if (plan.Type == "Nâng cấp")
+        // Mỗi học viên chỉ 1 gói active: đóng gói đang chạy và gói 'active' đã quá hạn trước khi kích hoạt gói mới.
+        foreach (var item in plan.Running)
         {
-            foreach (var item in plan.Running)
-            {
-                item.Status = "upgraded";
-            }
+            item.Status = plan.Type == "Gia hạn" ? "renewed" : "upgraded";
         }
+
+        var stale = await db.Memberships
+            .Where(item => item.UserId == member.UserId && item.Status == "active"
+                && item.EndDate < today && item.MembershipId != membership.MembershipId)
+            .ToListAsync();
+        foreach (var item in stale)
+        {
+            item.Status = "expired";
+        }
+
+        // Lưu trước để unique index UX_membership_one_active không báo trùng khi dòng mới chuyển 'active'.
+        await db.SaveChangesAsync();
 
         membership.StartDate = plan.StartDate;
         membership.EndDate = plan.EndDate;
@@ -361,7 +371,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     }
 
     // Chưa có gói còn hạn            → đăng ký mới: bắt đầu hôm nay
-    // Còn hạn, chọn cùng gói         → gia hạn:     nối tiếp sau ngày hết hạn hiện tại
+    // Còn hạn, chọn cùng gói         → gia hạn:     bắt đầu hôm nay, hết hạn = hạn cũ + thời hạn gói, gói cũ chuyển "renewed"
     // Còn hạn, chọn gói khác         → nâng cấp:    bắt đầu hôm nay, gói cũ chuyển "upgraded"
     // Dòng cũ chưa gắn gói (membership_package_id NULL) được coi là gói khác.
     private async Task<RenewalPlan> PlanRenewalAsync(int userId, MembershipPackage package, DateOnly today, bool blockDowngrade)
@@ -374,30 +384,31 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         var latest = running.LastOrDefault();
 
         string renewalType;
-        DateOnly startDate;
+        var startDate = today;
+        DateOnly endDate;
         if (latest is null)
         {
             renewalType = "Đăng ký mới";
-            startDate = today;
+            endDate = today.AddMonths(package.ValidityMonths).AddDays(-1);
         }
         else if (latest.MembershipPackageId == package.MembershipPackageId)
         {
+            // Gia hạn: dòng mới thay dòng cũ, giữ số ngày còn lại + thêm thời hạn gói.
             renewalType = "Gia hạn";
-            startDate = latest.EndDate.AddDays(1);
+            endDate = latest.EndDate.AddMonths(package.ValidityMonths);
         }
         else
         {
             if (blockDowngrade && latest.Package is not null && package.Fee < latest.Package.Fee)
             {
                 throw new InvalidOperationException(
-                    $"{latest.PlanName} còn hạn đến {latest.EndDate:dd/MM/yyyy}. Chỉ được gia hạn hoặc nâng cấp lên gói phí cao hơn.");
+                    $"{latest.PlanName} còn hạn đến {latest.EndDate:dd/MM/yyyy}. Chỉ được gia hạn hoặc nâng cấp lên hạng cao hơn.");
             }
 
             renewalType = "Nâng cấp";
-            startDate = today;
+            endDate = today.AddMonths(package.ValidityMonths).AddDays(-1);
         }
 
-        var endDate = startDate.AddMonths(package.ValidityMonths).AddDays(-1);
         return new RenewalPlan(renewalType, startDate, endDate, running);
     }
 

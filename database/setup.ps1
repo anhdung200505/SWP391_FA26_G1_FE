@@ -25,7 +25,8 @@ $scripts = @(
     '08_ai_workout_recommendation.sql',
     '09_class_slots.sql',
     '10_password_reset.sql',
-    '11_membership_pending.sql'
+    '11_membership_pending.sql',
+    '12_membership_package_discount.sql'
 )
 
 foreach ($script in $scripts) {
