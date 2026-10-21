@@ -49,13 +49,7 @@ public class CustomerServiceFlowService(
 
     public async Task<SupportRequestCreatedDto> CreateEnrollmentConsultationAsync(CreateEnrollmentConsultationRequest request)
     {
-        var kind = request.Kind?.Trim().ToLowerInvariant() ?? "";
-        var title = kind switch
-        {
-            "tu-van-ghi-danh" => "Tư vấn ghi danh",
-            "dang-ky-tu-van" => "Đăng ký tư vấn",
-            _ => throw new InvalidOperationException("Loại form không hợp lệ."),
-        };
+        var title = RequireText(request.Title, "Nhập tiêu đề tư vấn ghi danh.", 200);
         var fullName = RequireText(request.FullName, "Nhập họ và tên.", 200);
         var phone = AccountPhone.Require(request.Phone);
         var email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
@@ -100,7 +94,7 @@ public class CustomerServiceFlowService(
             Title = title,
             Description = description,
             SystemCategory = "consultation_account",
-            ClassificationReason = $"Khách gửi form {title}.",
+            ClassificationReason = EnrollmentSource,
             Status = "pending_receptionist",
             CreatedAt = now,
         };
@@ -191,17 +185,11 @@ public class CustomerServiceFlowService(
             action: "Quyết định yêu cầu ngoài phạm vi lễ tân");
     }
 
-    public async Task<IReadOnlyList<SupportRequestDto>> AccessServiceRequestsAsync()
-    {
-        var ids = await db.SupportRequests
-            .AsNoTracking()
-            .Where(item => item.Status == "pending_receptionist" || item.Status == "classified")
-            .OrderBy(item => item.Status == "classified")
-            .ThenByDescending(item => item.CreatedAt)
-            .Select(item => item.SupportRequestId)
-            .ToListAsync();
-        return await LoadDtosAsync(ids);
-    }
+    public Task<IReadOnlyList<SupportRequestDto>> AccessServiceRequestsAsync() =>
+        LoadReceptionistQueueAsync(enrollment: false);
+
+    public Task<IReadOnlyList<SupportRequestDto>> AccessEnrollmentRequestsAsync() =>
+        LoadReceptionistQueueAsync(enrollment: true);
 
     public async Task<SupportRequestDto> EscalateToManagerAsync(string requestId, EscalateSupportRequest request)
     {
@@ -290,6 +278,23 @@ public class CustomerServiceFlowService(
             receptionistCategory: "consultation",
             result: $"Lễ tân đã tư vấn. {note}",
             action: "Tư vấn học viên");
+    }
+
+    private const string EnrollmentSource = "Khách gửi form tư vấn ghi danh.";
+
+    private async Task<IReadOnlyList<SupportRequestDto>> LoadReceptionistQueueAsync(bool enrollment)
+    {
+        var ids = await db.SupportRequests
+            .AsNoTracking()
+            .Where(item => item.Status == "pending_receptionist" || item.Status == "classified")
+            .Where(item => enrollment
+                ? item.ClassificationReason != null && item.ClassificationReason.StartsWith(EnrollmentSource)
+                : item.ClassificationReason == null || !item.ClassificationReason.StartsWith(EnrollmentSource))
+            .OrderBy(item => item.Status == "classified")
+            .ThenByDescending(item => item.CreatedAt)
+            .Select(item => item.SupportRequestId)
+            .ToListAsync();
+        return await LoadDtosAsync(ids);
     }
 
     private async Task<SupportRequestResultDto> SaveResultAsync(
