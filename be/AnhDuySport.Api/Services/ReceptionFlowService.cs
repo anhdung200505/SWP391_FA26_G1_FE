@@ -6,30 +6,32 @@ using Microsoft.EntityFrameworkCore;
 namespace AnhDuySport.Api.Services;
 
 // Lễ tân (hoặc quản trị) thao tác đăng ký lớp thay học viên. Mọi thao tác ghi vào class_registration_log.
-public class ReceptionFlowService(AppDbContext db, CurrentActor actor, ClassRegistrationFlowService registrations)
+public class ReceptionFlowService(
+    AppDbContext db,
+    CurrentActor actor,
+    ClassRegistrationFlowService registrations,
+    SlotFlowService slots)
 {
-    public async Task<IReadOnlyList<ReceptionMemberDto>> SearchMembersAsync(string? search)
+    // Chỉ tìm đúng 1 học viên theo email hoặc số điện thoại đầy đủ, không liệt kê danh sách học viên.
+    public async Task<ReceptionMemberDto> LookupMemberAsync(string? keyword)
     {
-        var members = db.UserAccounts.AsNoTracking().Where(user => user.Role!.RoleCode == "MEMBER");
-        if (!string.IsNullOrWhiteSpace(search))
+        var value = keyword?.Trim() ?? "";
+        if (value.Length == 0)
         {
-            var keyword = search.Trim();
-            members = members.Where(user =>
-                user.FullName.Contains(keyword)
-                || (user.Email ?? "").Contains(keyword)
-                || (user.Phone ?? "").Contains(keyword));
+            throw new RegistrationException("Nhập email hoặc số điện thoại của học viên.");
         }
 
-        return await members
-            .OrderBy(user => user.FullName)
-            .Take(50)
-            .Select(user => new ReceptionMemberDto(
-                user.UserId.ToString(),
-                user.FullName,
-                user.Email ?? "",
-                user.Phone ?? "",
-                user.Status))
-            .ToListAsync();
+        var members = db.UserAccounts.AsNoTracking().Where(user => user.Role!.RoleCode == "MEMBER");
+        var phone = AccountPhone.Digits(value);
+        var member = value.Contains('@')
+            ? await members.FirstOrDefaultAsync(user => user.Email != null && user.Email.ToLower() == value.ToLower())
+            : phone.Length == 10
+                ? (await members.Where(user => user.Phone != null && user.Phone != "").ToListAsync())
+                    .FirstOrDefault(user => AccountPhone.Digits(user.Phone) == phone)
+                : null;
+        return member is null
+            ? throw new KeyNotFoundException("Không tìm thấy học viên với email hoặc số điện thoại này.")
+            : ToMemberDto(member);
     }
 
     public async Task<ClassRegistrationDto> RegisterForMemberAsync(string memberUserId, CreateClassRegistrationRequest request)
@@ -61,7 +63,70 @@ public class ReceptionFlowService(AppDbContext db, CurrentActor actor, ClassRegi
             throw new RegistrationException("Đơn đã hết hạn giữ chỗ. Hãy đăng ký lại cho học viên.");
         }
 
-        return await registrations.MarkPaymentPaidAsync(id, performer.UserId, methodLabel);
+        var result = await registrations.MarkPaymentPaidAsync(id, performer.UserId, methodLabel);
+        ClassRegistrationLogs.Add(db, payment.UserId, payment.ClassId!.Value, ClassRegistrationLogs.ConfirmPayment, performer,
+            DateTime.Now, reason: $"Thu {payment.Amount:N0} ({methodLabel})", paymentId: payment.PaymentId);
+        await db.SaveChangesAsync();
+        return result;
+    }
+
+    public async Task<SlotRegistrationDto> RegisterSlotAsync(string memberUserId, string slotId)
+    {
+        var performer = await PerformerAsync();
+        var registered = await slots.RegisterAsync(slotId, new SlotMemberRequest(memberUserId), performer.UserId);
+        ClassRegistrationLogs.Add(db, int.Parse(registered.MemberUserId), int.Parse(registered.Slot.ClassId),
+            ClassRegistrationLogs.SlotRegister, performer, DateTime.Now,
+            reason: $"{registered.Slot.Title} {registered.Slot.Date:dd/MM/yyyy} {registered.Slot.StartTime:HH\\:mm}",
+            slotId: int.Parse(registered.SlotId));
+        await db.SaveChangesAsync();
+        return registered;
+    }
+
+    // Slot cũ hủy, slot mới đăng ký trong cùng giao dịch: slot mới đầy thì học viên vẫn giữ slot cũ.
+    public async Task<SlotRegistrationDto> MoveSlotAsync(string memberUserId, string slotId, MoveSlotRequest request)
+    {
+        var performer = await PerformerAsync();
+        var fromId = ParseId(slotId, "Không tìm thấy slot.");
+        var toId = ParseId(request.ToSlotId, "Không tìm thấy slot muốn dời sang.");
+        if (fromId == toId)
+        {
+            throw new RegistrationException("Slot mới trùng slot cũ.");
+        }
+
+        var classIds = await db.ClassSlots.AsNoTracking()
+            .Where(slot => slot.SlotId == fromId || slot.SlotId == toId)
+            .Select(slot => slot.ClassId)
+            .ToListAsync();
+        if (classIds.Count < 2)
+        {
+            throw new KeyNotFoundException("Không tìm thấy slot.");
+        }
+
+        if (classIds.Distinct().Count() > 1)
+        {
+            throw new RegistrationException("Chỉ dời sang slot cùng lớp.");
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await slots.CancelAsync(slotId, new SlotMemberRequest(memberUserId), performer.UserId);
+        var moved = await slots.RegisterAsync(request.ToSlotId, new SlotMemberRequest(memberUserId), performer.UserId);
+        var reason = request.Reason?.Trim();
+        ClassRegistrationLogs.Add(db, int.Parse(moved.MemberUserId), int.Parse(moved.Slot.ClassId),
+            ClassRegistrationLogs.SlotMove, performer, DateTime.Now,
+            reason: $"Slot {fromId} → {toId}" + (string.IsNullOrEmpty(reason) ? "" : $". Lý do: {reason}"),
+            slotId: toId);
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = performer.UserId,
+            Action = "Dời slot cho học viên",
+            EntityName = "slot_registration",
+            EntityId = toId,
+            Detail = $"{moved.MemberName}: slot {fromId} → {toId}" + (string.IsNullOrEmpty(reason) ? "" : $". Lý do: {reason}"),
+            CreatedAt = DateTime.Now,
+        });
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return moved;
     }
 
     public async Task<ReceptionEnrollmentDto> MoveOutAsync(string memberUserId, string classId, MoveOutRequest request)
@@ -206,7 +271,8 @@ public class ReceptionFlowService(AppDbContext db, CurrentActor actor, ClassRegi
 
         var sourceName = targetId == sourceId ? target.ClassName : await ClassNameAsync(sourceId);
         ClassRegistrationLogs.Add(db, memberId, targetId, ClassRegistrationLogs.ReEnroll, performer, now,
-            reason: targetId == sourceId ? reason : $"{reason} (chuyển từ lớp {sourceName})");
+            reason: targetId == sourceId ? reason : $"{reason} (chuyển từ lớp {sourceName})",
+            classAssignedBy: performer.RoleCode);
         db.Notifications.Add(new AccountNotification
         {
             UserId = memberId,
@@ -229,123 +295,200 @@ public class ReceptionFlowService(AppDbContext db, CurrentActor actor, ClassRegi
             $"Đã đăng ký học lại lớp {target.ClassName} cho {member.FullName}.");
     }
 
-    public async Task<IReadOnlyList<PaidRegistrationDto>> AccessPaidRegistrationsAsync(string? classId, string? search)
+    // Mỗi dòng là 1 học viên trong 1 lớp với đủ thông tin: học viên, lớp, đơn thanh toán, ai đăng ký, ai xếp lớp, slot và lịch sử.
+    // scope = mine (mặc định): chỉ học viên mà tài khoản đang đăng nhập đã thao tác. scope = all: tất cả, kể cả học viên tự đăng ký.
+    public async Task<IReadOnlyList<ReceptionRegistrationDto>> AccessRegistrationsAsync(
+        string? scope,
+        string? search,
+        string? sportId,
+        string? classId,
+        string? memberUserId)
     {
-        var payments = db.Payments.AsNoTracking().Where(payment => payment.ClassId != null && payment.Status == "paid");
+        var performer = await PerformerAsync();
+        var logs = db.ClassRegistrationLogs.AsNoTracking();
+        var mode = string.IsNullOrWhiteSpace(scope) ? "mine" : scope.Trim().ToLowerInvariant();
+        if (mode == "mine")
+        {
+            var mine = db.ClassRegistrationLogs.Where(log => log.PerformedByUserId == performer.UserId);
+            logs = logs.Where(log => mine.Any(own => own.MemberUserId == log.MemberUserId && own.ClassId == log.ClassId));
+        }
+        else if (mode != "all")
+        {
+            throw new RegistrationException("scope chỉ nhận mine hoặc all.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(memberUserId))
+        {
+            var id = ParseId(memberUserId, "Không tìm thấy học viên.");
+            logs = logs.Where(log => log.MemberUserId == id);
+        }
+
         if (!string.IsNullOrWhiteSpace(classId))
         {
             var id = ParseId(classId, "Không tìm thấy lớp học.");
-            payments = payments.Where(payment => payment.ClassId == id);
+            logs = logs.Where(log => log.ClassId == id);
         }
 
-        var rows = await (
-            from payment in payments
-            join member in db.UserAccounts on payment.UserId equals member.UserId
-            join registrar in db.UserAccounts on payment.RegisteredByUserId equals (int?)registrar.UserId into registrars
-            from registrar in registrars.DefaultIfEmpty()
-            orderby payment.PaidAt descending
-            select new
+        if (!string.IsNullOrWhiteSpace(sportId))
+        {
+            var id = ParseId(sportId, "Không tìm thấy môn thể thao.");
+            logs = logs.Where(log => db.Classes.Any(item => item.ClassId == log.ClassId && item.Course!.SportId == id));
+        }
+
+        var history = await (
+            from log in logs
+            join user in db.UserAccounts on log.PerformedByUserId equals (int?)user.UserId into users
+            from user in users.DefaultIfEmpty()
+            orderby log.CreatedAt descending, log.ClassRegistrationLogId descending
+            select new { Log = log, PerformerName = user != null ? user.FullName : null })
+            .ToListAsync();
+        if (history.Count == 0)
+        {
+            return [];
+        }
+
+        var memberIds = history.Select(row => row.Log.MemberUserId).Distinct().ToList();
+        var classIds = history.Select(row => row.Log.ClassId).Distinct().ToList();
+        var members = await db.UserAccounts.AsNoTracking()
+            .Where(user => memberIds.Contains(user.UserId))
+            .ToDictionaryAsync(user => user.UserId);
+        var classes = await db.Classes.AsNoTracking()
+            .Where(item => classIds.Contains(item.ClassId))
+            .Select(item => new ReceptionClassDto(
+                item.ClassId.ToString(),
+                item.ClassName,
+                item.Status,
+                item.Course!.SportId.ToString(),
+                item.Course.Sport!.SportName,
+                item.Course.CourseName,
+                item.Coach!.FullName,
+                item.StartDate,
+                item.EndDate))
+            .ToDictionaryAsync(item => int.Parse(item.Id));
+        var enrollments = (await db.ClassEnrollments.AsNoTracking()
+                .Where(item => memberIds.Contains(item.UserId) && classIds.Contains(item.ClassId))
+                .Select(item => new { item.UserId, item.ClassId, item.Status })
+                .ToListAsync())
+            .ToDictionary(item => (item.UserId, item.ClassId), item => item.Status);
+        var payments = await db.Payments.AsNoTracking()
+            .Where(payment => payment.ClassId != null
+                && memberIds.Contains(payment.UserId)
+                && classIds.Contains(payment.ClassId.Value))
+            .Select(payment => new
             {
                 payment.PaymentId,
-                InvoiceCode = payment.Invoice!.InvoiceCode,
                 payment.UserId,
-                member.FullName,
-                member.Email,
-                member.Phone,
                 ClassId = payment.ClassId!.Value,
-                ClassName = payment.Class!.ClassName,
+                payment.Invoice!.InvoiceCode,
+                payment.Invoice.IssuedAt,
                 payment.Amount,
                 payment.PaymentMethod,
+                payment.Status,
                 payment.PaidAt,
-                EnrollmentStatus = db.ClassEnrollments
-                    .Where(enrollment => enrollment.ClassId == payment.ClassId && enrollment.UserId == payment.UserId)
-                    .Select(enrollment => enrollment.Status)
-                    .FirstOrDefault(),
-                payment.RegisteredByUserId,
-                RegistrarName = registrar != null ? registrar.FullName : null,
-                RegistrarRole = registrar != null ? registrar.Role!.RoleCode : null,
+                payment.RequestedSlotId,
             })
             .ToListAsync();
+        var slotRegistrations = await db.SlotRegistrations.AsNoTracking()
+            .Where(item => memberIds.Contains(item.UserId) && classIds.Contains(item.Slot!.ClassId))
+            .Select(item => new { item.UserId, item.Slot!.ClassId, item.SlotId, item.Status })
+            .ToListAsync();
+        var slotIds = slotRegistrations.Select(item => item.SlotId)
+            .Concat(payments.Select(payment => payment.RequestedSlotId).OfType<int>())
+            .Distinct();
+        var slotDetails = new Dictionary<int, RequestedSlotDto>();
+        foreach (var slotId in slotIds)
+        {
+            if (await registrations.RequestedSlotAsync(slotId) is { } slot)
+            {
+                slotDetails[slotId] = slot;
+            }
+        }
+
+        var rows = history
+            .GroupBy(row => (row.Log.MemberUserId, row.Log.ClassId))
+            .Select(group =>
+            {
+                var (memberId, rowClassId) = group.Key;
+                var member = members[memberId];
+                var payment = payments
+                    .Where(item => item.UserId == memberId && item.ClassId == rowClassId)
+                    .OrderByDescending(item => item.Status == "paid")
+                    .ThenByDescending(item => item.IssuedAt)
+                    .FirstOrDefault();
+                var register = group.FirstOrDefault(row => row.Log.Action == ClassRegistrationLogs.Register);
+                var assigned = group.FirstOrDefault(row => row.Log.ClassAssignedBy is not null);
+                var memberSlots = slotRegistrations.Where(item => item.UserId == memberId && item.ClassId == rowClassId).ToList();
+                var requestedSlotId = payment?.RequestedSlotId;
+                return new ReceptionRegistrationDto(
+                    ToMemberDto(member),
+                    classes[rowClassId],
+                    enrollments.GetValueOrDefault((memberId, rowClassId)),
+                    payment is null
+                        ? null
+                        : new ReceptionPaymentDto(
+                            payment.PaymentId.ToString(),
+                            payment.InvoiceCode,
+                            payment.Amount,
+                            payment.PaymentMethod,
+                            payment.Status,
+                            payment.PaidAt),
+                    register is null ? null : ToPerformerDto(register.Log, register.PerformerName),
+                    assigned is null ? null : ToClassAssignedDto(assigned.Log, assigned.PerformerName),
+                    requestedSlotId is int requested ? slotDetails.GetValueOrDefault(requested) : null,
+                    requestedSlotId is int requestedId
+                        ? memberSlots.FirstOrDefault(item => item.SlotId == requestedId)?.Status
+                        : null,
+                    memberSlots
+                        .Where(item => item.Status == "registered")
+                        .Select(item => slotDetails.GetValueOrDefault(item.SlotId))
+                        .OfType<RequestedSlotDto>()
+                        .OrderBy(item => item.Date)
+                        .ThenBy(item => item.StartTime)
+                        .ToList(),
+                    group
+                        .Select(row => new ReceptionHistoryDto(
+                            row.Log.ClassRegistrationLogId.ToString(),
+                            row.Log.Action,
+                            ClassRegistrationLogs.ActionLabel(row.Log.Action),
+                            row.Log.Reason,
+                            row.Log.SlotId?.ToString(),
+                            row.Log.PaymentId?.ToString(),
+                            ToPerformerDto(row.Log, row.PerformerName),
+                            row.Log.CreatedAt))
+                        .ToList(),
+                    group.First().Log.CreatedAt);
+            })
+            .OrderByDescending(row => row.LastActivityAt)
+            .ToList();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var keyword = search.Trim();
             rows = rows.Where(row =>
-                    row.FullName.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                    || (row.Email ?? "").Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                    || (row.Phone ?? "").Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                    || row.InvoiceCode.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    row.Member.FullName.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                    || row.Member.Email.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                    || row.Member.Phone.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                    || row.Class.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                    || (row.Payment?.InvoiceCode ?? "").Contains(keyword, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
 
-        return rows
-            .Select(row => new PaidRegistrationDto(
-                row.PaymentId.ToString(),
-                row.InvoiceCode,
-                row.UserId.ToString(),
-                row.FullName,
-                row.Email ?? "",
-                row.Phone ?? "",
-                row.ClassId.ToString(),
-                row.ClassName,
-                row.Amount,
-                row.PaymentMethod,
-                row.PaidAt,
-                row.EnrollmentStatus,
-                row.RegisteredByUserId?.ToString(),
-                row.RegistrarName,
-                row.RegistrarRole))
-            .ToList();
+        return rows;
     }
 
-    public async Task<IReadOnlyList<ClassRegistrationLogDto>> AccessRegistrationLogsAsync(string? memberUserId, string? classId)
+    private static RegisteredByDto ToPerformerDto(ClassRegistrationLog log, string? performerName) =>
+        new(log.PerformedByUserId?.ToString(), performerName, log.PerformedByRole);
+
+    private static ClassAssignedByDto ToClassAssignedDto(ClassRegistrationLog log, string? performerName)
     {
-        var logs = db.ClassRegistrationLogs.AsNoTracking();
-        if (!string.IsNullOrWhiteSpace(memberUserId))
-        {
-            var id = ParseId(memberUserId, "Không tìm thấy học viên.");
-            logs = logs.Where(item => item.MemberUserId == id);
-        }
-
-        if (!string.IsNullOrWhiteSpace(classId))
-        {
-            var id = ParseId(classId, "Không tìm thấy lớp học.");
-            logs = logs.Where(item => item.ClassId == id);
-        }
-
-        var rows = await (
-            from log in logs
-            join member in db.UserAccounts on log.MemberUserId equals member.UserId
-            join trainingClass in db.Classes on log.ClassId equals trainingClass.ClassId
-            join performer in db.UserAccounts on log.PerformedByUserId equals (int?)performer.UserId into performers
-            from performer in performers.DefaultIfEmpty()
-            orderby log.CreatedAt descending, log.ClassRegistrationLogId descending
-            select new
-            {
-                Log = log,
-                MemberName = member.FullName,
-                trainingClass.ClassName,
-                PerformerName = performer != null ? performer.FullName : null,
-            })
-            .Take(500)
-            .ToListAsync();
-
-        return rows
-            .Select(row => new ClassRegistrationLogDto(
-                row.Log.ClassRegistrationLogId.ToString(),
-                row.Log.Action,
-                row.Log.MemberUserId.ToString(),
-                row.MemberName,
-                row.Log.ClassId.ToString(),
-                row.ClassName,
-                row.Log.PaymentId?.ToString(),
-                row.Log.Reason,
-                row.Log.PerformedByUserId?.ToString(),
-                row.PerformerName,
-                row.Log.PerformedByRole,
-                row.Log.CreatedAt))
-            .ToList();
+        var source = log.ClassAssignedBy!;
+        return source == ClassRegistrationLogs.SystemAssigned
+            ? new ClassAssignedByDto(source, ClassRegistrationLogs.ClassAssignedLabel(source), null, null)
+            : new ClassAssignedByDto(source, ClassRegistrationLogs.ClassAssignedLabel(source), log.PerformedByUserId?.ToString(), performerName);
     }
+
+    private static ReceptionMemberDto ToMemberDto(UserAccount user) =>
+        new(user.UserId.ToString(), user.FullName, user.Email ?? "", user.Phone ?? "", user.Status);
 
     public async Task EnsureSchemaAsync()
     {
@@ -357,6 +500,11 @@ public class ReceptionFlowService(AppDbContext db, CurrentActor actor, ClassRegi
                 ALTER TABLE payment ADD registered_by_user_id INT NULL
                     CONSTRAINT FK_payment_registered_by REFERENCES [user] (user_id);
                 EXEC(N'UPDATE payment SET registered_by_user_id = user_id WHERE class_id IS NOT NULL;');
+            END
+            IF COL_LENGTH(N'dbo.payment', N'requested_slot_id') IS NULL
+            BEGIN
+                ALTER TABLE payment ADD requested_slot_id INT NULL
+                    CONSTRAINT FK_payment_requested_slot REFERENCES slot (slot_id);
             END
             IF OBJECT_ID(N'dbo.class_registration_log', N'U') IS NULL
             BEGIN
@@ -383,6 +531,27 @@ public class ReceptionFlowService(AppDbContext db, CurrentActor actor, ClassRegi
                 FROM payment AS p
                 LEFT JOIN invoice AS i ON i.invoice_id = p.invoice_id
                 WHERE p.class_id IS NOT NULL;
+            END
+            IF COL_LENGTH(N'dbo.class_registration_log', N'class_assigned_by') IS NULL
+            BEGIN
+                ALTER TABLE class_registration_log ADD class_assigned_by NVARCHAR(50) NULL;
+                EXEC(N'UPDATE class_registration_log SET class_assigned_by = performed_by_role WHERE action IN (N''register'', N''re_enroll'');');
+            END
+            IF COL_LENGTH(N'dbo.class_registration_log', N'slot_id') IS NULL
+            BEGIN
+                ALTER TABLE class_registration_log ADD slot_id INT NULL
+                    CONSTRAINT FK_class_registration_log_slot REFERENCES slot (slot_id);
+            END
+            IF EXISTS (
+                SELECT 1 FROM sys.check_constraints
+                WHERE name = N'CK_class_registration_log_action' AND definition NOT LIKE N'%slot_move%')
+            BEGIN
+                ALTER TABLE class_registration_log DROP CONSTRAINT CK_class_registration_log_action;
+            END
+            IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_class_registration_log_action')
+            BEGIN
+                ALTER TABLE class_registration_log ADD CONSTRAINT CK_class_registration_log_action CHECK (action IN (
+                    N'register', N'move_out', N're_enroll', N'confirm_payment', N'slot_register', N'slot_move'));
             END
             """);
     }
