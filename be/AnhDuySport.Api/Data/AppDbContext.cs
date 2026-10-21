@@ -58,8 +58,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasPrecision(18, 2);
 
         modelBuilder.Entity<MembershipPackage>()
-            .Property(package => package.ClassDiscountPercent)
+            .Property(package => package.UpgradeDiscountPercent)
             .HasPrecision(5, 2);
+
+        modelBuilder.Entity<Payment>()
+            .Property(payment => payment.UpgradeAmount)
+            .HasPrecision(18, 2);
 
         modelBuilder.Entity<Room>()
             .HasOne(room => room.Center)
