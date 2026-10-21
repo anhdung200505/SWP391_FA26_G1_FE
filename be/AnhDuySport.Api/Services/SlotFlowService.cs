@@ -56,7 +56,8 @@ public class SlotFlowService(AppDbContext db)
         return result;
     }
 
-    public async Task<SlotRegistrationDto> RegisterAsync(string slotId, SlotMemberRequest request)
+    // actorUserId có giá trị khi lễ tân đăng ký giùm.
+    public async Task<SlotRegistrationDto> RegisterAsync(string slotId, SlotMemberRequest request, int? actorUserId = null)
     {
         var slot = await FindSlotAsync(slotId);
         var member = await FindActiveMemberAsync(request.MemberUserId);
@@ -66,21 +67,21 @@ public class SlotFlowService(AppDbContext db)
             item.ClassId == slot.ClassId && item.UserId == member.UserId && item.Status == "enrolled");
         if (!enrolled)
         {
-            throw new InvalidOperationException("Chỉ đăng ký slot khi đã ghi danh lớp của môn đó.");
+            throw new RegistrationException("Chỉ đăng ký slot khi đã ghi danh lớp của môn đó.");
         }
 
         var existing = await db.SlotRegistrations
             .FirstOrDefaultAsync(item => item.SlotId == slot.SlotId && item.UserId == member.UserId);
         if (existing?.Status == "registered")
         {
-            throw new InvalidOperationException("Học viên đã đăng ký slot này.");
+            throw new RegistrationException("Học viên đã đăng ký slot này.");
         }
 
         var registeredCount = await db.SlotRegistrations.CountAsync(item =>
             item.SlotId == slot.SlotId && item.Status == "registered");
         if (registeredCount >= slot.RegistrationLimit)
         {
-            throw new InvalidOperationException("Slot đã đạt giới hạn đăng ký.");
+            throw new RegistrationException("Slot đã đạt giới hạn đăng ký.");
         }
 
         if (existing is null)
@@ -102,18 +103,18 @@ public class SlotFlowService(AppDbContext db)
 
         db.ActivityLogs.Add(new ActivityLog
         {
-            ActorUserId = member.UserId,
-            Action = "Đăng ký slot",
+            ActorUserId = actorUserId ?? member.UserId,
+            Action = actorUserId is null ? "Đăng ký slot" : "Đăng ký slot giùm học viên",
             EntityName = "slot_registration",
             EntityId = slot.SlotId,
-            Detail = slot.Title,
+            Detail = actorUserId is null ? slot.Title : $"{member.FullName}: {slot.Title}",
             CreatedAt = DateTime.Now,
         });
         await SaveRegistrationAsync();
         return await ToRegistrationDtoAsync(existing.SlotRegistrationId);
     }
 
-    public async Task<SlotRegistrationDto> CancelAsync(string slotId, SlotMemberRequest request)
+    public async Task<SlotRegistrationDto> CancelAsync(string slotId, SlotMemberRequest request, int? actorUserId = null)
     {
         var slot = await FindSlotAsync(slotId);
         var member = await FindActiveMemberAsync(request.MemberUserId);
@@ -121,17 +122,17 @@ public class SlotFlowService(AppDbContext db)
             item.SlotId == slot.SlotId && item.UserId == member.UserId && item.Status == "registered");
         if (existing is null)
         {
-            throw new InvalidOperationException("Học viên chưa đăng ký slot này.");
+            throw new RegistrationException("Học viên chưa đăng ký slot này.");
         }
 
         existing.Status = "cancelled";
         db.ActivityLogs.Add(new ActivityLog
         {
-            ActorUserId = member.UserId,
-            Action = "Hủy đăng ký slot",
+            ActorUserId = actorUserId ?? member.UserId,
+            Action = actorUserId is null ? "Hủy đăng ký slot" : "Hủy slot giùm học viên",
             EntityName = "slot_registration",
             EntityId = slot.SlotId,
-            Detail = slot.Title,
+            Detail = actorUserId is null ? slot.Title : $"{member.FullName}: {slot.Title}",
             CreatedAt = DateTime.Now,
         });
         await SaveRegistrationAsync();
@@ -149,17 +150,17 @@ public class SlotFlowService(AppDbContext db)
             var message = exception.GetBaseException().Message;
             if (message.Contains("giới hạn đăng ký", StringComparison.Ordinal))
             {
-                throw new InvalidOperationException("Slot đã đạt giới hạn đăng ký.");
+                throw new RegistrationException("Slot đã đạt giới hạn đăng ký.");
             }
 
             if (message.Contains("ghi danh", StringComparison.Ordinal))
             {
-                throw new InvalidOperationException("Chỉ đăng ký slot khi đã ghi danh lớp của môn đó.");
+                throw new RegistrationException("Chỉ đăng ký slot khi đã ghi danh lớp của môn đó.");
             }
 
             if (message.Contains("UQ_slot_registration", StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("Học viên đã đăng ký slot này.");
+                throw new RegistrationException("Học viên đã đăng ký slot này.");
             }
 
             throw;
@@ -239,7 +240,7 @@ public class SlotFlowService(AppDbContext db)
 
         if (member.Status != "active")
         {
-            throw new InvalidOperationException("Tài khoản học viên không hoạt động.");
+            throw new RegistrationException("Tài khoản học viên không hoạt động.");
         }
 
         return member;
@@ -252,7 +253,7 @@ public class SlotFlowService(AppDbContext db)
     {
         if (slot.SlotDate < DateOnly.FromDateTime(DateTime.Now))
         {
-            throw new InvalidOperationException("Slot đã qua ngày học.");
+            throw new RegistrationException("Slot đã qua ngày học.");
         }
     }
 

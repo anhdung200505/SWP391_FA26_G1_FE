@@ -13,6 +13,11 @@ public static class ClassRegistrationLogs
     public const string Register = "register";
     public const string MoveOut = "move_out";
     public const string ReEnroll = "re_enroll";
+    public const string ConfirmPayment = "confirm_payment";
+    public const string SlotRegister = "slot_register";
+    public const string SlotMove = "slot_move";
+
+    public const string SystemAssigned = "SYSTEM";
 
     public static void Add(
         AppDbContext db,
@@ -22,20 +27,47 @@ public static class ClassRegistrationLogs
         RegistrationActor performedBy,
         DateTime at,
         Payment? payment = null,
-        string? reason = null)
+        string? reason = null,
+        string? classAssignedBy = null,
+        int? slotId = null,
+        int? paymentId = null)
     {
         db.ClassRegistrationLogs.Add(new ClassRegistrationLog
         {
             MemberUserId = memberUserId,
             ClassId = classId,
             Payment = payment,
+            PaymentId = payment is null ? paymentId : null,
             Action = action,
             Reason = reason is { Length: > 500 } ? reason[..500] : reason,
+            SlotId = slotId,
+            ClassAssignedBy = classAssignedBy,
             PerformedByUserId = performedBy.UserId,
             PerformedByRole = performedBy.RoleCode,
             CreatedAt = at,
         });
     }
+
+    public static string ActionLabel(string action) => action switch
+    {
+        Register => "Đăng ký lớp",
+        MoveOut => "Cho ra khỏi lớp",
+        ReEnroll => "Đăng ký học lại",
+        ConfirmPayment => "Xác nhận thu học phí",
+        SlotRegister => "Đăng ký slot",
+        SlotMove => "Dời slot",
+        _ => action,
+    };
+
+    public static string ClassAssignedLabel(string source) => source switch
+    {
+        SystemAssigned => "Hệ thống tự xếp lớp",
+        "RECEPTIONIST" => "Lễ tân xếp lớp",
+        "ADMIN" => "Quản trị xếp lớp",
+        "COACH" => "Huấn luyện viên xếp lớp",
+        "MEMBER" => "Học viên tự chọn lớp",
+        _ => source,
+    };
 
     // Người tạo đơn đăng ký này.
     public static async Task<RegisteredByDto?> RegisteredByPaymentAsync(AppDbContext db, int paymentId)
