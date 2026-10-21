@@ -118,6 +118,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             })
             .ToListAsync();
 
+        // Học viên đăng nhập có gói active → giá đã giảm; khách chưa đăng nhập → giá gốc.
+        var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, actor.UserId);
+
         return classes
             .Select(item => new ClassSummaryDto(
                 item.ClassId.ToString(),
@@ -133,7 +136,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 item.Capacity,
                 item.EnrolledCount,
                 AvailableSeats(item.Capacity, item.EnrolledCount + item.HeldCount),
-                item.Price,
+                MembershipDiscount.Apply(item.Price, discount),
                 item.NextSlot is null
                     ? null
                     : new ClassSlotDto(
@@ -141,7 +144,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                         item.NextSlot.SlotDate,
                         item.NextSlot.StartTime,
                         item.NextSlot.EndTime,
-                        item.NextSlot.Title ?? "")))
+                        item.NextSlot.Title ?? ""),
+                item.Price,
+                discount))
             .ToList();
     }
 
@@ -190,6 +195,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         var today = DateOnly.FromDateTime(DateTime.Now);
         var availableSeats = AvailableSeats(item.Capacity, item.EnrolledCount + item.HeldCount);
         var isOpen = IsOpenForRegistration(item.Status, item.EndDate, item.CourseStatus, availableSeats, today);
+        var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, actor.UserId);
 
         return new ClassDetailDto(
             item.ClassId.ToString(),
@@ -210,7 +216,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             item.Capacity,
             item.EnrolledCount,
             availableSeats,
-            item.Tuition,
+            MembershipDiscount.Apply(item.Tuition, discount),
             isOpen,
             item.Slots
                 .Select(slot => new ClassSlotDto(
@@ -219,7 +225,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                     slot.StartTime,
                     slot.EndTime,
                     slot.Title ?? ""))
-                .ToList());
+                .ToList(),
+            item.Tuition,
+            discount);
     }
 
     public async Task<IReadOnlyList<CoachOptionDto>> AccessCoachesAsync(string sportId)
@@ -328,7 +336,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
 
         try
         {
-            var created = await CreatePendingPaymentAsync(member, request, classId, item.ClassName, item.Tuition);
+            var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, member.UserId);
+            var tuition = MembershipDiscount.Apply(item.Tuition, discount);
+            var created = await CreatePendingPaymentAsync(member, request, classId, item.ClassName, tuition);
             return ToRegistrationDto(created, item.ClassName, false);
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
@@ -634,13 +644,14 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
 
         var now = DateTime.Now;
+        var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, user.UserId);
         await using var transaction = await db.Database.BeginTransactionAsync();
         var invoice = new Invoice
         {
             UserId = user.UserId,
             InvoiceCode = $"HD{now:yyyyMMddHHmmss}{user.UserId}",
             IssuedAt = now,
-            TotalAmount = trainingClass.Course?.Price ?? 0,
+            TotalAmount = MembershipDiscount.Apply(trainingClass.Course?.Price ?? 0, discount),
             Status = "paid",
         };
         db.Invoices.Add(invoice);
