@@ -1,103 +1,165 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   getMyClassRegistrations,
   getMemberProfile,
+  getMemberMembership,
+  getConsultationContact,
+  createMembershipRenewal,
+  confirmMembershipRenewal,
 } from '../api/managementApi';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
 export default function HocVienDashboardPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [myClasses, setMyClasses] = useState([]);
   const [membershipData, setMembershipData] = useState(null);
   const [profileData, setProfileData] = useState(null);
+  const [contactData, setContactData] = useState(null);
+
+  // Modal Thanh Toán & Gia Hạn Gói
+  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [checkoutInfo, setCheckoutInfo] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [notice, setNotice] = useState({ type: '', msg: '' });
+
+  const memberUserId = user?.id || user?.userId;
+
+  // Tải dữ liệu chính của Học viên qua managementApi
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+
+      // 1. Lấy danh sách lớp học đã ghi danh
+      const classes = await getMyClassRegistrations().catch(() => []);
+      if (Array.isArray(classes)) setMyClasses(classes);
+
+      if (memberUserId) {
+        // 2. Lấy thông tin Membership
+        const memData = await getMemberMembership(memberUserId).catch(() => null);
+        if (memData) setMembershipData(memData);
+
+        // 3. Lấy Hotline chăm sóc khách hàng
+        const contact = await getConsultationContact(memberUserId).catch(() => null);
+        if (contact) setContactData(contact);
+
+        // 4. Lấy Hồ sơ cá nhân
+        const prof = await getMemberProfile(memberUserId).catch(() => null);
+        if (prof) setProfileData(prof);
+      }
+    } catch (err) {
+      console.error('Lỗi tải dữ liệu Dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchDashboardData() {
-      try {
-        setLoading(true);
-
-        // 1. Gọi API GET /api/class-registrations/mine lấy danh sách lớp đã đăng ký
-        const classes = await getMyClassRegistrations().catch(() => []);
-        if (Array.isArray(classes)) setMyClasses(classes);
-
-        // 2. Lấy thông tin Membership & Profile chi tiết nếu có ID học viên
-        const memberUserId = user?.id || user?.userId;
-        if (memberUserId) {
-          // Gọi API GET /api/members/{memberUserId}/membership
-          try {
-            const token = localStorage.getItem('token') || '';
-            const res = await fetch(`/api/members/${memberUserId}/membership`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
-            if (res.ok) {
-              const data = await res.json();
-              setMembershipData(data);
-            }
-          } catch (e) {
-            console.error('Lỗi tải thông tin membership:', e);
-          }
-
-          // Gọi API lấy hồ sơ cá nhân
-          const prof = await getMemberProfile(memberUserId).catch(() => null);
-          if (prof) setProfileData(prof);
-        }
-      } catch (err) {
-        console.error('Lỗi tải dữ liệu Dashboard:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchDashboardData();
   }, [user]);
 
-  // Thông tin hiển thị học viên
+  // Xử lý khi PayOS redirect về (có paymentId)
+  useEffect(() => {
+    const paymentId = searchParams.get('paymentId');
+    if (paymentId && memberUserId) {
+      handleConfirmPayment(paymentId);
+    }
+  }, [searchParams, memberUserId]);
+
+  // Gọi API xác nhận thanh toán PayOS
+  const handleConfirmPayment = async (paymentId) => {
+    try {
+      setIsProcessing(true);
+      const result = await confirmMembershipRenewal(memberUserId, paymentId);
+      setNotice({
+        type: 'success',
+        msg: result.message || 'Xác nhận thanh toán thành công! Gói hội viên của bạn đã được cập nhật hạn mới.',
+      });
+      fetchDashboardData();
+    } catch (e) {
+      setNotice({ type: 'error', msg: e.message || 'Chưa nhận được xác nhận thanh toán từ PayOS.' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Gọi API tạo Link/QR thanh toán Gia hạn
+  const handleCreateRenewal = async (packageItem) => {
+    try {
+      setIsProcessing(true);
+      setSelectedPackage(packageItem);
+      const data = await createMembershipRenewal(memberUserId, packageItem.id);
+      if (data && data.checkoutUrl) {
+        setCheckoutInfo(data);
+      } else {
+        alert(data.message || 'Không thể tạo đơn gia hạn gói.');
+      }
+    } catch (e) {
+      alert(e.message || 'Đã xảy ra lỗi kết nối thanh toán.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const displayName = profileData?.fullName || user?.fullName || user?.userName || 'Học viên';
   const displayEmail = profileData?.email || user?.email || 'Chưa cập nhật';
   const displayPhone = profileData?.phone || user?.phone || 'Chưa cập nhật';
   const currentMembership = membershipData?.currentMembership;
+  const packageList = membershipData?.packages || [];
+  const historyList = membershipData?.history || [];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col justify-between">
-      {/* 1. HEADER CHUNG CỦA WEBSITE */}
-      <Header />
+      {/* 1. TRUYỀN forceWhite ĐỂ BẮT BUỘC HEADER Ở DANG BACKGROUND TRẮNG CHO RIÊNG TRANG NÀY */}
+      <Header forceWhite />
 
-      {/* 2. NỘI DUNG CHÍNH (TRANG NỀN TRẮNG SÁNG MODERN) */}
-      <main className="flex-1 pb-16">
-        
-        {/* BANNER XIN CHÀO & TỔNG QUAN HỌC VIÊN */}
+      {/* 2. BỔ SUNG pt-20 sm:pt-24 ĐỂ NỘI DUNG ĐƯỢC ĐẨY XUỐNG DƯỚI, KHÔNG BỊ HEADER TRẮNG CHE MẤT CHỮ */}
+      <main className="flex-1 pt-20 sm:pt-24 pb-16">
+        {/* BANNER ALERTS */}
+        {notice.msg && (
+          <div
+            className={`max-w-6xl mx-auto mt-4 px-6 py-4 rounded-2xl text-xs font-bold border shadow-sm flex items-center justify-between ${
+              notice.type === 'success'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-red-50 text-red-700 border-red-200'
+            }`}
+          >
+            <span>{notice.msg}</span>
+            <button onClick={() => setNotice({ type: '', msg: '' })} className="font-bold text-sm cursor-pointer">
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* BANNER XIN CHÀO */}
         <section className="bg-white border-b border-slate-200 py-8 shadow-xs">
           <div className="max-w-6xl mx-auto px-4 sm:px-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <span className="inline-block bg-[#e31b23]/10 text-[#e31b23] text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full mb-2">
-                  TRANG CÁ NHÂN HỌC VIÊN
+                  PORTAL CÁ NHÂN HỌC VIÊN
                 </span>
                 <h1 className="text-2xl sm:text-3xl font-black text-slate-900 uppercase">
                   XIN CHÀO, <span className="text-[#e31b23]">{displayName}</span>!
                 </h1>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  Chào mừng bạn đến với trung tâm quản lý học tập thể thao AnhDuy Sport Center.
+                  Quản lý gói tập hội viên và danh sách các lớp học thể thao của bạn.
                 </p>
               </div>
 
-              {/* NÚT DIRECT SANG TRANG HỒ SƠ ĐỂ CHỈNH SỬA THÔNG TIN CÁ NHÂN */}
               <Link
                 to="/ho-so"
-                className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-[#e31b23] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all duration-200 active:scale-95 cursor-pointer self-start md:self-auto"
+                className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-[#e31b23] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer self-start md:self-auto"
               >
                 <span>⚙️ Chỉnh sửa hồ sơ</span>
               </Link>
             </div>
 
-            {/* CÁC THẺ THÔNG TIN TÓM TẮT TÀI KHOẢN */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
                 <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-1">
@@ -119,29 +181,28 @@ export default function HocVienDashboardPage() {
 
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
                 <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-1">
-                  TRẠNG THÁI TÀI KHOẢN
+                  TRẠNG THÁI HỘI VIÊN
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Đã kích hoạt
+                  {currentMembership ? 'Đang kích hoạt' : 'Chưa có gói tập'}
                 </span>
               </div>
             </div>
           </div>
         </section>
 
-        {/* THÔNG TIN CHI TIẾT LỚP HỌC & GÓI TẬP */}
         <div className="max-w-6xl mx-auto px-4 sm:px-8 mt-8 space-y-8">
           
-          {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG (MEMBERSHIP CARD) */}
+          {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG */}
           {currentMembership && (
-            <section className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-3xl p-6 sm:p-8 shadow-md relative overflow-hidden">
-              <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-[#e31b23]/20 rounded-full blur-2xl"></div>
-              
-              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <section className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-[#e31b23]/20 rounded-full blur-3xl"></div>
+
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
                   <span className="inline-block bg-white/10 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-2">
-                    GÓI TẬP HIỆN TẠI
+                    GÓI TẬP ĐANG SỬ DỤNG
                   </span>
                   <h2 className="text-2xl font-black text-white uppercase tracking-wide">
                     {currentMembership.planName || 'Gói Hội Viên'}
@@ -166,7 +227,78 @@ export default function HocVienDashboardPage() {
             </section>
           )}
 
-          {/* DANH SÁCH KHÓA HỌC & LỚP ĐÃ ĐĂNG KÝ */}
+          {/* DANH SÁCH GÓI CÓ THỂ GIA HẠN / NÂNG CẤP */}
+          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <span className="inline-block bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full mb-1">
+                  ƯU ĐÃI GIA HẠN & NÂNG CẤP
+                </span>
+                <h2 className="text-lg font-black text-slate-900 uppercase">
+                  DANH SÁCH GÓI HỘI VIÊN MỚI
+                </h2>
+              </div>
+
+              {contactData && (
+                <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl text-xs">
+                  <span className="text-slate-400 font-medium block text-[10px] uppercase">Cần tư vấn thêm?</span>
+                  <strong className="text-[#e31b23] font-black">📞 {contactData.phone}</strong>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {packageList.map((pkg) => (
+                <div
+                  key={pkg.id}
+                  className="bg-slate-50 hover:bg-slate-100/80 rounded-3xl p-6 border border-slate-200 transition-all flex flex-col justify-between space-y-4"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-md">
+                        {pkg.code}
+                      </span>
+                      {pkg.upgradeDiscountPercent > 0 && (
+                        <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          Giảm {pkg.upgradeDiscountPercent}%
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="text-base font-black text-slate-900 uppercase">
+                      {pkg.name}
+                    </h3>
+                    
+                    <div className="mt-3">
+                      <span className="text-2xl font-black text-[#e31b23]">
+                        {pkg.fee?.toLocaleString('vi-VN')}đ
+                      </span>
+                      <span className="text-xs text-slate-400 font-medium"> / {pkg.validityMonths} tháng</span>
+                    </div>
+
+                    <ul className="mt-4 space-y-2 text-xs text-slate-600">
+                      {pkg.benefits?.map((benefit, bIdx) => (
+                        <li key={bIdx} className="flex items-center gap-2">
+                          <span className="text-emerald-500 font-bold">✓</span>
+                          <span>{benefit}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={() => handleCreateRenewal(pkg)}
+                    disabled={isProcessing}
+                    className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase py-3 rounded-xl shadow transition-all cursor-pointer disabled:opacity-50 mt-4"
+                  >
+                    {isProcessing ? 'Đang tạo đơn...' : 'Gia hạn / Nâng cấp ngay →'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* LỚP HỌC ĐÃ ĐĂNG KÝ */}
           <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
               <div>
@@ -174,7 +306,7 @@ export default function HocVienDashboardPage() {
                   KHÓA HỌC & LỚP ĐÃ GHI DANH
                 </h2>
                 <p className="text-xs text-slate-400 font-medium mt-0.5">
-                  Danh sách các khóa học thể thao bạn đang tham gia
+                  Danh sách các lớp thể thao bạn đã đăng ký tham gia
                 </p>
               </div>
 
@@ -223,10 +355,6 @@ export default function HocVienDashboardPage() {
                         <span className="font-bold text-slate-800">{cls.coachName || 'Đang cập nhật'}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400 font-medium">Địa điểm / Phòng:</span>
-                        <span className="font-bold text-slate-800">{cls.roomName || cls.centerName || 'Sân tập'}</span>
-                      </div>
-                      <div className="flex justify-between">
                         <span className="text-slate-400 font-medium">Thời gian học:</span>
                         <span className="font-bold text-slate-800">
                           {cls.startDate} ~ {cls.endDate}
@@ -237,7 +365,6 @@ export default function HocVienDashboardPage() {
                 ))}
               </div>
             ) : (
-              /* MÀN HÌNH MẶC ĐỊNH KHI CHƯA ĐĂNG KÝ LỚP NÀO */
               <div className="py-12 px-4 text-center max-w-md mx-auto space-y-4">
                 <div className="w-16 h-16 bg-red-50 text-[#e31b23] rounded-full flex items-center justify-center mx-auto text-2xl font-black">
                   🏋️
@@ -253,7 +380,7 @@ export default function HocVienDashboardPage() {
 
                 <Link
                   to="/tuyen-sinh"
-                  className="inline-block bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase px-8 py-3.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+                  className="inline-block bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase px-8 py-3.5 rounded-xl shadow-md transition-all cursor-pointer"
                 >
                   KHÁM PHÁ CÁC KHÓA HỌC →
                 </Link>
@@ -261,11 +388,108 @@ export default function HocVienDashboardPage() {
             )}
           </section>
 
+          {/* LỊCH SỬ DÙNG GÓI */}
+          {historyList.length > 0 && (
+            <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+              <h2 className="text-lg font-black text-slate-900 uppercase mb-4">
+                LỊCH SỬ DÙNG GÓI HỘI VIÊN
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
+                      <th className="p-3">Gói tập</th>
+                      <th className="p-3">Hóa đơn</th>
+                      <th className="p-3">Thời hạn</th>
+                      <th className="p-3">Đã thanh toán</th>
+                      <th className="p-3">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {historyList.map((hItem) => (
+                      <tr key={hItem.id}>
+                        <td className="p-3 font-bold text-slate-900">{hItem.planName}</td>
+                        <td className="p-3 font-mono text-slate-500">#{hItem.invoiceCode}</td>
+                        <td className="p-3 text-slate-600">{hItem.startDate} ~ {hItem.endDate}</td>
+                        <td className="p-3 font-bold text-emerald-600">{hItem.amountPaid?.toLocaleString('vi-VN')}đ</td>
+                        <td className="p-3">
+                          <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">
+                            {hItem.status || 'Hoàn tất'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
         </div>
       </main>
 
-      {/* 3. FOOTER CHUNG CỦA WEBSITE */}
       <Footer />
+
+      {/* MODAL POPUP THANH TOÁN PAYOS */}
+      {checkoutInfo && selectedPackage && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-fadeIn text-center">
+            
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-black text-slate-900 uppercase">
+                THANH TOÁN PAYOS GIA HẠN GÓI
+              </h3>
+              <button
+                onClick={() => setCheckoutInfo(null)}
+                className="text-slate-400 hover:text-slate-700 font-bold text-base p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-400 uppercase">Mã hóa đơn</span>
+              <p className="text-base font-mono font-black text-[#e31b23]">
+                #{checkoutInfo.invoiceCode}
+              </p>
+              <p className="text-xl font-black text-slate-900">
+                {checkoutInfo.amount?.toLocaleString('vi-VN')} VNĐ
+              </p>
+            </div>
+
+            {checkoutInfo.qrCode ? (
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 inline-block">
+                <img src={checkoutInfo.qrCode} alt="PayOS QR Code" className="w-48 h-48 mx-auto object-contain" />
+                <p className="text-[11px] font-bold text-slate-500 mt-2">Mở app Ngân hàng / ví để Quét mã QR</p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Vui lòng bấm nút bên dưới để chuyển hướng sang cổng thanh toán an toàn PayOS.
+              </p>
+            )}
+
+            <div className="space-y-2 pt-2">
+              <a
+                href={checkoutInfo.checkoutUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer"
+              >
+                Mở Cổng Thanh Toán PayOS →
+              </a>
+
+              <button
+                onClick={() => handleConfirmPayment(checkoutInfo.paymentId)}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-2.5 rounded-xl cursor-pointer"
+              >
+                🔄 Tôi đã hoàn tất thanh toán
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
