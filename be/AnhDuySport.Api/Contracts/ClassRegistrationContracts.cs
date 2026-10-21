@@ -85,7 +85,14 @@ public sealed record EnrolledClassDto(
     string CenterName,
     string RoomName,
     string CoachName,
-    decimal Tuition);
+    decimal Tuition,
+    RegisteredByDto? RegisteredBy);
+
+// Người đã đăng ký (hoặc đăng ký học lại) cho học viên. Role là vai trò lúc thao tác; UserId null nếu tài khoản đó đã xóa.
+public sealed record RegisteredByDto(
+    string? UserId,
+    string? FullName,
+    string Role);
 
 public sealed class PayRegistrationRequest
 {
@@ -104,7 +111,8 @@ public sealed record RegistrationPaymentResponse(
     string? Commitment,
     string? InvoiceCode,
     string? Token,
-    AuthUserDto? User);
+    AuthUserDto? User,
+    RegisteredByDto? RegisteredBy);
 
 // Các trường hồ sơ đều tùy chọn: có gửi thì ghi đè hồ sơ học viên khi tạo đơn mới.
 public sealed record CreateClassRegistrationRequest(
@@ -122,7 +130,8 @@ public sealed record ClassRegistrationDto(
     decimal Amount,
     string Status,
     string PaymentUrl,
-    bool IsExisting);
+    bool IsExisting,
+    RegisteredByDto? RegisteredBy);
 
 public sealed record RegistrationStatusDto(
     string PaymentId,
@@ -133,4 +142,5 @@ public sealed record RegistrationStatusDto(
     string PaymentStatus,
     string InvoiceStatus,
     string? EnrollmentStatus,
-    string Message);
+    string Message,
+    RegisteredByDto? RegisteredBy);
