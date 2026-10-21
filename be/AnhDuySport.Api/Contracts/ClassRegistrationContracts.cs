@@ -41,7 +41,9 @@ public sealed record ClassSummaryDto(
     int EnrolledCount,
     int? AvailableSeats,
     decimal Tuition,
-    ClassSlotDto? NextSlot);
+    ClassSlotDto? NextSlot,
+    decimal OriginalTuition,
+    decimal DiscountPercent);
 
 public sealed record ClassDetailDto(
     string Id,
@@ -64,7 +66,9 @@ public sealed record ClassDetailDto(
     int? AvailableSeats,
     decimal Tuition,
     bool IsOpenForRegistration,
-    IReadOnlyList<ClassSlotDto> Slots);
+    IReadOnlyList<ClassSlotDto> Slots,
+    decimal OriginalTuition,
+    decimal DiscountPercent);
 
 public sealed record EnrolledClassDto(
     string ClassId,

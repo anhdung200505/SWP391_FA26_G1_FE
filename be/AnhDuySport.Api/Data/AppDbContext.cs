@@ -56,6 +56,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(package => package.Fee)
             .HasPrecision(18, 2);
 
+        modelBuilder.Entity<MembershipPackage>()
+            .Property(package => package.ClassDiscountPercent)
+            .HasPrecision(5, 2);
+
         modelBuilder.Entity<Room>()
             .HasOne(room => room.Center)
             .WithMany()
