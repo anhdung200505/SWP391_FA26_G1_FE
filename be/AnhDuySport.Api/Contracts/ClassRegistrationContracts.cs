@@ -41,9 +41,7 @@ public sealed record ClassSummaryDto(
     int EnrolledCount,
     int? AvailableSeats,
     decimal Tuition,
-    ClassSlotDto? NextSlot,
-    decimal OriginalTuition,
-    decimal DiscountPercent);
+    ClassSlotDto? NextSlot);
 
 public sealed record ClassDetailDto(
     string Id,
@@ -66,9 +64,7 @@ public sealed record ClassDetailDto(
     int? AvailableSeats,
     decimal Tuition,
     bool IsOpenForRegistration,
-    IReadOnlyList<ClassSlotDto> Slots,
-    decimal OriginalTuition,
-    decimal DiscountPercent);
+    IReadOnlyList<ClassSlotDto> Slots);
 
 public sealed record EnrolledClassDto(
     string ClassId,
@@ -102,6 +98,8 @@ public sealed class PayRegistrationRequest
     public string FullName { get; set; } = "";
     public string Phone { get; set; } = "";
     public string PaymentMethod { get; set; } = "";
+    // Lên cấp ngay cùng lúc đăng ký lớp (id gói Bạc/Vàng). Bỏ trống → được tặng Hạng Đồng.
+    public string? UpgradePackageId { get; set; }
 }
 
 public sealed record RegistrationPaymentResponse(
@@ -114,17 +112,15 @@ public sealed record RegistrationPaymentResponse(
     AuthUserDto? User,
     RegisteredByDto? RegisteredBy);
 
-// Bắt buộc chọn môn. Không chọn lớp thì hệ thống chọn lớp còn chỗ bắt đầu sớm nhất của môn đó;
-// chỉ chọn slot thì lấy lớp của slot. Slot chỉ là nguyện vọng, lễ tân đăng ký slot hoặc dời slot sau khi thanh toán.
 // Các trường hồ sơ đều tùy chọn: có gửi thì ghi đè hồ sơ học viên khi tạo đơn mới.
 public sealed record CreateClassRegistrationRequest(
-    string SportId,
-    string? ClassId = null,
-    string? SlotId = null,
+    string ClassId,
     [StringLength(200, MinimumLength = 1)] string? FullName = null,
     [RegularExpression(@"^\+?[0-9 ]{8,20}$")] string? Phone = null,
     DateOnly? DateOfBirth = null,
-    [RegularExpression("^(Nam|Nữ|Khác)$")] string? Gender = null);
+    [RegularExpression("^(Nam|Nữ|Khác)$")] string? Gender = null,
+    // Lên cấp ngay cùng lúc đăng ký lớp (id gói Bạc/Vàng). Bỏ trống → được tặng Hạng Đồng.
+    string? UpgradePackageId = null);
 
 public sealed record ClassRegistrationDto(
     string PaymentId,
@@ -135,17 +131,7 @@ public sealed record ClassRegistrationDto(
     string Status,
     string PaymentUrl,
     bool IsExisting,
-    RegisteredByDto? RegisteredBy,
-    RequestedSlotDto? RequestedSlot);
-
-// Slot học viên mong muốn. Remaining = 0 nghĩa là slot đã đầy, lễ tân sẽ dời sang slot khác.
-public sealed record RequestedSlotDto(
-    string Id,
-    DateOnly Date,
-    TimeOnly StartTime,
-    TimeOnly EndTime,
-    string Title,
-    int Remaining);
+    RegisteredByDto? RegisteredBy);
 
 public sealed record RegistrationStatusDto(
     string PaymentId,
@@ -157,5 +143,4 @@ public sealed record RegistrationStatusDto(
     string InvoiceStatus,
     string? EnrollmentStatus,
     string Message,
-    RegisteredByDto? RegisteredBy,
-    RequestedSlotDto? RequestedSlot);
+    RegisteredByDto? RegisteredBy);
