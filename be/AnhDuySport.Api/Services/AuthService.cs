@@ -30,16 +30,29 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         await db.SaveChangesAsync();
     }
 
-    public Task<LoginResponse> LoginAsync(LoginRequest request) =>
-        SignInAsync(request, [RoleCatalog.AdminCode, "RECEPTIONIST"], "Chỉ quản trị trung tâm và lễ tân đăng nhập được.");
-
-    public Task<LoginResponse> LoginMemberAsync(LoginRequest request) =>
-        SignInAsync(request, ["MEMBER"], "Chỉ học viên đăng nhập được ở đây.");
-
-    private async Task<LoginResponse> SignInAsync(LoginRequest request, string[] allowedRoles, string wrongRoleMessage)
+    public Task<LoginResponse> LoginAsync(LoginRequest request)
     {
-        var email = request.Email?.Trim() ?? "";
-        var password = request.Password ?? "";
+        var portal = request.Portal?.Trim().ToLowerInvariant() ?? "";
+        if (portal == "customer")
+        {
+            return SignInAsync(request.Email, request.Password, ["MEMBER"], "Cửa này dành cho học viên.");
+        }
+
+        if (portal.Length == 0)
+        {
+            return SignInAsync(request.Email, request.Password, [RoleCatalog.AdminCode, "RECEPTIONIST"], "Chỉ quản trị trung tâm và lễ tân đăng nhập được.");
+        }
+
+        return SignInAsync(request.Email, request.Password, [RoleCatalog.AdminCode, "RECEPTIONIST", "COACH"], "Cửa này dành cho quản trị trung tâm, lễ tân và huấn luyện viên.");
+    }
+
+    public Task<LoginResponse> LoginMemberAsync(MemberLoginRequest request) =>
+        SignInAsync(request.Email, request.Password, ["MEMBER"], "Chỉ học viên đăng nhập được ở đây.");
+
+    private async Task<LoginResponse> SignInAsync(string? emailValue, string? passwordValue, string[] allowedRoles, string wrongRoleMessage)
+    {
+        var email = emailValue?.Trim() ?? "";
+        var password = passwordValue ?? "";
         if (email.Length == 0 || password.Length == 0)
         {
             throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng.");
@@ -47,7 +60,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
 
         var user = await db.UserAccounts
             .Include(account => account.Role)
-            .FirstOrDefaultAsync(account => account.Email == email);
+            .FirstOrDefaultAsync(account => account.Email != null && account.Email.ToLower() == email.ToLower());
         if (user is null || !passwords.Verify(password, user.PasswordHash))
         {
             throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng.");
@@ -63,22 +76,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new UnauthorizedAccessException("Tài khoản đã ngưng hoạt động.");
         }
 
-        var portal = request.Portal?.Trim().ToLowerInvariant() ?? "";
-        if (portal == "customer")
-        {
-            if (user.Role?.RoleCode is not "MEMBER")
-            {
-                throw new UnauthorizedAccessException("Cửa này dành cho học viên.");
-            }
-        }
-        else if (portal.Length > 0)
-        {
-            if (user.Role?.RoleCode is not (RoleCatalog.AdminCode or "RECEPTIONIST" or "COACH"))
-            {
-                throw new UnauthorizedAccessException("Cửa này dành cho quản trị trung tâm, lễ tân và huấn luyện viên.");
-            }
-        }
-        else if (user.Role is null || !allowedRoles.Contains(user.Role.RoleCode))
+        if (user.Role is null || !allowedRoles.Contains(user.Role.RoleCode))
         {
             throw new UnauthorizedAccessException(wrongRoleMessage);
         }
@@ -86,11 +84,152 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         return await IssueAsync(user);
     }
 
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        var currentPassword = request.CurrentPassword ?? "";
+        var newPassword = request.NewPassword ?? "";
+
+        var user = await db.UserAccounts.FirstOrDefaultAsync(account => account.UserId == userId && account.Status == "active")
+            ?? throw new InvalidOperationException("Không tìm thấy tài khoản đang hoạt động.");
+
+        if (!passwords.Verify(currentPassword, user.PasswordHash))
+        {
+            throw new InvalidOperationException("Mật khẩu hiện tại không đúng.");
+        }
+
+        if (newPassword == currentPassword)
+        {
+            throw new InvalidOperationException("Mật khẩu mới phải khác mật khẩu hiện tại.");
+        }
+
+        PasswordHasher.EnsureAcceptable(newPassword);
+
+        user.PasswordHash = passwords.Hash(newPassword);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        var email = NormalizeEmail(request.Email);
+        if (email.Length is 0 or > 200 || !email.Contains('@'))
+        {
+            throw new InvalidOperationException("Email không hợp lệ.");
+        }
+
+        var now = DateTime.UtcNow;
+        await db.PasswordResets.Where(row => row.ExpiresAt <= now).ExecuteDeleteAsync();
+
+        var accountStatus = await db.UserAccounts
+            .Where(account => account.Email != null && account.Email.ToLower() == email)
+            .Select(account => account.Status)
+            .FirstOrDefaultAsync();
+        if (accountStatus is null)
+        {
+            throw new InvalidOperationException("Email không tồn tại.");
+        }
+
+        if (accountStatus != "active")
+        {
+            throw new InvalidOperationException("Tài khoản đã bị khóa hoặc ngưng hoạt động.");
+        }
+
+        var reset = await db.PasswordResets.FirstOrDefaultAsync(row => row.Email == email);
+        if (reset is not null && reset.CreatedAt > now.AddMinutes(-1))
+        {
+            throw new InvalidOperationException("Hãy đợi một phút trước khi gửi lại mã.");
+        }
+
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        var body = $"Xin chào,{Environment.NewLine}{Environment.NewLine}Mã OTP đặt lại mật khẩu AnhDuy Sport là {code}. Mã có hiệu lực trong 3 phút. Nếu bạn không yêu cầu mã này, hãy bỏ qua email.";
+        try
+        {
+            await emailSender.SendAsync(email, "[AnhDuy Sport] Mã OTP đặt lại mật khẩu", body);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException("Không gửi được email. Hãy thử lại.", exception);
+        }
+
+        if (reset is null)
+        {
+            reset = new PasswordReset { Email = email };
+            db.PasswordResets.Add(reset);
+        }
+
+        reset.OtpHash = HashOtp(code);
+        reset.Attempts = 0;
+        reset.CreatedAt = now;
+        reset.ExpiresAt = now.AddMinutes(3);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        var email = NormalizeEmail(request.Email);
+        var code = request.Code?.Trim() ?? "";
+        var newPassword = request.NewPassword ?? "";
+        const string invalidCode = "Mã OTP không đúng hoặc đã hết hạn.";
+
+        if (email.Length == 0 || code.Length != 6 || !code.All(char.IsDigit))
+        {
+            throw new InvalidOperationException(invalidCode);
+        }
+
+        var reset = await db.PasswordResets.FirstOrDefaultAsync(row => row.Email == email);
+        if (reset is null || reset.ExpiresAt <= DateTime.UtcNow)
+        {
+            if (reset is not null)
+            {
+                db.PasswordResets.Remove(reset);
+                await db.SaveChangesAsync();
+            }
+
+            throw new InvalidOperationException(invalidCode);
+        }
+
+        if (reset.Attempts >= 5)
+        {
+            db.PasswordResets.Remove(reset);
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException("Bạn đã nhập sai quá số lần. Hãy gửi lại mã.");
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(reset.OtpHash),
+                Encoding.UTF8.GetBytes(HashOtp(code))))
+        {
+            reset.Attempts += 1;
+            if (reset.Attempts >= 5)
+            {
+                db.PasswordResets.Remove(reset);
+            }
+
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException(reset.Attempts >= 5
+                ? "Bạn đã nhập sai quá số lần. Hãy gửi lại mã."
+                : invalidCode);
+        }
+
+        PasswordHasher.EnsureAcceptable(newPassword);
+
+        var user = await db.UserAccounts.FirstOrDefaultAsync(account =>
+            account.Email != null && account.Email.ToLower() == email && account.Status == "active")
+            ?? throw new InvalidOperationException(invalidCode);
+
+        user.PasswordHash = passwords.Hash(newPassword);
+        db.PasswordResets.Remove(reset);
+        await db.SaveChangesAsync();
+    }
+
     public async Task<LoginResponse> RegisterGuestAsync(RegisterGuestRequest request)
     {
         var fullName = request.FullName?.Trim() ?? "";
         var email = request.Email?.Trim() ?? "";
-        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        var phone = AccountPhone.Require(request.Phone);
         var password = request.Password ?? "";
 
         if (fullName.Length is 0 or > 200)
@@ -103,11 +242,6 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new InvalidOperationException("Email không hợp lệ.");
         }
 
-        if (phone is { Length: > 20 })
-        {
-            throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
-        }
-
         PasswordHasher.EnsureAcceptable(password);
 
         var emailTaken = await db.UserAccounts.AnyAsync(account =>
@@ -116,6 +250,8 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         {
             throw new InvalidOperationException("Email này đã được dùng.");
         }
+
+        await AccountPhone.EnsureUniqueAsync(db, phone);
 
         var memberRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == "MEMBER")
             ?? throw new InvalidOperationException("Chưa có vai trò học viên.");
@@ -148,7 +284,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
     {
         var fullName = request.FullName?.Trim() ?? "";
         var email = NormalizeEmail(request.Email);
-        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        var phone = AccountPhone.Require(request.Phone);
         var password = request.Password ?? "";
 
         if (fullName.Length is 0 or > 200)
@@ -161,11 +297,6 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             throw new InvalidOperationException("Email không hợp lệ.");
         }
 
-        if (phone is { Length: > 20 })
-        {
-            throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
-        }
-
         PasswordHasher.EnsureAcceptable(password);
 
         await DeleteUnconfirmedRegistrationsAsync();
@@ -176,6 +307,8 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         {
             throw new InvalidOperationException("Email này đã được dùng.");
         }
+
+        await AccountPhone.EnsureUniqueAsync(db, phone, exceptPendingEmail: email);
 
         var now = DateTime.UtcNow;
         var pending = await db.PendingRegistrations.FirstOrDefaultAsync(row => row.Email == email);
@@ -261,6 +394,9 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
                 : "Mã OTP không đúng hoặc đã hết hạn.");
         }
 
+        var phone = AccountPhone.Require(pending.Phone);
+        await AccountPhone.EnsureUniqueAsync(db, phone, exceptPendingEmail: email);
+
         var memberRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == "MEMBER")
             ?? throw new InvalidOperationException("Chưa có vai trò học viên.");
         var user = new UserAccount
@@ -269,7 +405,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             Role = memberRole,
             FullName = pending.FullName,
             Email = email,
-            Phone = pending.Phone,
+            Phone = phone,
             PasswordHash = pending.PasswordHash,
             Status = "active",
             CreatedAt = DateTime.Now,
@@ -288,6 +424,78 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         return await IssueAsync(user);
     }
 
+    public async Task DeleteOwnAccountAsync(int userId, string? password)
+    {
+        var user = await db.UserAccounts.Include(account => account.Role)
+            .FirstOrDefaultAsync(account => account.UserId == userId)
+            ?? throw new UnauthorizedAccessException("Tài khoản không còn tồn tại.");
+
+        if (!passwords.Verify(password ?? "", user.PasswordHash))
+        {
+            throw new UnauthorizedAccessException("Mật khẩu không đúng.");
+        }
+
+        if (user.Role?.RoleCode == RoleCatalog.AdminCode || user.UserId == RoleCatalog.ActorUserId)
+        {
+            throw new InvalidOperationException("Tài khoản quản trị không tự xóa được.");
+        }
+
+        if (await db.Classes.AnyAsync(item => item.CoachUserId == user.UserId))
+        {
+            throw new InvalidOperationException("Tài khoản đang phụ trách lớp học nên không tự xóa được.");
+        }
+
+        var planCount = await db.Database
+            .SqlQuery<int>($"SELECT COUNT(*) AS Value FROM training_plan WHERE created_by_user_id = {user.UserId}")
+            .SingleAsync();
+        if (planCount > 0)
+        {
+            throw new InvalidOperationException("Tài khoản đang có giáo án nên không tự xóa được.");
+        }
+
+        var email = user.Email ?? "";
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = user.UserId,
+            Action = "Tự xóa tài khoản",
+            EntityName = "user",
+            EntityId = user.UserId,
+            Detail = $"Tài khoản {email} (user {user.UserId}) tự xóa.",
+            CreatedAt = DateTime.Now,
+        });
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM class_registration_log WHERE member_user_id = {user.UserId};
+            UPDATE class_registration_log SET performed_by_user_id = NULL WHERE performed_by_user_id = {user.UserId};
+            UPDATE payment SET registered_by_user_id = NULL WHERE registered_by_user_id = {user.UserId};
+            DELETE FROM notification WHERE user_id = {user.UserId};
+            DELETE FROM attendance WHERE user_id = {user.UserId};
+            DELETE FROM slot_registration WHERE user_id = {user.UserId};
+            DELETE FROM class_enrollment WHERE user_id = {user.UserId};
+            DELETE FROM evaluation WHERE evaluator_user_id = {user.UserId} OR evaluated_user_id = {user.UserId};
+            UPDATE evaluation SET reviewer_user_id = NULL WHERE reviewer_user_id = {user.UserId};
+            DELETE FROM support_request WHERE member_user_id = {user.UserId};
+            UPDATE support_request SET assigned_to_user_id = NULL WHERE assigned_to_user_id = {user.UserId};
+            UPDATE consultation_request SET received_by_user_id = NULL WHERE received_by_user_id = {user.UserId};
+            UPDATE audit_log SET user_id = NULL WHERE user_id = {user.UserId};
+            DELETE FROM personal_exercise WHERE user_id = {user.UserId};
+            DELETE FROM ai_workout_recommendation WHERE user_id = {user.UserId};
+            DELETE FROM member_body_metric WHERE user_id = {user.UserId};
+            DELETE FROM coach_training_history WHERE member_user_id = {user.UserId} OR coach_user_id = {user.UserId};
+            DELETE FROM membership WHERE user_id = {user.UserId}
+                OR payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
+            DELETE FROM payment_history WHERE payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
+            DELETE FROM payment WHERE user_id = {user.UserId};
+            DELETE FROM invoice WHERE user_id = {user.UserId};
+            DELETE FROM pending_registration WHERE email = {email};
+            DELETE FROM password_reset WHERE email = {email};
+            DELETE FROM [user] WHERE user_id = {user.UserId};
+            """);
+        await transaction.CommitAsync();
+    }
+
     public Task<int> DeleteUnconfirmedRegistrationsAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
@@ -300,6 +508,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
     {
         await db.Database.ExecuteSqlRawAsync(
             """
+            SET QUOTED_IDENTIFIER ON;
             IF OBJECT_ID(N'dbo.pending_registration', N'U') IS NULL
             BEGIN
                 CREATE TABLE pending_registration (
@@ -313,6 +522,20 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
                     expires_at     DATETIME2(0)  NOT NULL,
                     CONSTRAINT PK_pending_registration PRIMARY KEY (email)
                 );
+            END
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.indexes
+                WHERE name = N'UQ_user_phone' AND object_id = OBJECT_ID(N'dbo.[user]'))
+            BEGIN
+                CREATE UNIQUE INDEX UQ_user_phone ON [user] (phone) WHERE phone IS NOT NULL;
+            END
+            IF OBJECT_ID(N'dbo.pending_registration', N'U') IS NOT NULL
+               AND NOT EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = N'UQ_pending_registration_phone' AND object_id = OBJECT_ID(N'dbo.pending_registration'))
+            BEGIN
+                CREATE UNIQUE INDEX UQ_pending_registration_phone
+                    ON pending_registration (phone) WHERE phone IS NOT NULL;
             END
             """);
     }

@@ -54,7 +54,7 @@ public class UserAccountFlowService(
 
         var fullName = request.FullName?.Trim() ?? "";
         var email = request.Email?.Trim() ?? "";
-        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        var phone = AccountPhone.Require(request.Phone);
         var password = request.Password ?? "";
         var roleCode = request.RoleId?.Trim() ?? "";
 
@@ -66,11 +66,6 @@ public class UserAccountFlowService(
         if (email.Length is 0 or > 200 || !email.Contains('@'))
         {
             throw new InvalidOperationException("Email không hợp lệ.");
-        }
-
-        if (phone is { Length: > 20 })
-        {
-            throw new InvalidOperationException("Số điện thoại không quá 20 ký tự.");
         }
 
         if (roleCode is not ("RECEPTIONIST" or "COACH"))
@@ -86,6 +81,8 @@ public class UserAccountFlowService(
         {
             throw new InvalidOperationException("Email này đã được dùng.");
         }
+
+        await AccountPhone.EnsureUniqueAsync(db, phone);
 
         var role = await db.Roles.FirstOrDefaultAsync(item => item.RoleCode == roleCode)
             ?? throw new InvalidOperationException("Không tìm thấy vai trò.");
@@ -135,6 +132,11 @@ public class UserAccountFlowService(
     public async Task<UserMutationResponse> ModifyRoleAsync(string userId, string roleCode)
     {
         var user = await FindEditableUserAsync(userId);
+        if (roleCode == RoleCatalog.AdminCode)
+        {
+            throw new InvalidOperationException("Không cấp vai trò quản trị qua chức năng đổi vai trò.");
+        }
+
         var nextRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == roleCode)
             ?? throw new InvalidOperationException("Vai trò không hợp lệ.");
         if (user.RoleId == nextRole.RoleId)
