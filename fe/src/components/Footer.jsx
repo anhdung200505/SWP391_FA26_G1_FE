@@ -41,7 +41,7 @@ export default function Footer() {
 
   // ------------ STATE CỦA WIDGET HỖ TRỢ (MEMBER LOGGED IN) ------------
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [supportType, setSupportType] = useState('Góp ý / Hỏi đáp');
+  const [supportType, setSupportType] = useState('consultation'); // Mặc định khớp Enum Backend
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [helpLoading, setHelpLoading] = useState(false);
@@ -78,7 +78,7 @@ export default function Footer() {
     });
   };
 
-  // Submit Form Tư vấn ghi danh (Khách vãng lai / Guest)
+  // Submit Form Tư vấn ghi danh
   const handleSubmitEnrollment = async (e) => {
     e.preventDefault();
     setActionNotice('');
@@ -102,7 +102,7 @@ export default function Footer() {
       newErrors.email = 'Email không hợp lệ';
     }
 
-    if (!formData.age.trim()) {
+    if (!formData.age.toString().trim()) {
       newErrors.age = 'Vui lòng nhập độ tuổi';
     } else if (Number(formData.age) <= 0) {
       newErrors.age = 'Độ tuổi không hợp lệ';
@@ -128,8 +128,12 @@ export default function Footer() {
     };
 
     try {
-      await createEnrollmentConsultation(payload);
-      setIsSuccess(true);
+      const res = await createEnrollmentConsultation(payload);
+      if (res && res.message) {
+        setActionNotice(res.message);
+      } else {
+        setIsSuccess(true);
+      }
     } catch (requestError) {
       setActionNotice(requestError.message || 'Gửi yêu cầu thất bại. Vui lòng thử lại sau.');
     } finally {
@@ -137,7 +141,7 @@ export default function Footer() {
     }
   };
 
-  // Submit Form Tạo Yêu cầu Hỗ trợ Lễ tân
+  // Submit Form Tạo Yêu cầu Hỗ trợ Lễ tân (API POST /api/support-requests)
   const handleSubmitSupport = async (e) => {
     e.preventDefault();
     setHelpNotice({ type: '', msg: '' });
@@ -148,17 +152,20 @@ export default function Footer() {
     }
 
     setHelpLoading(true);
+
+    const supportPayload = {
+      memberUserId: String(user?.id || user?.userId || '0'),
+      requestType: supportType, // Chuẩn enum: "consultation", "account", "financial", "discount"
+      subject: subject.trim(),
+      content: content.trim(),
+    };
+
     try {
-      await createSupportRequest({
-        memberUserId: user?.id || user?.userId || '',
-        requestType: supportType,
-        subject: subject.trim(),
-        content: content.trim(),
-      });
+      await createSupportRequest(supportPayload);
 
       setHelpNotice({
         type: 'success',
-        msg: 'Đã gửi yêu cầu tới Lễ tân! Chúng tôi sẽ phản hồi bạn trong thời gian sớm nhất.',
+        msg: 'Đã gửi yêu cầu tới Lễ tân thành công! Chúng tôi sẽ phản hồi bạn sớm nhất.',
       });
       setSubject('');
       setContent('');
@@ -357,7 +364,7 @@ export default function Footer() {
                       </div>
                     </div>
 
-                    {/* 3. Email (BẮT BUỘC - REQUIRED) */}
+                    {/* 3. Email */}
                     <div className="relative">
                       <input
                         type="email"
@@ -419,7 +426,7 @@ export default function Footer() {
                       )}
                     </div>
 
-                    {/* 5. Độ tuổi học viên (BẮT BUỘC - REQUIRED) */}
+                    {/* 5. Độ tuổi học viên */}
                     <div className="relative">
                       <input
                         type="text"
@@ -490,12 +497,12 @@ export default function Footer() {
                   <select
                     value={supportType}
                     onChange={(e) => setSupportType(e.target.value)}
-                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white outline-none focus:border-[#e31b23]"
+                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white outline-none focus:border-[#e31b23] cursor-pointer"
                   >
-                    <option value="Góp ý / Hỏi đáp">Góp ý / Hỏi đáp chung</option>
-                    <option value="Sự cố tài khoản">Sự cố tài khoản & Thẻ</option>
-                    <option value="Lịch học & Đăng ký">Tư vấn Lịch học / Đổi lớp</option>
-                    <option value="Khiếu nại dịch vụ">Khiếu nại dịch vụ</option>
+                    <option value="consultation">💬 Tư vấn / Góp ý / Hỏi đáp</option>
+                    <option value="account">🔑 Sự cố tài khoản & Thẻ</option>
+                    <option value="financial">💰 Vấn đề Học phí & Thanh toán</option>
+                    <option value="discount">🎟️ Ưu đãi / Khuyến mãi</option>
                   </select>
                 </div>
 

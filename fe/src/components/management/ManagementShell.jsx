@@ -3,10 +3,12 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import logoImg from '../../assets/logo.png';
 import { useAuth } from '../../context/AuthContext';
 
+// DANH SÁCH MENU SIDEBAR - ĐÃ THÊM LỚP HỌC THỂ THAO
 const links = [
   { to: '/quan-ly', label: 'Bảng điều khiển', end: true },
   { to: '/quan-ly/tai-khoan', label: 'Tài khoản người dùng', end: false },
   { to: '/quan-ly/goi', label: 'Gói hội viên', end: false },
+  { to: '/quan-ly/lop-hoc', label: 'Lớp học thể thao', end: false },
 ];
 
 function navClass(isActive) {
@@ -128,13 +130,13 @@ function SidebarContent({ user, onLogout }) {
 
       <div className="mt-auto border-t border-white/10 p-4">
         <div className="rounded-2xl bg-white/5 px-3 py-3">
-          <p className="text-sm font-bold">{user?.fullName}</p>
-          <p className="text-xs text-white/55">{user?.roleName}</p>
+          <p className="text-sm font-bold">{user?.fullName || user?.userName || 'Quản trị viên'}</p>
+          <p className="text-xs text-white/55">{user?.roleName || 'Quản trị'}</p>
           <p className="mt-1 truncate text-xs text-white/40">{user?.email}</p>
           <button
             type="button"
             onClick={onLogout}
-            className="mt-3 w-full rounded-xl border border-white/15 px-3 py-2 text-sm font-bold text-white hover:bg-white/10"
+            className="mt-3 w-full rounded-xl border border-white/15 px-3 py-2 text-sm font-bold text-white hover:bg-white/10 cursor-pointer"
           >
             Đăng xuất
           </button>
