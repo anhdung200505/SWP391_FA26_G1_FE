@@ -262,9 +262,14 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             .ToList();
     }
 
-    public async Task<ClassRegistrationDto> SubmitRegistrationAsync(int memberUserId, CreateClassRegistrationRequest request)
+    // registeredBy để trống nghĩa là học viên tự đăng ký.
+    public async Task<ClassRegistrationDto> SubmitRegistrationAsync(
+        int memberUserId,
+        CreateClassRegistrationRequest request,
+        RegistrationActor? registeredBy = null)
     {
         var member = await FindActiveMemberAsync(memberUserId);
+        registeredBy ??= new RegistrationActor(member.UserId, "MEMBER");
         if (request.FullName is not null && string.IsNullOrWhiteSpace(request.FullName))
         {
             throw new RegistrationException("Họ tên không được để trống.");
@@ -325,7 +330,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         var pending = await FindPendingPaymentAsync(member.UserId, classId);
         if (pending is not null)
         {
-            return ToRegistrationDto(pending, item.ClassName, true);
+            return await ToRegistrationDtoAsync(pending, item.ClassName, true);
         }
 
         // shortcut: giới hạn mềm, hai request cùng lúc ở hai lớp khác nhau có thể vượt 1 đơn; đủ cho chặn spam giữ chỗ.
@@ -338,8 +343,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         {
             var discount = await MembershipDiscount.ClassDiscountPercentAsync(db, member.UserId);
             var tuition = MembershipDiscount.Apply(item.Tuition, discount);
-            var created = await CreatePendingPaymentAsync(member, request, classId, item.ClassName, tuition);
-            return ToRegistrationDto(created, item.ClassName, false);
+            var created = await CreatePendingPaymentAsync(member, request, classId, item.ClassName, tuition, registeredBy);
+            return await ToRegistrationDtoAsync(created, item.ClassName, false);
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
         {
@@ -351,7 +356,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 throw;
             }
 
-            return ToRegistrationDto(existing, item.ClassName, true);
+            return await ToRegistrationDtoAsync(existing, item.ClassName, true);
         }
     }
 
@@ -382,6 +387,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             .OrderByDescending(row => row.EnrolledAt)
             .ToListAsync();
 
+        var registeredBy = await ClassRegistrationLogs.LatestRegisteredByClassAsync(
+            db, memberUserId, rows.Select(row => row.ClassId).ToList());
         return rows
             .Select(row => new EnrolledClassDto(
                 row.ClassId.ToString(),
@@ -398,7 +405,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 row.CenterName,
                 row.RoomName,
                 row.CoachName,
-                row.Tuition))
+                row.Tuition,
+                registeredBy.GetValueOrDefault(row.ClassId)))
             .ToList();
     }
 
@@ -421,7 +429,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
     }
 
     // Hệ thống xác nhận đã nhận tiền (webhook payOS gọi hàm này). Gọi lặp lại không ghi thêm gì.
-    public async Task<RegistrationStatusDto> MarkPaymentPaidAsync(int paymentId, int? actorUserId = null)
+    // paymentMethod có giá trị khi lễ tân thu tiền tại quầy.
+    public async Task<RegistrationStatusDto> MarkPaymentPaidAsync(int paymentId, int? actorUserId = null, string? paymentMethod = null)
     {
         await using var transaction = await db.Database.BeginTransactionAsync();
         var payment = await db.Payments
@@ -484,6 +493,11 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
 
         payment.Status = "paid";
         payment.PaidAt = now;
+        if (paymentMethod is not null)
+        {
+            payment.PaymentMethod = paymentMethod;
+        }
+
         if (payment.Invoice is not null)
         {
             payment.Invoice.Status = "paid";
@@ -666,8 +680,12 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             PaymentMethod = methodLabel,
             PaidAt = now,
             Status = "paid",
+            RegisteredByUserId = user.UserId,
         };
         db.Payments.Add(payment);
+        ClassRegistrationLogs.Add(
+            db, user.UserId, trainingClass.ClassId, ClassRegistrationLogs.Register,
+            new RegistrationActor(user.UserId, "MEMBER"), now, payment);
         db.ClassEnrollments.Add(new ClassEnrollment
         {
             ClassId = trainingClass.ClassId,
@@ -707,10 +725,11 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             commitment,
             invoice.InvoiceCode,
             session.Token,
-            session.User);
+            session.User,
+            new RegisteredByDto(user.UserId.ToString(), user.FullName, "MEMBER"));
     }
 
-    private static readonly Dictionary<string, string> PaymentMethods = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly Dictionary<string, string> PaymentMethods = new(StringComparer.OrdinalIgnoreCase)
     {
         ["cash"] = "Tiền mặt",
         ["transfer"] = "Chuyển khoản",
@@ -741,7 +760,13 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             .Include(payment => payment.Invoice)
             .FirstOrDefaultAsync(payment => payment.UserId == userId && payment.ClassId == classId);
 
-    private async Task<Payment> CreatePendingPaymentAsync(UserAccount member, CreateClassRegistrationRequest request, int classId, string className, decimal tuition)
+    private async Task<Payment> CreatePendingPaymentAsync(
+        UserAccount member,
+        CreateClassRegistrationRequest request,
+        int classId,
+        string className,
+        decimal tuition,
+        RegistrationActor registeredBy)
     {
         var userId = member.UserId;
         // Số lấy từ SEQUENCE nên hai đơn tạo cùng lúc không bao giờ trùng mã.
@@ -792,7 +817,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         {
             db.ActivityLogs.Add(new ActivityLog
             {
-                ActorUserId = userId,
+                ActorUserId = registeredBy.UserId,
                 Action = "Cập nhật hồ sơ khi đăng ký lớp",
                 EntityName = "user",
                 EntityId = userId,
@@ -819,17 +844,21 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             Amount = tuition,
             PaymentMethod = "payos",
             Status = "pending",
+            RegisteredByUserId = registeredBy.UserId,
         };
         db.Payments.Add(payment);
+        ClassRegistrationLogs.Add(db, userId, classId, ClassRegistrationLogs.Register, registeredBy, now, payment);
         await db.SaveChangesAsync();
 
         db.ActivityLogs.Add(new ActivityLog
         {
-            ActorUserId = userId,
+            ActorUserId = registeredBy.UserId,
             Action = Shorten($"Đăng ký lớp {className}", 100),
             EntityName = "payment",
             EntityId = payment.PaymentId,
-            Detail = $"Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}",
+            Detail = registeredBy.UserId == userId
+                ? $"Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}"
+                : $"Đăng ký giùm {member.FullName} ({registeredBy.RoleCode}). Hóa đơn {invoice.InvoiceCode}, học phí {tuition:N0}",
             CreatedAt = now,
         });
         await db.SaveChangesAsync();
@@ -837,7 +866,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         return payment;
     }
 
-    private static ClassRegistrationDto ToRegistrationDto(Payment payment, string className, bool isExisting) =>
+    private async Task<ClassRegistrationDto> ToRegistrationDtoAsync(Payment payment, string className, bool isExisting) =>
         new(
             payment.PaymentId.ToString(),
             payment.Invoice!.InvoiceCode,
@@ -846,10 +875,16 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             payment.Amount,
             payment.Status,
             "",
-            isExisting);
+            isExisting,
+            await ClassRegistrationLogs.RegisteredByPaymentAsync(db, payment.PaymentId));
 
     // Người gọi phải Include(Invoice), nếu không InvoiceCode và InvoiceStatus sẽ rỗng.
-    private static RegistrationStatusDto ToRegistrationStatusDto(Payment payment, string className, string? enrollmentStatus, string message) =>
+    private static RegistrationStatusDto ToRegistrationStatusDto(
+        Payment payment,
+        string className,
+        string? enrollmentStatus,
+        string message,
+        RegisteredByDto? registeredBy) =>
         new RegistrationStatusDto(
             payment.PaymentId.ToString(),
             payment.Invoice?.InvoiceCode ?? "",
@@ -859,7 +894,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             payment.Status,
             payment.Invoice?.Status ?? "",
             enrollmentStatus,
-            message);
+            message,
+            registeredBy);
 
     // Đơn có thể không gắn lớp (thanh toán gói hội viên): khi đó không có tên lớp và trạng thái ghi danh.
     private async Task<RegistrationStatusDto> BuildStatusAsync(Payment payment)
@@ -875,7 +911,11 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 .FirstOrDefaultAsync();
         }
 
-        return ToRegistrationStatusDto(payment, className, enrollmentStatus, StatusMessage(payment.Status, enrollmentStatus, className));
+        var registeredBy = payment.ClassId is null
+            ? null
+            : await ClassRegistrationLogs.RegisteredByPaymentAsync(db, payment.PaymentId);
+        return ToRegistrationStatusDto(
+            payment, className, enrollmentStatus, StatusMessage(payment.Status, enrollmentStatus, className), registeredBy);
     }
 
     private static string StatusMessage(string paymentStatus, string? enrollmentStatus, string className) =>
@@ -934,7 +974,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
 
     private static DateTime HoldSince() => DateTime.Now.AddMinutes(-HoldMinutes);
 
-    private IQueryable<Payment> LiveHolds()
+    internal IQueryable<Payment> LiveHolds()
     {
         var since = HoldSince();
         return db.Payments

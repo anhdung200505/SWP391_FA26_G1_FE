@@ -467,6 +467,9 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         await using var transaction = await db.Database.BeginTransactionAsync();
         await db.SaveChangesAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM class_registration_log WHERE member_user_id = {user.UserId};
+            UPDATE class_registration_log SET performed_by_user_id = NULL WHERE performed_by_user_id = {user.UserId};
+            UPDATE payment SET registered_by_user_id = NULL WHERE registered_by_user_id = {user.UserId};
             DELETE FROM notification WHERE user_id = {user.UserId};
             DELETE FROM attendance WHERE user_id = {user.UserId};
             DELETE FROM slot_registration WHERE user_id = {user.UserId};
@@ -477,12 +480,17 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             UPDATE support_request SET assigned_to_user_id = NULL WHERE assigned_to_user_id = {user.UserId};
             UPDATE consultation_request SET received_by_user_id = NULL WHERE received_by_user_id = {user.UserId};
             UPDATE audit_log SET user_id = NULL WHERE user_id = {user.UserId};
+            DELETE FROM personal_exercise WHERE user_id = {user.UserId};
+            DELETE FROM ai_workout_recommendation WHERE user_id = {user.UserId};
+            DELETE FROM member_body_metric WHERE user_id = {user.UserId};
+            DELETE FROM coach_training_history WHERE member_user_id = {user.UserId} OR coach_user_id = {user.UserId};
             DELETE FROM membership WHERE user_id = {user.UserId}
                 OR payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
             DELETE FROM payment_history WHERE payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
             DELETE FROM payment WHERE user_id = {user.UserId};
             DELETE FROM invoice WHERE user_id = {user.UserId};
             DELETE FROM pending_registration WHERE email = {email};
+            DELETE FROM password_reset WHERE email = {email};
             DELETE FROM [user] WHERE user_id = {user.UserId};
             """);
         await transaction.CommitAsync();

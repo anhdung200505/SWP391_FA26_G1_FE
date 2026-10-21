@@ -25,6 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentHistory> PaymentHistories => Set<PaymentHistory>();
+    public DbSet<ClassRegistrationLog> ClassRegistrationLogs => Set<ClassRegistrationLog>();
     public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
     public DbSet<TrainingPlan> TrainingPlans => Set<TrainingPlan>();
     public DbSet<MemberBodyMetric> BodyMetrics => Set<MemberBodyMetric>();
@@ -117,6 +118,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasForeignKey(payment => payment.ClassId);
             entity.Property(payment => payment.Amount).HasPrecision(18, 2);
         });
+
+        modelBuilder.Entity<ClassRegistrationLog>()
+            .HasOne(item => item.Payment)
+            .WithMany()
+            .HasForeignKey(item => item.PaymentId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<SupportRequest>(entity =>
         {
