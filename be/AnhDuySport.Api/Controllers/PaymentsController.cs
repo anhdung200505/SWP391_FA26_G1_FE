@@ -6,19 +6,19 @@ using PayOS.Models.Webhooks;
 
 namespace AnhDuySport.Api.Controllers;
 
-[AllowAnonymous]
 [ApiController]
 [Route("api/payments")]
-public class PaymentsController(PayOsPaymentService payments) : ControllerBase
+public class PaymentsController(PayOsPaymentService payments, CurrentActor actor) : ControllerBase
 {
+    [Authorize(Roles = "MEMBER")]
     [HttpPost("payos")]
     [EndpointSummary("Tạo link thanh toán payOS cho một lớp")]
-    [EndpointDescription("Học viên chưa đăng nhập được, truyền memberUserId. Trả checkoutUrl. Nếu còn đơn pending thì trả lại link cũ.")]
+    [EndpointDescription("Chỉ học viên đã đăng nhập. Đơn gắn với tài khoản trong token, không tạo tài khoản mới.")]
     public async Task<ActionResult<PayOsPaymentDto>> Create(CreatePayOsPaymentRequest request)
     {
         try
         {
-            return Ok(await payments.CreateAsync(request));
+            return Ok(await payments.CreateAsync(request, actor.UserId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -26,13 +26,14 @@ public class PaymentsController(PayOsPaymentService payments) : ControllerBase
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpGet("{paymentId}")]
     [EndpointSummary("Xem trạng thái một thanh toán")]
     public async Task<ActionResult<PayOsPaymentDto>> Access(string paymentId)
     {
         try
         {
-            return Ok(await payments.AccessAsync(paymentId));
+            return Ok(await payments.AccessAsync(paymentId, actor.UserId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -40,6 +41,7 @@ public class PaymentsController(PayOsPaymentService payments) : ControllerBase
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpPost("{paymentId}/cancel")]
     [EndpointSummary("Ghi cancel khi không thanh toán")]
     [EndpointDescription("Chỉ đơn pending mới chuyển cancel. Đơn paid giữ nguyên. Không xóa payment hay lịch sử.")]
@@ -47,7 +49,7 @@ public class PaymentsController(PayOsPaymentService payments) : ControllerBase
     {
         try
         {
-            return Ok(await payments.CancelAsync(paymentId));
+            return Ok(await payments.CancelAsync(paymentId, actor.UserId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -55,6 +57,7 @@ public class PaymentsController(PayOsPaymentService payments) : ControllerBase
         }
     }
 
+    [AllowAnonymous]
     [HttpPost("payos/webhook")]
     [EndpointSummary("payOS báo thanh toán thành công")]
     [EndpointDescription("Chỉ cập nhật paid khi chữ ký checksum hợp lệ và số tiền khớp. payOS không gửi JWT.")]
