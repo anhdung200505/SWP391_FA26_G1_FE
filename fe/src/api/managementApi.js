@@ -48,7 +48,6 @@ async function request(path, options = {}) {
 // API XÁC THỰC (AUTHENTICATION)
 // ==========================================
 
-// POST /api/auth/login - Đăng nhập Quản trị & Lễ tân
 export function loginStaff(email, password, portal = 'staff') {
   return request('/auth/login', {
     method: 'POST',
@@ -57,7 +56,6 @@ export function loginStaff(email, password, portal = 'staff') {
   });
 }
 
-// POST /api/auth/member-login - Đăng nhập Học viên
 export function loginMember(email, password, portal = 'member') {
   return request('/auth/member-login', {
     method: 'POST',
@@ -66,7 +64,6 @@ export function loginMember(email, password, portal = 'member') {
   });
 }
 
-// POST /api/auth/register - Đăng ký trực tiếp
 export function registerGuest(payload) {
   return request('/auth/register', {
     method: 'POST',
@@ -75,7 +72,6 @@ export function registerGuest(payload) {
   });
 }
 
-// POST /api/auth/register/otp - Gửi mã OTP đăng ký
 export function sendRegisterOtp(payload) {
   return request('/auth/register/otp', {
     method: 'POST',
@@ -84,7 +80,6 @@ export function sendRegisterOtp(payload) {
   });
 }
 
-// POST /api/auth/register/confirm - Xác nhận mã OTP đăng ký
 export function confirmRegisterOtp(email, code) {
   return request('/auth/register/confirm', {
     method: 'POST',
@@ -105,18 +100,40 @@ export function getSports(centerId = '1') {
   return request(`/catalog/centers/${centerId}/sports`);
 }
 
-// Alias bổ sung cho getSports để tương thích các component cũ/mới
 export function getSportsByCenter(centerId = '1') {
   return getSports(centerId);
 }
 
 export function getClasses(centerId, sportId) {
-  const query = new URLSearchParams({ centerId, sportId });
-  return request(`/catalog/classes?${query}`);
+  const params = new URLSearchParams();
+  if (centerId) params.append('centerId', centerId);
+  if (sportId) params.append('sportId', sportId);
+
+  const queryString = params.toString();
+  return request(`/catalog/classes${queryString ? `?${queryString}` : ''}`);
 }
 
 export function getClassDetail(classId) {
   return request(`/catalog/classes/${classId}`);
+}
+
+// ==========================================
+// API ĐĂNG KÝ & THANH TOÁN (REGISTRATIONS & PAYMENTS)
+// ==========================================
+
+export function registerClass(payload) {
+  return request('/class-registrations', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getMyClassRegistrations() {
+  return request('/class-registrations/mine');
+}
+
+export function getClassRegistrationStatus(paymentId) {
+  return request(`/class-registrations/${paymentId}`);
 }
 
 export function payRegistration(payload) {
@@ -125,6 +142,17 @@ export function payRegistration(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// HÀM HỦY ĐƠN PENDING (GIÚP TẠO ĐƠN MỚI KHÔNG BỊ KHÓA TRÙNG)
+export function cancelPayment(paymentId) {
+  return request(`/payments/${paymentId}/cancel`, {
+    method: 'POST',
+  });
+}
+
+// ==========================================
+// API QUẢN LÝ (MANAGEMENT & USERS)
+// ==========================================
 
 export function createStaffAccount(payload) {
   return request('/user-accounts', {
@@ -193,9 +221,72 @@ export function updateMemberProfile(memberUserId, payload) {
   });
 }
 
+// ==========================================
+// API YÊU CẦU HỖ TRỢ & TƯ VẤN (SUPPORT REQUESTS)
+// ==========================================
+
 export function createEnrollmentConsultation(payload) {
   return request('/support-requests/enrollment', {
     method: 'POST',
+    anonymous: true,
     body: JSON.stringify(payload),
   });
+}
+
+export function createSupportRequest(payload) {
+  return request('/support-requests', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// ==========================================
+// API QUẢN LÝ GÓI HỘI VIÊN & GIA HẠN PAYOS (MEMBERSHIP & RENEWALS)
+// ==========================================
+
+// 1. Lấy gói đang dùng, lịch sử & danh sách gói đang bán
+export function getMemberMembership(memberUserId) {
+  return request(`/members/${memberUserId}/membership`);
+}
+
+// 2. Lấy hotline tư vấn chăm sóc khách hàng
+export function getConsultationContact(memberUserId) {
+  return request(`/members/${memberUserId}/consultation-contact`);
+}
+
+// 3. Chọn gói & tạo liên kết/mã QR thanh toán PayOS
+export function createMembershipRenewal(memberUserId, packageId) {
+  return request(`/members/${memberUserId}/membership/renewals`, {
+    method: 'POST',
+    body: JSON.stringify({ packageId }),
+  });
+}
+
+// 4. Kiểm tra & xác nhận cập nhật hạn gói sau khi thanh toán PayOS
+export function confirmMembershipRenewal(memberUserId, paymentId) {
+  return request(`/members/${memberUserId}/membership/renewals/${paymentId}/confirm`, {
+    method: 'POST',
+  });
+}
+
+// ==========================================
+// API QUẢN TRỊ TRUNG TÂM XỬ LÝ ĐƠN HỖ TRỢ (ADMIN DECISION)
+// ==========================================
+
+// 1. Quản trị trung tâm lấy danh sách các yêu cầu Lễ tân chuyển lên
+export function getEscalatedSupportRequests() {
+  return request('/support-requests/financial');
+}
+
+// 2. Quản trị trung tâm ra quyết định phê duyệt (approved) hoặc từ chối (rejected)
+export function processSupportRequestDecision(requestId, { decision, note }) {
+  return request(`/support-requests/${requestId}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision, note }),
+  });
+}
+
+// Lấy danh sách Huấn luyện viên theo bộ môn
+export function getCoachesBySport(sportId) {
+  return request(`/catalog/sports/${sportId}/coaches`);
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
 import arenaImg from '../assets/facilities/facility-arena-1024x683.webp';
@@ -7,10 +7,9 @@ import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { register, sendOtp, confirmOtp } = useAuth();
+  const { sendOtp, confirmOtp } = useAuth();
 
-  const [useOtp, setUseOtp] = useState(true);
-  const [step, setStep] = useState('fill');
+  const [step, setStep] = useState('fill'); // 'fill' | 'otp'
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -18,13 +17,42 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Submit Bước 1
+  // State quản lý đếm ngược gửi lại OTP
+  const [countdown, setCountdown] = useState(0);
+
+  // Effect đếm ngược thời gian chờ gửi lại OTP (60s)
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  // Hàm gửi thông tin tạo/gửi lại mã OTP
+  const requestOtp = async () => {
+    const payload = {
+      fullName: fullName.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      password,
+    };
+
+    await sendOtp(payload);
+    setCountdown(60); // Đặt thời gian chờ 60s
+  };
+
+  // Submit Bước 1: Gửi thông tin nhận OTP
   const handleSubmitInfo = async (event) => {
     event.preventDefault();
     if (saving) return;
     setError('');
+    setSuccessMsg('');
 
     if (!fullName.trim() || !email.trim() || !phone.trim() || !password) {
       setError('Vui lòng điền đầy đủ các thông tin bắt buộc.');
@@ -37,36 +65,39 @@ export default function RegisterPage() {
     }
 
     setSaving(true);
-    const payload = {
-      fullName: fullName.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      password,
-    };
-
     try {
-      if (useOtp) {
-        // Gửi OTP tới Backend
-        await sendOtp(payload);
-        setStep('otp');
-      } else {
-        // Đăng ký trực tiếp vào Database
-        await register(payload);
-        alert('Đăng ký tài khoản thành công!');
-        navigate('/home');
-      }
+      await requestOtp();
+      setStep('otp');
     } catch (requestError) {
-      setError(requestError.message || 'Đăng ký không thành công.');
+      setError(requestError.message || 'Không thể gửi mã OTP. Vui lòng kiểm tra lại thông tin.');
     } finally {
       setSaving(false);
     }
   };
 
-  // Submit Bước 2 (Xác nhận OTP)
+  // Xử lý gửi lại mã OTP ở Bước 2
+  const handleResendOtp = async () => {
+    if (countdown > 0 || saving) return;
+    setError('');
+    setSuccessMsg('');
+    setSaving(true);
+
+    try {
+      await requestOtp();
+      setSuccessMsg('Đã gửi lại mã OTP mới tới email của bạn.');
+    } catch (requestError) {
+      setError(requestError.message || 'Chưa thể gửi lại OTP. Vui lòng thử lại sau.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Submit Bước 2: Xác nhận OTP -> Tự động Đăng nhập & Chuyển hướng
   const handleConfirmOtp = async (event) => {
     event.preventDefault();
     if (saving) return;
     setError('');
+    setSuccessMsg('');
 
     if (!otpCode.trim()) {
       setError('Vui lòng nhập mã OTP.');
@@ -75,22 +106,16 @@ export default function RegisterPage() {
 
     setSaving(true);
 
-    // Gửi đầy đủ thông tin kèm code OTP lên Backend để hoàn tất lưu DB
-    const payloadConfirm = {
-      email: email.trim(),
-      code: otpCode.trim(),
-      fullName: fullName.trim(),
-      phone: phone.trim(),
-      password,
-    };
-
     try {
-      await confirmOtp(payloadConfirm);
-      alert('Xác nhận OTP thành công! Tài khoản đã được kích hoạt.');
-      navigate('/home');
+      // confirmOtp sẽ trả về token và lưu session đăng nhập tự động
+      await confirmOtp({ email: email.trim(), code: otpCode.trim() });
+      setSuccessMsg('Xác nhận OTP thành công! Đang tự động đăng nhập...');
+
+      setTimeout(() => {
+        navigate('/hoc-vien-dashboard');
+      }, 1200);
     } catch (requestError) {
       setError(requestError.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
-    } finally {
       setSaving(false);
     }
   };
@@ -147,7 +172,7 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      {/* FORM ĐĂNG KÝ BÊN PHẢI */}
+      {/* FORM BÊN PHẢI */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 bg-[#12141d] relative z-10 my-auto">
         <div className="w-full max-w-md bg-[#181d2a] rounded-2xl p-8 sm:p-10 border border-gray-800 shadow-2xl">
           <div className="lg:hidden mb-6 flex justify-center">
@@ -232,19 +257,6 @@ export default function RegisterPage() {
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="useOtp"
-                  checked={useOtp}
-                  onChange={(e) => setUseOtp(e.target.checked)}
-                  className="w-4 h-4 rounded accent-[#e31b23] cursor-pointer"
-                />
-                <label htmlFor="useOtp" className="text-xs font-semibold text-gray-300 cursor-pointer select-none">
-                  Xác minh bằng mã OTP qua Email
-                </label>
-              </div>
-
               {error && (
                 <div className="rounded-xl bg-red-950/60 border border-red-800/80 px-4 py-2.5 text-xs font-semibold text-red-300">
                   ⚠️ {error}
@@ -256,15 +268,28 @@ export default function RegisterPage() {
                 disabled={saving}
                 className="w-full rounded-xl bg-[#e31b23] hover:bg-[#c4131a] px-4 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-red-900/40 cursor-pointer disabled:opacity-60 transition-all transform active:scale-[0.99] mt-2"
               >
-                {saving ? 'Đang kết nối API...' : useOtp ? 'Gửi mã OTP xác nhận' : 'Đăng ký ngay'}
+                {saving ? 'Đang gửi mã OTP...' : 'Tiếp tục (Nhận OTP)'}
               </button>
             </form>
           ) : (
             <form className="space-y-4" onSubmit={handleConfirmOtp}>
               <div>
-                <label className="block text-xs font-extrabold uppercase tracking-wider text-gray-300 mb-1.5">
-                  Nhập mã OTP từ Email
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-gray-300">
+                    Nhập mã OTP từ Email
+                  </label>
+
+                  {/* NÚT GỬI LẠI MÃ OTP WITH COUNTDOWN */}
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={countdown > 0 || saving}
+                    className="text-[11px] font-bold text-[#e31b23] hover:underline disabled:text-gray-500 disabled:no-underline cursor-pointer transition-colors"
+                  >
+                    {countdown > 0 ? `Gửi lại mã (${countdown}s)` : 'Gửi lại mã OTP'}
+                  </button>
+                </div>
+
                 <input
                   type="text"
                   value={otpCode}
@@ -274,9 +299,16 @@ export default function RegisterPage() {
                 />
               </div>
 
+              {/* KHỐI THÔNG BÁO LỖI VÀ THÀNH CÔNG */}
               {error && (
                 <div className="rounded-xl bg-red-950/60 border border-red-800/80 px-4 py-2.5 text-xs font-semibold text-red-300">
                   ⚠️ {error}
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="rounded-xl bg-emerald-950/70 border border-emerald-700/80 px-4 py-3 text-xs font-bold text-emerald-300 flex items-center gap-2">
+                  <span>✓</span> {successMsg}
                 </div>
               )}
 
@@ -290,8 +322,12 @@ export default function RegisterPage() {
 
               <button
                 type="button"
-                onClick={() => { setStep('fill'); setError(''); }}
-                className="w-full text-xs font-bold text-gray-400 hover:text-white transition-colors"
+                onClick={() => {
+                  setStep('fill');
+                  setError('');
+                  setSuccessMsg('');
+                }}
+                className="w-full text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer"
               >
                 ← Quay lại sửa thông tin
               </button>
