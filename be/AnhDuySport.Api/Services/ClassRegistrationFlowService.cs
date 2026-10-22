@@ -1073,7 +1073,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             await RequestedSlotAsync(payment.RequestedSlotId),
             payment.Amount - payment.UpgradeAmount,
             await ClassMembershipBonus.QuoteOfPaymentAsync(db, payment),
-            linked?.QrCode ?? "");
+            linked?.QrCode ?? "",
+            PayOsQrImage.ToDataUrl(linked?.QrCode));
     }
 
     // Người gọi phải Include(Invoice), nếu không InvoiceCode và InvoiceStatus sẽ rỗng.
