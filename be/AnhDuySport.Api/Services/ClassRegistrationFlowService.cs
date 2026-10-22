@@ -367,6 +367,90 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
     }
 
+    // Đơn chờ thanh toán còn hạn của học viên (đăng ký lớp và mua gói), mới nhất lên đầu.
+    public async Task<IReadOnlyList<PendingCheckoutDto>> AccessPendingCheckoutsAsync(int memberUserId)
+    {
+        var result = new List<(DateTime IssuedAt, PendingCheckoutDto Item)>();
+
+        var classPayments = await LiveHolds()
+            .Where(payment => payment.UserId == memberUserId)
+            .Select(payment => new
+            {
+                payment.PaymentId,
+                payment.Invoice!.IssuedAt,
+                ClassName = payment.Class!.ClassName,
+                PackageName = payment.UpgradePackageId == null
+                    ? null
+                    : db.MembershipPackages
+                        .Where(item => item.MembershipPackageId == payment.UpgradePackageId)
+                        .Select(item => item.PackageName)
+                        .FirstOrDefault(),
+            })
+            .ToListAsync();
+        foreach (var row in classPayments)
+        {
+            // Đơn chưa có link (vd. payOS lỗi lúc tạo) thì thử tạo lại.
+            var linked = await payOs.EnsureRegistrationLinkAsync(row.PaymentId, PaymentTimeout.ExpiresAt(row.IssuedAt));
+            var payment = linked ?? await db.Payments.AsNoTracking().FirstAsync(item => item.PaymentId == row.PaymentId);
+            result.Add((row.IssuedAt, new PendingCheckoutDto(
+                "class",
+                payment.PaymentId.ToString(),
+                await db.Invoices.Where(item => item.InvoiceId == payment.InvoiceId).Select(item => item.InvoiceCode).FirstAsync(),
+                payment.Amount,
+                payment.ClassId?.ToString(),
+                row.ClassName,
+                payment.UpgradePackageId?.ToString(),
+                row.PackageName,
+                payment.CheckoutUrl ?? "",
+                payment.QrCode ?? "",
+                PayOsQrImage.ToDataUrl(payment.QrCode),
+                PaymentTimeout.SecondsLeft(row.IssuedAt))));
+        }
+
+        var since = DateTime.Now.AddMinutes(-PaymentTimeout.Minutes);
+        var membershipPayments = await db.Memberships
+            .AsNoTracking()
+            .Where(item => item.UserId == memberUserId
+                && item.Status == "pending"
+                && item.Payment!.Status == "pending"
+                && item.Payment.ClassId == null
+                && item.Payment.Invoice!.IssuedAt > since)
+            .Select(item => new
+            {
+                item.Payment!.PaymentId,
+                item.Payment.Invoice!.InvoiceCode,
+                item.Payment.Invoice.IssuedAt,
+                item.Payment.Amount,
+                item.Payment.CheckoutUrl,
+                item.Payment.QrCode,
+                item.MembershipPackageId,
+                item.PlanName,
+            })
+            .ToListAsync();
+        foreach (var row in membershipPayments.Where(row => !string.IsNullOrWhiteSpace(row.QrCode)))
+        {
+            result.Add((row.IssuedAt, new PendingCheckoutDto(
+                "membership",
+                row.PaymentId.ToString(),
+                row.InvoiceCode,
+                row.Amount,
+                null,
+                null,
+                row.MembershipPackageId?.ToString(),
+                row.PlanName,
+                row.CheckoutUrl ?? "",
+                row.QrCode ?? "",
+                PayOsQrImage.ToDataUrl(row.QrCode),
+                PaymentTimeout.SecondsLeft(row.IssuedAt))));
+        }
+
+        return result
+            .Where(row => row.Item.ExpiresInSeconds > 0)
+            .OrderByDescending(row => row.IssuedAt)
+            .Select(row => row.Item)
+            .ToList();
+    }
+
     // Học viên xem các lớp mình đã ghi danh (enrolled), mới đăng ký nhất lên đầu.
     public async Task<IReadOnlyList<EnrolledClassDto>> AccessEnrolledClassesAsync(int memberUserId)
     {
