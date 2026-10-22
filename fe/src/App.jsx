@@ -82,11 +82,14 @@ export default function App() {
             {/* Khai báo các route Quản lý (ADMIN) */}
             <Route path="/quan-ly" element={<Protected allowedRoles={['ADMIN']}><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected allowedRoles={['ADMIN']}><UserAccountListPage /></Protected>} />
+            
+            {/* Route chi tiết tài khoản */}
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected allowedRoles={['ADMIN']}><UserAccountPage /></Protected>} />
+            
             <Route path="/quan-ly/goi" element={<Protected allowedRoles={['ADMIN']}><PackageListPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="create" /></Protected>} />
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
-            <Route path="/quan-ly/lop-hoc" element={<ClassListPage />} />
+            <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />
             
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
