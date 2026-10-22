@@ -286,6 +286,10 @@ export function processSupportRequestDecision(requestId, { decision, note }) {
   });
 }
 
+export function getMySupportRequests() {
+  return request('/support-requests/mine');
+}
+
 // Lấy danh sách Huấn luyện viên theo bộ môn
 export function getCoachesBySport(sportId) {
   return request(`/catalog/sports/${sportId}/coaches`);

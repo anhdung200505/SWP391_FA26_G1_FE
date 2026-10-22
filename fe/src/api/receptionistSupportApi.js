@@ -104,8 +104,14 @@ export function classifySupportRequest(requestId, category) {
   });
 }
 
+export function resolveMemberSupport(requestId, note) {
+  return request(`/support-requests/${requestId}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
 /**
- * 7. Lễ tân xử lý sự cố tài khoản (Gửi email tự động cho học viên)
  * POST /api/support-requests/{requestId}/resolve-account
  * Payload: { note: "Nội dung giải quyết..." }
  */

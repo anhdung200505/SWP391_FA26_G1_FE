@@ -127,10 +127,10 @@ public class CustomerServiceFlowService(
         }
 
         var current = ReadEnrollment(item.Description);
-        var title = request.Title is null ? item.Title : RequireText(request.Title, "Nhập tiêu đề tư vấn ghi danh.", 200);
-        var fullName = request.FullName is null ? current.FullName : RequireText(request.FullName, "Nhập họ và tên.", 200);
-        var phone = request.Phone is null ? current.Phone : AccountPhone.Require(request.Phone);
-        var email = request.Email is null ? current.Email : NormalizeOptionalEmail(request.Email);
+        var title = BlankAsMissing(request.Title) is null ? item.Title : RequireText(request.Title, "Nhập tiêu đề tư vấn ghi danh.", 200);
+        var fullName = BlankAsMissing(request.FullName) is null ? current.FullName : RequireText(request.FullName, "Nhập họ và tên.", 200);
+        var phone = BlankAsMissing(request.Phone) is null ? current.Phone : AccountPhone.Require(request.Phone);
+        var email = BlankAsMissing(request.Email) is null ? current.Email : NormalizeOptionalEmail(request.Email);
         var sports = request.Sports is null ? current.Sports : NormalizeSports(request.Sports);
         var age = request.Age ?? current.Age;
         if (age is < 1 or > 99)
@@ -152,19 +152,17 @@ public class CustomerServiceFlowService(
             var result = $"Lễ tân đã xử lý tư vấn khách hàng. {resolution}";
             if (item.Member is not null)
             {
-                var emailNotice = await emailNotifications.SendSupportResultEmailAsync(item.Member, title, result);
-                db.Notifications.Add(new AccountNotification
-                {
-                    UserId = item.Member.UserId,
-                    Title = emailNotice.Subject,
-                    Content = emailNotice.Body,
-                    IsRead = false,
-                    CreatedAt = now,
-                });
+                await TryNotifyMemberAsync(item.Member, title, result, now);
             }
             else if (email.Contains('@'))
             {
-                await emailNotifications.SendGuestResultEmailAsync(email, fullName, title, result);
+                try
+                {
+                    await emailNotifications.SendGuestResultEmailAsync(email, fullName, title, result);
+                }
+                catch (InvalidOperationException)
+                {
+                }
             }
             item.Status = "resolved";
             item.ReceptionistCategory = "consultation";
@@ -219,6 +217,58 @@ public class CustomerServiceFlowService(
         var ids = await db.SupportRequests
             .AsNoTracking()
             .Where(item => item.MemberUserId == member.UserId)
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(item => item.SupportRequestId)
+            .ToListAsync();
+        return await LoadDtosAsync(ids);
+    }
+
+    public async Task<IReadOnlyList<SupportRequestDto>> AccessMyRequestsAsync()
+    {
+        if (actor.UserId == 0)
+        {
+            throw new UnauthorizedAccessException("Phiên đăng nhập không hợp lệ.");
+        }
+
+        return await AccessMemberRequestsAsync(actor.UserId.ToString());
+    }
+
+    public async Task<SupportRequestResultDto> ResolveMemberRequestAsync(string requestId, SupportResultRequest request)
+    {
+        var note = RequireText(request.Note, "Nhập kết quả xử lý cho học viên.", 2000);
+        var item = await FindRequestAsync(requestId);
+        EnsureMemberRequest(item);
+        if (item.Status is not ("pending_receptionist" or "classified"))
+        {
+            throw new InvalidOperationException("Đơn này không còn trong hàng chờ lễ tân.");
+        }
+
+        if (item.SystemCategory == "financial_discount")
+        {
+            throw new InvalidOperationException("Đơn tài chính hoặc giảm giá hãy chuyển lên quản trị trung tâm.");
+        }
+
+        var category = item.ReceptionistCategory is "account_issue" or "consultation"
+            ? item.ReceptionistCategory
+            : "consultation";
+        var result = category == "account_issue"
+            ? $"Lễ tân đã xử lý sự cố tài khoản. {note}"
+            : $"Lễ tân đã tư vấn. {note}";
+        return await SaveResultAsync(
+            requestId,
+            expectedCategory: "consultation_account",
+            expectedStatus: item.Status,
+            expectedReceptionistCategory: null,
+            decision: null,
+            receptionistCategory: category,
+            result: result,
+            action: "Xử lý yêu cầu của học viên");
+    }
+
+    public async Task<IReadOnlyList<SupportRequestDto>> AccessAllRequestsAsync()
+    {
+        var ids = await db.SupportRequests
+            .AsNoTracking()
             .OrderByDescending(item => item.CreatedAt)
             .Select(item => item.SupportRequestId)
             .ToListAsync();
@@ -462,11 +512,13 @@ public class CustomerServiceFlowService(
     {
         var ids = await db.SupportRequests
             .AsNoTracking()
-            .Where(item => item.Status == "pending_receptionist" || item.Status == "classified")
+            .Where(item => enrollment
+                ? item.Status == "pending_receptionist" || item.Status == "classified" || item.Status == "resolved"
+                : item.Status == "pending_receptionist" || item.Status == "classified" || item.Status == "resolved" || item.Status == "pending_manager")
             .Where(item => enrollment
                 ? item.ClassificationReason != null && item.ClassificationReason.StartsWith(EnrollmentSource)
                 : item.ClassificationReason == null || !item.ClassificationReason.StartsWith(EnrollmentSource))
-            .OrderBy(item => item.Status == "classified")
+            .OrderBy(item => item.Status == "resolved" || item.Status == "pending_manager")
             .ThenByDescending(item => item.CreatedAt)
             .Select(item => item.SupportRequestId)
             .ToListAsync();
@@ -508,7 +560,6 @@ public class CustomerServiceFlowService(
 
         var handlerId = RequireActor();
         var member = item.Member ?? throw new KeyNotFoundException("Không tìm thấy học viên.");
-        var email = await emailNotifications.SendSupportResultEmailAsync(member, item.Title, result);
         var now = DateTime.Now;
         item.Status = "resolved";
         item.AssignedToUserId = handlerId;
@@ -516,14 +567,7 @@ public class CustomerServiceFlowService(
         item.ReceptionistCategory = receptionistCategory ?? item.ReceptionistCategory;
         item.ResolutionNote = result;
         item.ResolvedAt = now;
-        db.Notifications.Add(new AccountNotification
-        {
-            UserId = member.UserId,
-            Title = email.Subject,
-            Content = email.Body,
-            IsRead = false,
-            CreatedAt = now,
-        });
+        var email = await TryNotifyMemberAsync(member, item.Title, result, now);
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = handlerId,
@@ -668,6 +712,30 @@ public class CustomerServiceFlowService(
         "account" => "Tài khoản",
         _ => requestType,
     };
+
+    private static string? BlankAsMissing(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private async Task<EmailDto> TryNotifyMemberAsync(UserAccount member, string title, string result, DateTime now)
+    {
+        try
+        {
+            var email = await emailNotifications.SendSupportResultEmailAsync(member, title, result);
+            db.Notifications.Add(new AccountNotification
+            {
+                UserId = member.UserId,
+                Title = email.Subject,
+                Content = email.Body,
+                IsRead = false,
+                CreatedAt = now,
+            });
+            return email;
+        }
+        catch (InvalidOperationException)
+        {
+            return new EmailDto(member.Email ?? "", "[AnhDuy Sport] Yêu cầu hỗ trợ đã được xử lý", result);
+        }
+    }
 
     private static string RequireText(string? value, string message, int max)
     {

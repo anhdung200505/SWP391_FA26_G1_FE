@@ -4,7 +4,39 @@ import {
   getServiceSupportRequests,
   updateEnrollmentConsultation,
   escalateSupportRequest,
+  resolveMemberSupport,
 } from '../../api/receptionistSupportApi';
+
+function readEnrollmentLine(description, prefix) {
+  const line = String(description || '')
+    .split(/\r?\n/)
+    .find((row) => row.startsWith(prefix));
+  return line ? line.slice(prefix.length).trim() : '';
+}
+
+function resultHeadline(item) {
+  if (item?.status === 'resolved' && item?.decision === 'approved') return 'Quản trị đã chấp nhận';
+  if (item?.status === 'resolved' && item?.decision === 'rejected') return 'Quản trị đã từ chối';
+  if (item?.status === 'resolved') return 'Đã xử lý';
+  if (item?.status === 'pending_manager') return 'Đã chuyển quản trị';
+  return 'Đang chờ xử lý';
+}
+
+function enrollmentFormFrom(item) {
+  const description = item.description || '';
+  const ageText = readEnrollmentLine(description, 'Độ tuổi:');
+  const sports = readEnrollmentLine(description, 'Môn:');
+  return {
+    title: item.title || '',
+    fullName: readEnrollmentLine(description, 'Họ tên:') || item.memberName || '',
+    phone: readEnrollmentLine(description, 'Số điện thoại:') || '',
+    email: readEnrollmentLine(description, 'Email:') || item.memberEmail || '',
+    sports: sports === 'Chưa chọn' ? '' : sports,
+    age: /^\d+$/.test(ageText) ? ageText : '',
+    note: readEnrollmentLine(description, 'Gói quan tâm:'),
+    resolutionNote: '',
+  };
+}
 
 export default function ReceptionistPage() {
   const [activeTab, setActiveTab] = useState('enrollment'); // 'enrollment' | 'service'
@@ -77,16 +109,7 @@ export default function ReceptionistPage() {
     setActionNote('');
 
     if (type === 'edit_enrollment') {
-      setEnrollForm({
-        title: item.title || '',
-        fullName: item.memberName || item.fullName || '',
-        phone: item.memberPhone || item.phone || '',
-        email: item.memberEmail || item.email || '',
-        sports: item.sports || '',
-        age: item.age || '',
-        note: item.description || item.note || '',
-        resolutionNote: item.resolutionNote || '',
-      });
+      setEnrollForm(enrollmentFormFrom(item));
     }
   };
 
@@ -99,7 +122,7 @@ export default function ReceptionistPage() {
   // 1. Xử lý Cập nhật đơn tư vấn ghi danh
   const handleUpdateEnrollment = async (e) => {
     e.preventDefault();
-    if (!selectedItem) return;
+    if (!selectedItem || !enrollForm.resolutionNote.trim()) return;
     setSubmitting(true);
     try {
       await updateEnrollmentConsultation(selectedItem.id, {
@@ -117,6 +140,26 @@ export default function ReceptionistPage() {
   };
 
   // 2. Chuyển cấp Quản trị Trung tâm
+  const handleResolveMember = async (e) => {
+    e.preventDefault();
+    if (!selectedItem || !actionNote.trim()) return;
+    setSubmitting(true);
+    try {
+      await resolveMemberSupport(selectedItem.id, actionNote.trim());
+      showNotice('Đã lưu kết quả xử lý. Học viên có thể xem trong hồ sơ.');
+      closeModal();
+      fetchData();
+    } catch (err) {
+      showNotice(err.message, true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const isPending = (status) => status === 'pending_receptionist' || status === 'classified';
+  const isResolved = (status) => status === 'resolved';
+  const isEscalated = (status) => status === 'pending_manager';
+
   const handleEscalate = async (e) => {
     e.preventDefault();
     if (!actionNote.trim()) return;
@@ -143,8 +186,9 @@ export default function ReceptionistPage() {
 
     const matchStatus =
       statusFilter === 'ALL' ||
-      (statusFilter === 'PENDING' && (item.status === 'PENDING' || !item.status)) ||
-      item.status === statusFilter;
+      (statusFilter === 'PENDING' && isPending(item.status)) ||
+      (statusFilter === 'RESOLVED' && isResolved(item.status)) ||
+      (statusFilter === 'ESCALATED' && isEscalated(item.status));
 
     return matchName && matchStatus;
   });
@@ -292,8 +336,8 @@ export default function ReceptionistPage() {
                           "{item.description || item.note || 'Không có ghi chú'}"
                         </p>
                         {item.resolutionNote && (
-                          <div className="mt-1 text-[11px] text-emerald-700 bg-emerald-50 p-1.5 rounded border border-emerald-100">
-                            <strong>Ghi chú giải quyết:</strong> {item.resolutionNote}
+                          <div className="mt-1 whitespace-pre-line text-[11px] text-emerald-700 bg-emerald-50 p-1.5 rounded border border-emerald-100">
+                            <strong>Kết quả xử lý:</strong> {item.resolutionNote}
                           </div>
                         )}
                       </td>
@@ -302,24 +346,29 @@ export default function ReceptionistPage() {
                       <td className="p-4">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${
-                            item.status === 'RESOLVED' || item.status === 'APPROVED'
+                            item.status === 'resolved' && item.decision === 'rejected'
+                              ? 'bg-red-50 text-red-600 border-red-200'
+                              : isResolved(item.status)
                               ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                              : item.status === 'ESCALATED'
+                              : isEscalated(item.status)
                               ? 'bg-amber-50 text-amber-600 border-amber-200'
                               : 'bg-slate-100 text-slate-600 border-slate-200'
                           }`}
                         >
-                          {item.status === 'RESOLVED' || item.status === 'APPROVED'
-                            ? '✓ Đã hoàn tất'
-                            : item.status === 'ESCALATED'
-                            ? '⏳ Đã chuyển QTTT'
-                            : '🔴 Đang chờ xử lý'}
+                          {resultHeadline(item)}
                         </span>
                       </td>
 
                       {/* THAO TÁC */}
                       <td className="p-4 text-right whitespace-nowrap">
-                        {activeTab === 'enrollment' ? (
+                        {isResolved(item.status) ? (
+                          <button
+                            onClick={() => openActionModal(item, 'view_result')}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Xem kết quả
+                          </button>
+                        ) : activeTab === 'enrollment' ? (
                           <button
                             onClick={() => openActionModal(item, 'edit_enrollment')}
                             className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
@@ -327,12 +376,24 @@ export default function ReceptionistPage() {
                             ✏️ Cập nhật & Giải quyết
                           </button>
                         ) : (
-                          <button
-                            onClick={() => openActionModal(item, 'escalate')}
-                            className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                          >
-                            ⬆️ Chuyển QTTT
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            {isPending(item.status) && item.systemCategory !== 'financial_discount' && (
+                              <button
+                                onClick={() => openActionModal(item, 'resolve_member')}
+                                className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Lưu kết quả
+                              </button>
+                            )}
+                            {isPending(item.status) && (
+                              <button
+                                onClick={() => openActionModal(item, 'escalate')}
+                                className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                              >
+                                ⬆️ Chuyển QTTT
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -357,7 +418,13 @@ export default function ReceptionistPage() {
             
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-sm font-black text-slate-900 uppercase">
-                {modalType === 'edit_enrollment' ? 'CẬP NHẬT ĐƠN TƯ VẤN KHÁCH HÀNG' : 'CHUYỂN YÊU CẦU LÊN QUẢN TRỊ TRUNG TÂM'}
+                {modalType === 'edit_enrollment'
+                  ? 'CẬP NHẬT ĐƠN TƯ VẤN KHÁCH HÀNG'
+                  : modalType === 'resolve_member'
+                  ? 'LƯU KẾT QUẢ CHO HỌC VIÊN'
+                  : modalType === 'view_result'
+                  ? 'KẾT QUẢ XỬ LÝ'
+                  : 'CHUYỂN YÊU CẦU LÊN QUẢN TRỊ TRUNG TÂM'}
               </h3>
               <button
                 onClick={closeModal}
@@ -415,6 +482,7 @@ export default function ReceptionistPage() {
                   <label className="block font-bold text-slate-700 mb-1">Ghi chú giải quyết (Resolution Note)</label>
                   <textarea
                     rows={3}
+                    required
                     placeholder="Nhập nội dung tư vấn/kết quả gọi điện cho khách..."
                     value={enrollForm.resolutionNote}
                     onChange={(e) => setEnrollForm({ ...enrollForm, resolutionNote: e.target.value })}
@@ -424,7 +492,7 @@ export default function ReceptionistPage() {
 
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || !enrollForm.resolutionNote.trim()}
                   className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
                 >
                   {submitting ? 'ĐANG LƯU...' : 'LƯU & ĐÁNH DẤU HOÀN TẤT'}
@@ -433,6 +501,55 @@ export default function ReceptionistPage() {
             )}
 
             {/* FORM MODAL 2: ESCALATE */}
+            {modalType === 'view_result' && (
+              <div className="space-y-3 text-xs">
+                <p className="font-black text-slate-900">{selectedItem.title}</p>
+                <p className="font-bold text-[#e31b23]">{resultHeadline(selectedItem)}</p>
+                {selectedItem.assigneeName && (
+                  <p className="text-slate-600">Người xử lý: {selectedItem.assigneeName}</p>
+                )}
+                {selectedItem.resolvedAt && (
+                  <p className="text-slate-500">
+                    {new Date(selectedItem.resolvedAt).toLocaleString('vi-VN')}
+                  </p>
+                )}
+                <div className="whitespace-pre-line rounded-xl bg-emerald-50 px-3 py-3 font-semibold text-slate-800">
+                  {selectedItem.resolutionNote || 'Chưa có nội dung xử lý.'}
+                </div>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="w-full bg-slate-900 text-white font-black uppercase text-xs py-3 rounded-xl cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            )}
+
+            {modalType === 'resolve_member' && (
+              <form onSubmit={handleResolveMember} className="space-y-3 text-xs">
+                <p className="font-bold text-slate-800">{selectedItem.title}</p>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Kết quả xử lý *</label>
+                  <textarea
+                    rows={4}
+                    required
+                    placeholder="Nội dung lễ tân đã xử lý. Học viên sẽ xem được kết quả này."
+                    value={actionNote}
+                    onChange={(e) => setActionNote(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none resize-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={submitting || !actionNote.trim()}
+                  className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
+                >
+                  {submitting ? 'ĐANG LƯU...' : 'LƯU KẾT QUẢ'}
+                </button>
+              </form>
+            )}
+
             {modalType === 'escalate' && (
               <form onSubmit={handleEscalate} className="space-y-3 text-xs">
                 <div>
