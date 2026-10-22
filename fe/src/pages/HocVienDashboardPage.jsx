@@ -13,15 +13,65 @@ import {
 } from '../api/managementApi';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import goldDragonImg from '../assets/membership/gold-dragon.jpg';
+
+// Hạng của gói theo mã hoặc tên: gold / silver / bronze
+const packageTier = (pkg, fallbackName = '') => {
+  const name = (pkg?.name || fallbackName || '').toLowerCase();
+  if (pkg?.code === 'PKG-003' || name.includes('vàng')) return 'gold';
+  if (pkg?.code === 'PKG-002' || name.includes('bạc')) return 'silver';
+  return 'bronze';
+};
+
+// Giao diện thẻ hội viên theo hạng. Vàng là "thẻ đen" có rồng vàng.
+const TIER_THEMES = {
+  bronze: {
+    label: 'Bronze Member',
+    medal: '🥉',
+    cardStyle: {
+      background:
+        'radial-gradient(120% 140% at 85% 0%, rgba(255,196,150,0.35) 0%, rgba(255,196,150,0) 45%), linear-gradient(135deg, #1a0d05 0%, #4e2810 35%, #8c4f26 55%, #3b1d0b 78%, #120803 100%)',
+    },
+    border: 'rgba(205,127,50,0.55)',
+    titleGradient: 'linear-gradient(90deg, #ffe0c2 0%, #e39a5c 45%, #b8692f 100%)',
+    accent: '#f3b07a',
+    subText: 'rgba(255,226,200,0.75)',
+    chip: ['#f5c79a', '#9c5a28'],
+    buttonStyle: { background: 'linear-gradient(135deg, #f3b07a, #b8692f)', color: '#2a1206' },
+  },
+  silver: {
+    label: 'Silver Member',
+    medal: '🥈',
+    cardStyle: {
+      background:
+        'repeating-linear-gradient(100deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 2px, transparent 2px, transparent 6px), radial-gradient(120% 140% at 85% 0%, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 45%), linear-gradient(135deg, #111418 0%, #3a4048 38%, #7d8590 56%, #2b3036 80%, #0c0e11 100%)',
+    },
+    border: 'rgba(209,213,219,0.55)',
+    titleGradient: 'linear-gradient(90deg, #ffffff 0%, #d1d5db 45%, #8e959e 100%)',
+    accent: '#e5e7eb',
+    subText: 'rgba(229,231,235,0.75)',
+    chip: ['#f3f4f6', '#8b929b'],
+    buttonStyle: { background: 'linear-gradient(135deg, #f9fafb, #9ca3af)', color: '#111827' },
+  },
+  gold: {
+    label: 'Gold · Black Card',
+    medal: '🥇',
+    dragon: true,
+    cardStyle: {
+      background:
+        'radial-gradient(90% 120% at 0% 0%, rgba(212,175,55,0.14) 0%, rgba(212,175,55,0) 50%), linear-gradient(135deg, #050505 0%, #111111 55%, #050505 100%)',
+    },
+    border: 'rgba(212,175,55,0.65)',
+    titleGradient: 'linear-gradient(90deg, #fff4c2 0%, #e8c766 40%, #b8892a 100%)',
+    accent: '#e8c766',
+    subText: 'rgba(240,222,160,0.75)',
+    chip: ['#fbe7a1', '#a87b22'],
+    buttonStyle: { background: 'linear-gradient(135deg, #fbe7a1, #c9971f)', color: '#1a1200' },
+  },
+};
 
 // Huy chương theo hạng gói: Đồng 🥉, Bạc 🥈, Vàng 🥇
-const packageMedal = (pkg) => {
-  const name = pkg?.name?.toLowerCase() || '';
-  if (pkg?.code === 'PKG-003' || name.includes('vàng')) return '🥇';
-  if (pkg?.code === 'PKG-002' || name.includes('bạc')) return '🥈';
-  if (pkg?.code === 'PKG-001' || name.includes('đồng')) return '🥉';
-  return '🏅';
-};
+const packageMedal = (pkg) => TIER_THEMES[packageTier(pkg)].medal;
 
 const formatCountdown = (ms) => {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
@@ -231,6 +281,34 @@ export default function HocVienDashboardPage() {
   const upgradePackages = highestPackage
     ? packageList.filter((pkg) => (pkg.fee || 0) > (highestPackage.fee || 0))
     : [];
+  // Thẻ mang giao diện của gói đang dùng
+  const currentPackage = packageList.find((pkg) => String(pkg.id) === String(currentMembership?.packageId)) || null;
+  const cardTheme = TIER_THEMES[packageTier(currentPackage, currentMembership?.planName)];
+  const membershipDates = currentMembership ? (
+    <div
+      className={`self-start ${cardTheme.dragon ? '' : 'md:self-center'} rounded-2xl p-4 border backdrop-blur-md flex items-center gap-6`}
+      style={{ borderColor: cardTheme.border, background: 'rgba(0,0,0,0.3)' }}
+    >
+      <div>
+        <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Ngày bắt đầu</span>
+        <span className="text-xs font-bold text-white">{currentMembership.startDate}</span>
+      </div>
+      <div className="h-8 w-px" style={{ background: cardTheme.border }}></div>
+      <div>
+        <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Hạn sử dụng đến</span>
+        <span className="text-xs font-black" style={{ color: cardTheme.accent }}>{currentMembership.endDate}</span>
+      </div>
+      {membershipData?.membershipEndDate && membershipData.membershipEndDate !== currentMembership.endDate && (
+        <>
+          <div className="h-8 w-px" style={{ background: cardTheme.border }}></div>
+          <div>
+            <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Gồm gói chờ kích hoạt</span>
+            <span className="text-xs font-black" style={{ color: cardTheme.accent }}>{membershipData.membershipEndDate}</span>
+          </div>
+        </>
+      )}
+    </div>
+  ) : null;
 
   // Chỉ hiện đơn còn trong thời gian giữ; hết giờ thì tự biến mất.
   const livePendingCheckouts = pendingCheckouts.filter((item) => item.deadline > now);
@@ -305,50 +383,85 @@ export default function HocVienDashboardPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-8 mt-8 space-y-8">
           {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG */}
           {currentMembership && (
-            <section className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-lg relative overflow-hidden">
-              <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-[#e31b23]/20 rounded-full blur-3xl"></div>
+            <section
+              className="relative overflow-hidden rounded-3xl p-6 sm:p-8 shadow-2xl border text-white"
+              style={{ ...cardTheme.cardStyle, borderColor: cardTheme.border }}
+            >
+              {/* Thẻ Vàng: rồng vàng chìm trên nền đen */}
+              {cardTheme.dragon && (
+                <>
+                  <img
+                    src={goldDragonImg}
+                    alt=""
+                    className="pointer-events-none select-none absolute inset-y-0 right-0 h-full w-auto max-w-none opacity-90 mix-blend-screen"
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{ background: 'linear-gradient(90deg, #050505 0%, rgba(5,5,5,0.85) 30%, rgba(5,5,5,0) 55%)' }}
+                  ></div>
+                </>
+              )}
+              {/* Vệt sáng kim loại */}
+              <div
+                className="pointer-events-none absolute -top-1/2 left-1/4 w-1/3 h-[200%] rotate-[20deg]"
+                style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.09), transparent)' }}
+              ></div>
 
-              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                  <span className="inline-block bg-white/10 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-2">
-                    GÓI TẬP ĐANG SỬ DỤNG
-                  </span>
-                  <h2 className="text-2xl font-black text-white uppercase tracking-wide">
-                    {currentMembership.planName || 'Gói Hội Viên'}
-                  </h2>
-                  <p className="text-xs text-slate-300 font-medium mt-1">
-                    Mã hóa đơn: <span className="font-mono text-amber-400 font-bold">#{currentMembership.invoiceCode || 'N/A'}</span>
-                  </p>
+              <div className="relative z-10 flex flex-col md:flex-row md:items-stretch justify-between gap-6">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.25em] px-3 py-1 rounded-full border"
+                      style={{ color: cardTheme.accent, borderColor: cardTheme.border, background: 'rgba(0,0,0,0.25)' }}
+                    >
+                      {cardTheme.medal} {cardTheme.label}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: cardTheme.subText }}>
+                      AnhDuy Sport
+                    </span>
+                  </div>
+
+                  {/* Chip thẻ */}
+                  <svg width="46" height="34" viewBox="0 0 46 34" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="cardChip" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={cardTheme.chip[0]} />
+                        <stop offset="100%" stopColor={cardTheme.chip[1]} />
+                      </linearGradient>
+                    </defs>
+                    <rect x="1" y="1" width="44" height="32" rx="6" fill="url(#cardChip)" />
+                    <path d="M1 12h14M1 22h14M31 12h14M31 22h14M15 1v32M31 1v32" stroke="rgba(0,0,0,0.35)" strokeWidth="1.2" fill="none" />
+                  </svg>
+
+                  <div>
+                    <h2
+                      className="text-3xl sm:text-4xl font-black uppercase tracking-wide"
+                      style={{ backgroundImage: cardTheme.titleGradient, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
+                    >
+                      {currentMembership.planName || 'Gói Hội Viên'}
+                    </h2>
+                    <p className="mt-2 font-mono text-sm tracking-[0.2em] uppercase" style={{ color: cardTheme.subText }}>
+                      {displayName} · {profileData?.code || `ND-${String(memberUserId || '').padStart(4, '0')}`}
+                    </p>
+                    <p className="text-[11px] mt-1" style={{ color: cardTheme.subText }}>
+                      Mã hóa đơn: <span className="font-mono font-bold" style={{ color: cardTheme.accent }}>#{currentMembership.invoiceCode || 'N/A'}</span>
+                    </p>
+                  </div>
+
+                  {/* Thẻ Vàng: ngày nằm bên trái để không che rồng */}
+                  {cardTheme.dragon && membershipDates}
                 </div>
 
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 flex items-center gap-6">
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-300 uppercase block">Ngày bắt đầu</span>
-                    <span className="text-xs font-bold text-white">{currentMembership.startDate}</span>
-                  </div>
-                  <div className="h-8 w-px bg-white/20"></div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-300 uppercase block">Hạn sử dụng đến</span>
-                    <span className="text-xs font-bold text-emerald-400">{currentMembership.endDate}</span>
-                  </div>
-                  {membershipData?.membershipEndDate && membershipData.membershipEndDate !== currentMembership.endDate && (
-                    <>
-                      <div className="h-8 w-px bg-white/20"></div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-300 uppercase block">Gồm gói chờ kích hoạt</span>
-                        <span className="text-xs font-bold text-emerald-400">{membershipData.membershipEndDate}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
+                {!cardTheme.dragon && membershipDates}
               </div>
 
-              {/* GIA HẠN (luôn có) / NÂNG CẤP (chỉ khi đang Đồng hoặc Bạc) */}
+              {/* GIA HẠN (luôn có) / NÂNG CẤP (chỉ khi đang Đồng hoặc Bạc), mỗi nút mang màu hạng của nó */}
               {highestPackage && (
                 <div className="relative z-10 mt-6 flex flex-wrap gap-3">
                   <Link
                     to={`/dang-ky-khoa-hoc?packageId=${highestPackage.id}`}
-                    className="bg-white text-slate-900 hover:bg-slate-100 font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
+                    className="font-black text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5"
+                    style={TIER_THEMES[packageTier(highestPackage)].buttonStyle}
                   >
                     {packageMedal(highestPackage)} Gia hạn {highestPackage.name}
                   </Link>
@@ -356,7 +469,8 @@ export default function HocVienDashboardPage() {
                     <Link
                       key={pkg.id}
                       to={`/dang-ky-khoa-hoc?packageId=${pkg.id}`}
-                      className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
+                      className="font-black text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5"
+                      style={TIER_THEMES[packageTier(pkg)].buttonStyle}
                     >
                       {packageMedal(pkg)} Nâng cấp lên {pkg.name}
                     </Link>
