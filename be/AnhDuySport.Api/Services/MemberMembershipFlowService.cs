@@ -759,8 +759,13 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             user.Status);
 
     // Cần có Payment và Payment.Invoice (Include hoặc vừa tạo) trước khi gọi.
-    private static MembershipDto ToMembershipDto(Membership membership, DateOnly today) =>
-        new(
+    private static MembershipDto ToMembershipDto(Membership membership, DateOnly today)
+    {
+        var issuedAt = membership.Payment?.Invoice?.IssuedAt;
+        var waitingSeconds = membership.Status == "pending" && membership.Payment is { Status: "pending" } && issuedAt is DateTime issued
+            ? PaymentTimeout.SecondsLeft(issued)
+            : 0;
+        return new(
             membership.MembershipId.ToString(),
             membership.MembershipPackageId?.ToString(),
             membership.PlanName,
@@ -769,17 +774,17 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             // Trong DB vẫn là active nhưng đã qua ngày hết hạn thì hiển thị expired;
             // đơn chờ thanh toán đã bị hủy hoặc quá thời gian giữ đơn thì hiển thị cancelled.
             membership.Status == "active" && membership.EndDate < today ? "expired"
-            : membership.Status == "pending"
-                && (membership.Payment is { Status: not "pending" }
-                    || (membership.Payment?.Invoice is { } invoice && PaymentTimeout.SecondsLeft(invoice.IssuedAt) == 0))
-                ? "cancelled"
+            : membership.Status == "pending" && waitingSeconds == 0 ? "cancelled"
             : membership.Status,
             // Gói lên cấp kèm lớp gắn với payment của lớp: chỉ tính phần tiền gói.
             membership.Payment is { ClassId: not null } classPayment
                 ? classPayment.UpgradeAmount
                 : membership.Payment?.Amount ?? 0,
             membership.Payment?.Invoice?.InvoiceCode ?? "",
-            membership.Payment?.PaymentMethod ?? "");
+            membership.Payment?.PaymentMethod ?? "",
+            issuedAt,
+            waitingSeconds);
+    }
 
     private static ActivityLogDto ToLogDto(ActivityLog log, string memberName) =>
         new(
