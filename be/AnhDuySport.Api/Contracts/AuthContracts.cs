@@ -25,6 +25,8 @@ public sealed record AuthUserDto(
     string Phone,
     string RoleId,
     string RoleName,
-    bool HasPaid);
+    bool HasPaid,
+    // Ảnh đại diện để hiện trên thanh menu, null khi chưa có ảnh.
+    string? AvatarUrl);
 
 public sealed record LoginResponse(string Token, AuthUserDto User);
