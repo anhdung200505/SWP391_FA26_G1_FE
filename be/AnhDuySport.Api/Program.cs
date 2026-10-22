@@ -15,6 +15,10 @@ if (File.Exists(databaseConfigPath))
     builder.Configuration.AddJsonFile(databaseConfigPath, optional: false, reloadOnChange: true);
 }
 
+// Khóa payOS dùng chung cả nhóm: đọc ở mọi môi trường (user-secrets chỉ có trên máy đã đặt và chỉ khi Development).
+var payOsConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "payos.json"));
+builder.Configuration.AddJsonFile(payOsConfigPath, optional: true, reloadOnChange: true);
+
 var connectionString = builder.Configuration["connectionString"]
     ?? builder.Configuration.GetConnectionString("AnhDuySport")
     ?? throw new InvalidOperationException("Thiếu chuỗi kết nối AnhDuySport.");
@@ -55,7 +59,7 @@ if (!string.IsNullOrWhiteSpace(payOsClientId)
 }
 else
 {
-    Console.WriteLine("payOS chưa có khóa. API vẫn chạy. Tạo mã QR sẽ báo thiếu PayOS:ClientId, PayOS:ApiKey, PayOS:ChecksumKey.");
+    Console.WriteLine($"payOS chưa có khóa (kiểm tra {payOsConfigPath}). API vẫn chạy nhưng không tạo được mã QR.");
 }
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
