@@ -33,7 +33,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
 
     private PayOSClient RequirePayOs() =>
         PayOsClient ?? throw new InvalidOperationException(
-            "Máy này chưa cấu hình payOS nên chưa tạo được mã QR thanh toán gói. Đặt PayOS:ClientId, PayOS:ApiKey và PayOS:ChecksumKey bằng lệnh dotnet user-secrets.");
+            "Máy này chưa cấu hình payOS nên chưa tạo được mã QR thanh toán gói. Kiểm tra file be/config/payos.json.");
 
     // ===== Access System =====
     public async Task<MemberProfileDto> AccessSystemAsync(string memberUserId)
