@@ -61,7 +61,7 @@ export default function HocVienDashboardPage() {
 
   const memberUserId = user?.id || user?.userId;
 
-  // Đơn đang chờ thanh toán + lịch sử gói, kèm hạn chót tính theo giờ máy để đếm ngược theo thời gian thực
+  // Đơn đang chờ thanh toán (kèm hạn chót tính theo giờ máy để đếm ngược) + lịch sử gói
   const loadPayments = useCallback(async () => {
     const [pending, memData] = await Promise.all([
       getPendingCheckouts().catch(() => []),
@@ -74,15 +74,7 @@ export default function HocVienDashboardPage() {
         deadline: loadedAt + item.expiresInSeconds * 1000,
       }))
     );
-    if (memData) {
-      setMembershipData({
-        ...memData,
-        history: (memData.history || []).map((item) => ({
-          ...item,
-          deadline: item.paymentExpiresInSeconds > 0 ? loadedAt + item.paymentExpiresInSeconds * 1000 : 0,
-        })),
-      });
-    }
+    if (memData) setMembershipData(memData);
     setNow(loadedAt);
   }, [memberUserId]);
 
@@ -126,9 +118,7 @@ export default function HocVienDashboardPage() {
 
   // Còn đơn đang chờ: đồng hồ chạy từng giây (đơn hết giờ tự biến mất / đổi nhãn),
   // và tải lại ngầm mỗi 10 giây để thấy ngay khi đã thanh toán trên điện thoại.
-  const hasPendingCheckouts =
-    pendingCheckouts.some((item) => item.deadline > now) ||
-    (membershipData?.history || []).some((item) => item.deadline > now);
+  const hasPendingCheckouts = pendingCheckouts.some((item) => item.deadline > now);
   useEffect(() => {
     if (!hasPendingCheckouts) return undefined;
     const tick = setInterval(() => setNow(Date.now()), 1000);
@@ -223,6 +213,16 @@ export default function HocVienDashboardPage() {
   const displayPhone = profileData?.phone || user?.phone || 'Chưa cập nhật';
   const currentMembership = membershipData?.currentMembership;
   const historyList = membershipData?.history || [];
+  // Gói cao nhất đang có (backend tính cả gói chờ kích hoạt): gia hạn gói này, chỉ nâng cấp lên gói đắt hơn.
+  const packageList = membershipData?.packages || [];
+  const highestPackage =
+    packageList.find((pkg) => String(pkg.id) === String(membershipData?.highestPackageId)) ||
+    packageList.find((pkg) => String(pkg.id) === String(currentMembership?.packageId)) ||
+    null;
+  const upgradePackages = highestPackage
+    ? packageList.filter((pkg) => (pkg.fee || 0) > (highestPackage.fee || 0))
+    : [];
+
   // Chỉ hiện đơn còn trong thời gian giữ; hết giờ thì tự biến mất.
   const livePendingCheckouts = pendingCheckouts.filter((item) => item.deadline > now);
 
@@ -322,8 +322,38 @@ export default function HocVienDashboardPage() {
                     <span className="text-[10px] font-bold text-slate-300 uppercase block">Hạn sử dụng đến</span>
                     <span className="text-xs font-bold text-emerald-400">{currentMembership.endDate}</span>
                   </div>
+                  {membershipData?.membershipEndDate && membershipData.membershipEndDate !== currentMembership.endDate && (
+                    <>
+                      <div className="h-8 w-px bg-white/20"></div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-300 uppercase block">Gồm gói chờ kích hoạt</span>
+                        <span className="text-xs font-bold text-emerald-400">{membershipData.membershipEndDate}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
+
+              {/* GIA HẠN (luôn có) / NÂNG CẤP (chỉ khi đang Đồng hoặc Bạc) */}
+              {highestPackage && (
+                <div className="relative z-10 mt-6 flex flex-wrap gap-3">
+                  <Link
+                    to={`/dang-ky-khoa-hoc?packageId=${highestPackage.id}`}
+                    className="bg-white text-slate-900 hover:bg-slate-100 font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
+                  >
+                    🔄 Gia hạn {highestPackage.name}
+                  </Link>
+                  {upgradePackages.map((pkg) => (
+                    <Link
+                      key={pkg.id}
+                      to={`/dang-ky-khoa-hoc?packageId=${pkg.id}`}
+                      className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
+                    >
+                      ⬆ Nâng cấp lên {pkg.name}
+                    </Link>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
@@ -560,18 +590,9 @@ export default function HocVienDashboardPage() {
                         <td className="p-3 text-slate-600">{hItem.startDate} ~ {hItem.endDate}</td>
                         <td className="p-3 font-bold text-emerald-600">{hItem.amountPaid?.toLocaleString('vi-VN')}đ</td>
                         <td className="p-3">
-                          {(() => {
-                            // Đơn chờ thanh toán hết giờ thì đổi nhãn ngay, không cần tải lại trang
-                            const waiting = hItem.status === 'pending' && hItem.deadline > now;
-                            const status = hItem.status === 'pending' && !waiting ? 'cancelled' : hItem.status;
-                            const badge = historyStatus(status);
-                            return (
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${badge.className}`}>
-                                {badge.label}
-                                {waiting ? ` · còn ${formatCountdown(hItem.deadline - now)}` : ''}
-                              </span>
-                            );
-                          })()}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${historyStatus(hItem.status).className}`}>
+                            {historyStatus(hItem.status).label}
+                          </span>
                         </td>
                       </tr>
                     ))}
