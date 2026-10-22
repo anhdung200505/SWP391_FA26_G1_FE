@@ -9,7 +9,7 @@ namespace AnhDuySport.Api.Services;
 // Lỗi nghiệp vụ (trả 400). InvalidOperationException của .NET/EF vẫn ra 500.
 public sealed class RegistrationException(string message) : InvalidOperationException(message);
 
-public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, AuthService auth)
+public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, AuthService auth, PayOsPaymentService payOs)
 {
     public async Task<IReadOnlyList<CenterDto>> AccessCentersAsync()
     {
@@ -431,6 +431,21 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             .Include(item => item.Class)
             .FirstOrDefaultAsync(item => item.PaymentId == id && item.UserId == memberId && item.ClassId != null)
             ?? throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
+
+        // Webhook payOS không tới được máy local: hỏi thẳng payOS khi học viên xem trạng thái.
+        if (payment.Status == "pending")
+        {
+            var status = (await payOs.PayOsStatusAsync(payment.PayosOrderCode))?.ToUpperInvariant();
+            if (status == "PAID")
+            {
+                return await MarkPaymentPaidAsync(id, memberId, "payOS");
+            }
+
+            if (status is "CANCELLED" or "CANCELED" or "EXPIRED")
+            {
+                return await MarkPaymentFailedAsync(id, memberId);
+            }
+        }
 
         return await BuildStatusAsync(payment);
     }
@@ -1039,20 +1054,27 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         return payment;
     }
 
-    private async Task<ClassRegistrationDto> ToRegistrationDtoAsync(Payment payment, string className, bool isExisting) =>
-        new(
+    // Người gọi phải Include(Invoice). Đơn pending được tạo link payOS (hết hạn trước khi nhả chỗ 2 phút).
+    private async Task<ClassRegistrationDto> ToRegistrationDtoAsync(Payment payment, string className, bool isExisting)
+    {
+        var linked = payment.Status == "pending"
+            ? await payOs.EnsureRegistrationLinkAsync(payment.PaymentId, payment.Invoice!.IssuedAt.AddMinutes(HoldMinutes - 2))
+            : null;
+        return new(
             payment.PaymentId.ToString(),
             payment.Invoice!.InvoiceCode,
             payment.ClassId.ToString()!,
             className,
             payment.Amount,
             payment.Status,
-            "",
+            linked?.CheckoutUrl ?? "",
             isExisting,
             await ClassRegistrationLogs.RegisteredByPaymentAsync(db, payment.PaymentId),
             await RequestedSlotAsync(payment.RequestedSlotId),
             payment.Amount - payment.UpgradeAmount,
-            await ClassMembershipBonus.QuoteOfPaymentAsync(db, payment));
+            await ClassMembershipBonus.QuoteOfPaymentAsync(db, payment),
+            linked?.QrCode ?? "");
+    }
 
     // Người gọi phải Include(Invoice), nếu không InvoiceCode và InvoiceStatus sẽ rỗng.
     private static RegistrationStatusDto ToRegistrationStatusDto(

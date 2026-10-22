@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
-import { getMemberProfile, updateMemberProfile } from '../api/managementApi';
+import { getMemberProfile, updateMemberProfile, getMySupportRequests } from '../api/managementApi';
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -16,6 +16,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [requests, setRequests] = useState([]);
 
   useEffect(() => {
     document.title = 'Hồ sơ cá nhân · AnhDuy Sport';
@@ -32,6 +33,11 @@ export default function ProfilePage() {
         })
         .catch((err) => setMessage({ type: 'error', text: err.message }))
         .finally(() => setLoading(false));
+      if ((user.roleId || user.role) === 'MEMBER') {
+        getMySupportRequests()
+          .then((items) => setRequests(Array.isArray(items) ? items : []))
+          .catch(() => setRequests([]));
+      }
     }
   }, [user]);
 
@@ -152,6 +158,47 @@ export default function ProfilePage() {
                 </button>
               </div>
             </form>
+          )}
+
+          {((user?.roleId || user?.role) === 'MEMBER') && (
+            <section className="mt-10 border-t border-gray-100 pt-8">
+              <h2 className="text-lg font-black text-gray-900">Kết quả yêu cầu của bạn</h2>
+              <p className="mt-1 text-sm text-gray-500">Tư vấn ghi danh, kết quả lễ tân xử lý và quyết định của quản trị.</p>
+              {requests.length === 0 ? (
+                <p className="mt-4 text-sm font-semibold text-gray-500">Chưa có yêu cầu nào.</p>
+              ) : (
+                <ul className="mt-4 space-y-3">
+                  {requests.map((item) => (
+                    <li key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="font-black text-gray-900">{item.title}</p>
+                        <span className="text-[11px] font-bold uppercase text-[#e31b23]">
+                          {item.status === 'resolved' && item.decision === 'approved'
+                            ? 'Quản trị đã chấp nhận'
+                            : item.status === 'resolved' && item.decision === 'rejected'
+                            ? 'Quản trị đã từ chối'
+                            : item.status === 'resolved'
+                            ? 'Đã xử lý'
+                            : item.status === 'pending_manager'
+                            ? 'Đang chờ quản trị'
+                            : 'Đang chờ lễ tân'}
+                        </span>
+                      </div>
+                      <p className="mt-2 whitespace-pre-line text-sm text-gray-600">{item.description}</p>
+                      {item.resolutionNote ? (
+                        <p className="mt-3 whitespace-pre-line rounded-xl bg-white px-3 py-2 text-sm font-semibold text-gray-800">
+                          Kết quả xử lý: {item.resolutionNote}
+                        </p>
+                      ) : item.status === 'pending_manager' ? (
+                        <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-gray-500">
+                          Lễ tân đã chuyển đơn lên quản trị. Kết quả sẽ hiện khi quản trị xử lý xong.
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           )}
         </div>
       </main>

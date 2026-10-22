@@ -41,21 +41,27 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
         }
     }
 
-    [AllowAnonymous]
-    [HttpGet("members/{memberUserId}")]
-    [EndpointSummary("Xem yêu cầu của một học viên")]
-    [EndpointDescription("Dùng memberUserId có sẵn trong bảng user vì học viên chưa đăng nhập được.")]
-    public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> AccessMemberRequests(string memberUserId)
+    [Authorize(Roles = "MEMBER")]
+    [HttpGet("mine")]
+    [EndpointSummary("Học viên xem đơn của mình và kết quả xử lý")]
+    public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> Mine()
     {
         try
         {
-            return Ok(await flow.AccessMemberRequestsAsync(memberUserId));
+            return Ok(await flow.AccessMyRequestsAsync());
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
             return result!;
         }
     }
+
+    [Authorize(Roles = "ADMIN")]
+    [HttpGet("all")]
+    [EndpointSummary("Quản trị xem toàn bộ đơn hỗ trợ")]
+    [EndpointDescription("Gồm tư vấn ghi danh và đơn của học viên, kể cả đơn đã xử lý. assigneeName là người đang xử lý hoặc người đã xử lý xong.")]
+    public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> AccessAll() =>
+        Ok(await flow.AccessAllRequestsAsync());
 
     [Authorize(Roles = "ADMIN")]
     [HttpGet("financial")]
@@ -135,6 +141,22 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
         try
         {
             return Ok(await flow.EscalateToManagerAsync(requestId, request));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
+    [Authorize(Roles = "RECEPTIONIST")]
+    [HttpPost("{requestId}/resolve")]
+    [EndpointSummary("Lễ tân lưu kết quả xử lý đơn của học viên")]
+    [EndpointDescription("Lưu resolution note và chuyển trạng thái resolved. Học viên xem lại tại GET /api/support-requests/mine.")]
+    public async Task<ActionResult<SupportRequestResultDto>> ResolveMember(string requestId, SupportResultRequest request)
+    {
+        try
+        {
+            return Ok(await flow.ResolveMemberRequestAsync(requestId, request));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
