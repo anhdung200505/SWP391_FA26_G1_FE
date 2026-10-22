@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
-import { getMemberProfile, updateMemberProfile, getMySupportRequests } from '../api/managementApi';
+import { getMemberProfile, updateMemberProfile, getMySupportRequests, uploadMemberAvatar } from '../api/managementApi';
+
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -17,6 +20,8 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [requests, setRequests] = useState([]);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     document.title = 'Hồ sơ cá nhân · AnhDuy Sport';
@@ -30,6 +35,7 @@ export default function ProfilePage() {
             dateOfBirth: data.dateOfBirth ? data.dateOfBirth.split('T')[0] : '',
             gender: data.gender || 'Nam',
           });
+          setAvatarUrl(data.avatarUrl || '');
         })
         .catch((err) => setMessage({ type: 'error', text: err.message }))
         .finally(() => setLoading(false));
@@ -40,6 +46,35 @@ export default function ProfilePage() {
       }
     }
   }, [user]);
+
+  // Chọn ảnh là tải lên ngay; kiểm tra loại và dung lượng trước để báo lỗi sớm
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!AVATAR_TYPES.includes(file.type)) {
+      setMessage({ type: 'error', text: 'Chỉ nhận ảnh JPG, PNG, WebP hoặc GIF.' });
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setMessage({ type: 'error', text: 'Ảnh đại diện tối đa 2 MB.' });
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setMessage({ type: '', text: '' });
+    try {
+      const res = await uploadMemberAvatar(user.id, file);
+      setAvatarUrl(res?.profile?.avatarUrl || '');
+      setMessage({ type: 'success', text: res?.message || 'Cập nhật ảnh đại diện thành công.' });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message || 'Tải ảnh đại diện thất bại.' });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const avatarInitial = (profile.fullName || user?.fullName || 'U').trim().charAt(0).toUpperCase();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -81,6 +116,41 @@ export default function ProfilePage() {
             <p className="text-sm font-bold text-gray-500">Đang tải thông tin...</p>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* ẢNH ĐẠI DIỆN */}
+              <div className="flex items-center gap-5">
+                <div className="relative w-24 h-24 rounded-full overflow-hidden bg-[#e31b23] text-white flex items-center justify-center text-3xl font-black shadow-md border-4 border-white ring-1 ring-gray-200">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Ảnh đại diện" className="w-full h-full object-cover" />
+                  ) : (
+                    avatarInitial
+                  )}
+                  {uploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <div className="h-7 w-7 animate-spin rounded-full border-4 border-white border-t-transparent"></div>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label
+                    className={`inline-block px-5 py-2.5 rounded-xl text-xs font-bold uppercase transition-colors ${
+                      uploadingAvatar
+                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                        : 'bg-gray-900 text-white hover:bg-gray-700 cursor-pointer'
+                    }`}
+                  >
+                    {uploadingAvatar ? 'Đang tải ảnh...' : avatarUrl ? 'Đổi ảnh đại diện' : 'Tải ảnh đại diện'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      disabled={uploadingAvatar}
+                      onChange={handleAvatarChange}
+                    />
+                  </label>
+                  <p className="text-[11px] text-gray-500 mt-2">JPG, PNG, WebP hoặc GIF, tối đa 2 MB.</p>
+                </div>
+              </div>
+
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
