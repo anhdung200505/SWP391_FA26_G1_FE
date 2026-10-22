@@ -28,13 +28,18 @@ public class Membership
     [Column("end_date")]
     public DateOnly EndDate { get; set; }
 
-    // active | expired | cancelled | upgraded
+    // pending | scheduled | active | expired | cancelled | upgraded | renewed
+    // scheduled: gói nhận kèm lớp, chờ gói hiện tại hết hạn mới chuyển active
     [Column("status")]
     public string Status { get; set; } = "active";
 
     // NULL với dữ liệu cũ chưa gắn gói
     [Column("membership_package_id")]
     public int? MembershipPackageId { get; set; }
+
+    // true: Hạng Đồng tặng kèm khi thanh toán lớp (payment_id NULL)
+    [Column("is_free")]
+    public bool IsFree { get; set; }
 
     public MembershipPackage? Package { get; set; }
     public Payment? Payment { get; set; }

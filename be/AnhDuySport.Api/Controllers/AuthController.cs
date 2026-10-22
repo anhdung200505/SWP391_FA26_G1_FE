@@ -28,6 +28,40 @@ public class AuthController(AuthService auth, CurrentActor actor) : ControllerBa
     }
 
     [AllowAnonymous]
+    [HttpPost("forgot-password")]
+    [EndpointSummary("Quên mật khẩu: gửi mã OTP qua email")]
+    [EndpointDescription("Email không có tài khoản hoặc tài khoản không hoạt động trả 400. Mã OTP 6 số hiệu lực 3 phút, gửi lại cách nhau 1 phút.")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request)
+    {
+        try
+        {
+            await auth.ForgotPasswordAsync(request);
+            return Ok(new { message = "Đã gửi mã OTP tới email của bạn. Mã có hiệu lực trong 3 phút." });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpPost("reset-password")]
+    [EndpointSummary("Đặt lại mật khẩu bằng mã OTP")]
+    [EndpointDescription("Nhập email, mã OTP và mật khẩu mới (6-100 ký tự, có @, # hoặc !). Nhập sai mã tối đa 5 lần. Thành công thì đăng nhập lại bằng mật khẩu mới.")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
+    {
+        try
+        {
+            await auth.ResetPasswordAsync(request);
+            return Ok(new { message = "Đặt lại mật khẩu thành công." });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [AllowAnonymous]
     [HttpPost("login")]
     [EndpointSummary("Quản trị và lễ tân đăng nhập")]
     public Task<ActionResult<LoginResponse>> Login(LoginRequest request) => SignIn(() => auth.LoginAsync(request));
