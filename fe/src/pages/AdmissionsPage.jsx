@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import arenaImg from '../assets/facilities/facility-arena-1024x683.webp';
-import { createEnrollmentConsultation } from '../api/managementApi';
+import { createEnrollmentConsultation, getPackages } from '../api/managementApi';
+import { useAuth } from '../context/AuthContext';
 
 // DỮ LIỆU QUY TRÌNH 4 BƯỚC CHUẨN MẪU
 const processSteps = [
@@ -60,9 +62,17 @@ const sportsList = [
 ];
 
 export default function AdmissionsPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth(); // Lấy thông tin user hiện tại
+
   const [activeStep, setActiveStep] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMemberOnlyModalOpen, setIsMemberOnlyModalOpen] = useState(false); // Popup giới hạn thành viên
   const [modalPackageName, setModalPackageName] = useState('');
+
+  // State danh sách gói huấn luyện từ API
+  const [packages, setPackages] = useState([]);
+  const [loadingPackages, setLoadingPackages] = useState(true);
 
   // State Form Đăng Ký Tư Vấn
   const [fullName, setFullName] = useState('');
@@ -73,10 +83,74 @@ export default function AdmissionsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  const processSectionRef = useRef(null);
+  const packagesSectionRef = useRef(null);
+
   useEffect(() => {
     document.title = 'Tuyển sinh & Đăng ký - AnhDuy Sport';
     window.scrollTo(0, 0);
+
+    // Fetch danh sách gói hội viên từ API và sắp xếp cho Gói Vàng ở giữa
+    const fetchPackages = async () => {
+      try {
+        setLoadingPackages(true);
+        const data = await getPackages();
+        if (Array.isArray(data)) {
+          // Lọc tìm gói Vàng, Đồng, Bạc để sắp xếp thứ tự: Đồng -> Vàng -> Bạc
+          const goldPkg = data.find((p) => p.name?.toLowerCase().includes('vàng') || p.code === 'PKG-003');
+          const bronzePkg = data.find((p) => p.name?.toLowerCase().includes('đồng') || p.code === 'PKG-001');
+          const silverPkg = data.find((p) => p.name?.toLowerCase().includes('bạc') || p.code === 'PKG-002');
+          
+          const remaining = data.filter((p) => p !== goldPkg && p !== bronzePkg && p !== silverPkg);
+
+          const reordered = [];
+          if (bronzePkg) reordered.push(bronzePkg);
+          if (goldPkg) reordered.push(goldPkg); // Đưa Gói Vàng vào giữa
+          if (silverPkg) reordered.push(silverPkg);
+          reordered.push(...remaining);
+
+          setPackages(reordered.length > 0 ? reordered : data);
+        }
+      } catch (err) {
+        console.error('Không thể tải danh sách gói hội viên:', err);
+      } finally {
+        setLoadingPackages(false);
+      }
+    };
+
+    fetchPackages();
   }, []);
+
+  // IntersectionObserver cho hiệu ứng xuất hiện khi cuộn
+  useEffect(() => {
+    const observerOptions = { threshold: 0.15 };
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('opacity-100', 'translate-y-0');
+          entry.target.classList.remove('opacity-0', 'translate-y-12');
+        }
+      });
+    }, observerOptions);
+
+    if (processSectionRef.current) observer.observe(processSectionRef.current);
+    if (packagesSectionRef.current) observer.observe(packagesSectionRef.current);
+
+    return () => observer.disconnect();
+  }, [loadingPackages]);
+
+  // Xử lý khi bấm Đăng ký gói
+  const handleRegisterPackageClick = (pkg) => {
+    const userRole = user?.role?.toUpperCase() || user?.roleName?.toUpperCase();
+    
+    // Nếu là MEMBER -> Chuyển hướng tới page /dang-ky-khoa-hoc
+    if (user && (userRole === 'MEMBER' || userRole === 'HỌC VIÊN')) {
+      navigate('/dang-ky-khoa-hoc');
+    } else {
+      // Role khác hoặc chưa đăng nhập -> Hiện popup thông báo
+      setIsMemberOnlyModalOpen(true);
+    }
+  };
 
   const openModal = (packageName = '') => {
     setFormError('');
@@ -103,8 +177,8 @@ export default function AdmissionsPage() {
         email: email.trim(),
         sports: selectedSport,
         age: studentAge ? Number(studentAge) : null,
-        title: 'Đăng ký tư vấn',
-        note: modalPackageName,
+        title: 'Đăng ký tư vấn gói hội viên',
+        note: modalPackageName ? `Gói quan tâm: ${modalPackageName}` : '',
       });
       closeModal();
       setFullName('');
@@ -125,7 +199,7 @@ export default function AdmissionsPage() {
       {/* 1. HEADER NỀN TRẮNG CỐ ĐỊNH */}
       <Header forceWhite />
 
-      {/* 2. HERO BANNER TUYỂN SINH (ĐÃ BỎ DẢI 4 NÚT) */}
+      {/* 2. HERO BANNER TUYỂN SINH */}
       <section className="relative w-full min-h-[55vh] pt-32 pb-20 bg-[#0d0f17] overflow-hidden flex flex-col justify-center">
         <div className="absolute inset-0 z-0">
           <img
@@ -134,7 +208,6 @@ export default function AdmissionsPage() {
             className="w-full h-full object-cover object-center filter brightness-[0.4] contrast-[1.1]"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent"></div>
-          {/* Lớp màu đỏ vát nghiêng góc phải banner */}
           <div
             className="absolute inset-y-0 right-0 w-full lg:w-[45%] bg-[#e31b23]/25 mix-blend-multiply pointer-events-none"
             style={{
@@ -143,8 +216,7 @@ export default function AdmissionsPage() {
           ></div>
         </div>
 
-        {/* TIÊU ĐỀ HERO BANNER */}
-        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 my-auto">
+        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 my-auto animate-fadeIn duration-700">
           <div className="mb-4">
             <span className="inline-block bg-[#e31b23] text-white font-black text-xs sm:text-sm px-4 py-1.5 uppercase tracking-widest shadow-lg transform -skew-x-6">
               <span className="inline-block transform skew-x-6">ANHDUY SPORT CENTER</span>
@@ -162,7 +234,10 @@ export default function AdmissionsPage() {
       </section>
 
       {/* 3. SECTION QUY TRÌNH TUYỂN SINH */}
-      <section className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 py-16">
+      <section
+        ref={processSectionRef}
+        className="opacity-0 translate-y-12 transition-all duration-700 ease-out relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 py-16"
+      >
         <div className="mb-10">
           <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tight">
             QUY TRÌNH <span className="text-[#e31b23]">TUYỂN SINH</span>
@@ -181,7 +256,6 @@ export default function AdmissionsPage() {
                     onClick={() => setActiveStep(idx)}
                     className="flex flex-col items-center justify-center w-full cursor-pointer group focus:outline-none"
                   >
-                    {/* KHỐI HÌNH BÌNH HÀNH VÁT NGHIÊNG ICON CÓ GLOW ĐỎ NỔI BẬT */}
                     <div
                       className={`w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center transition-all duration-300 transform -skew-x-12 mb-3 ${
                         isSelected
@@ -201,7 +275,6 @@ export default function AdmissionsPage() {
                     </span>
                   </button>
 
-                  {/* ĐƯỜNG NỐI NGANG GIỮA CÁC BƯỚC */}
                   {idx < processSteps.length - 1 && (
                     <div className="hidden md:block h-[1px] bg-gray-700/80 flex-1 mx-2"></div>
                   )}
@@ -212,8 +285,8 @@ export default function AdmissionsPage() {
         </div>
 
         {/* NỘI DUNG CHI TIẾT BƯỚC ĐANG CHỌN */}
-        <div className="relative bg-[#151926] border border-gray-800 rounded-2xl p-8 md:p-12 shadow-2xl overflow-hidden min-h-[320px]">
-          <div className="relative z-10">
+        <div className="relative bg-[#151926] border border-gray-800 rounded-2xl p-8 md:p-12 shadow-2xl overflow-hidden min-h-[320px] transition-all duration-300">
+          <div className="relative z-10 animate-fadeIn">
             <h3 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tight mb-4">
               {processSteps[activeStep].title}
             </h3>
@@ -222,7 +295,6 @@ export default function AdmissionsPage() {
               {processSteps[activeStep].desc}
             </p>
 
-            {/* TIẾN ĐỘ THỜI GIAN TUYỂN SINH */}
             <div className="mb-8 max-w-full">
               <div className="flex justify-between items-center text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">
                 <span>TIẾN ĐỘ TUYỂN SINH</span>
@@ -236,7 +308,6 @@ export default function AdmissionsPage() {
               </div>
             </div>
 
-            {/* NÚT ĐIỀU HƯỚNG PREV / NEXT & NÚT ĐĂNG KÝ NGAY */}
             <div className="flex items-center gap-3">
               <button
                 disabled={activeStep === 0}
@@ -255,7 +326,7 @@ export default function AdmissionsPage() {
 
               <button
                 onClick={() => openModal('Tư vấn khóa học')}
-                className="px-8 py-3 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider transform -skew-x-12 transition-all cursor-pointer shadow-lg shadow-red-900/40 ml-auto"
+                className="px-8 py-3 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider transform -skew-x-12 transition-all cursor-pointer shadow-lg shadow-red-900/40 ml-auto hover:scale-105"
               >
                 <span className="inline-block transform skew-x-12">
                   ĐĂNG KÝ NGAY →
@@ -264,159 +335,167 @@ export default function AdmissionsPage() {
             </div>
           </div>
 
-          {/* SỐ BƯỚC NỀN (01, 02, 03, 04) */}
           <div className="absolute right-4 bottom-0 text-[180px] font-black text-white/5 pointer-events-none select-none leading-none">
             {processSteps[activeStep].stepNum}
           </div>
         </div>
       </section>
 
-      {/* 4. SECTION CÁC GÓI HUẤN LUYỆN */}
-      <section className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 py-16 border-t border-gray-800">
+      {/* 4. SECTION CÁC GÓI HUẤN LUYỆN (GÓI VÀNG NẰM Ở GIỮA, CHỈ GÓI VÀNG CÓ TAG "GÓI KHUYÊN DÙNG") */}
+      <section
+        ref={packagesSectionRef}
+        className="opacity-0 translate-y-12 transition-all duration-700 ease-out relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 py-16 border-t border-gray-800"
+      >
         <div className="mb-12">
           <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tight">
-            CÁC GÓI <span className="text-[#e31b23]">HUẤN LUYỆN</span>
+            CÁC GÓI <span className="text-[#e31b23]">HỘI VIÊN & HUẤN LUYỆN</span>
           </h2>
           <div className="w-20 h-1 bg-[#e31b23] mt-3 mb-4"></div>
           <p className="text-sm font-semibold text-gray-400 max-w-3xl leading-relaxed">
-            Các chương trình được dẫn dắt bởi đội ngũ HLV giàu kinh nghiệm, trong môi trường luyện tập hiện đại chuẩn quốc tế, giúp học viên phát huy tối đa tiềm năng và bản lĩnh thể thao.
+            Lựa chọn gói hội viên phù hợp với nhu cầu tập luyện của bạn để tận hưởng trọn vẹn đặc quyền và không gian tập luyện hiện đại tại AnhDuy Sport.
           </p>
         </div>
 
-        {/* 3 THẺ GÓI HUẤN LUYỆN */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
-          
-          {/* THẺ 1: TẬP LUYỆN THEO NHÓM */}
-          <div className="bg-[#151926] border border-gray-800/80 rounded-xl p-8 flex flex-col justify-between hover:border-gray-700 transition-all shadow-xl">
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-300 bg-[#1e2433] px-3 py-1 rounded-sm border border-gray-700/80">
-                  GROUP TRAINING
-                </span>
-                <span className="text-gray-400">👥</span>
-              </div>
-
-              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-3">
-                TẬP LUYỆN THEO NHÓM
-              </h3>
-              <p className="text-xs font-medium text-gray-300 leading-relaxed mb-6">
-                Khuyến khích tinh thần đồng đội và tạo cơ hội giao lưu, học hỏi giữa các học viên có cùng đam mê thể thao.
-              </p>
-
-              <div className="space-y-3 pt-4 border-t border-gray-800 text-xs">
-                <div className="flex items-start gap-2.5 text-gray-200 font-bold">
-                  <span className="w-5 h-5 rounded bg-gray-800 text-gray-300 flex items-center justify-center text-[10px] shrink-0">1</span>
-                  Lớp học theo cấp độ, dễ hòa nhập với nhóm phù hợp
-                </div>
-                <div className="flex items-start gap-2.5 text-gray-200 font-bold">
-                  <span className="w-5 h-5 rounded bg-gray-800 text-gray-300 flex items-center justify-center text-[10px] shrink-0">2</span>
-                  Bài tập phối hợp giúp tăng phản xạ và tinh thần đồng đội
-                </div>
-                <div className="flex items-start gap-2.5 text-gray-200 font-bold">
-                  <span className="w-5 h-5 rounded bg-gray-800 text-gray-300 flex items-center justify-center text-[10px] shrink-0">3</span>
-                  Theo dõi tiến bộ định kỳ sau mỗi giai đoạn
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => openModal('Tập luyện theo nhóm')}
-              className="mt-8 w-full py-3.5 bg-[#1e2433] hover:bg-[#e31b23] text-white font-black text-xs uppercase tracking-wider rounded-md border border-gray-700/80 hover:border-[#e31b23] transition-all cursor-pointer"
-            >
-              TÌM HIỂU THÊM →
-            </button>
+        {loadingPackages ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#e31b23]"></div>
+            <span className="ml-3 text-sm font-bold text-gray-400">Đang tải danh sách gói hội viên...</span>
           </div>
+        ) : packages.length === 0 ? (
+          <p className="text-center text-gray-400 py-10 font-bold">Hiện chưa có thông tin gói hội viên.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
+            {packages.map((pkg, idx) => {
+              // CHỈ ĐÁNH DẤU GÓI VÀNG LÀ GÓI KHUYÊN DÙNG
+              const isGold = pkg.name?.toLowerCase().includes('vàng') || pkg.code === 'PKG-003';
 
-          {/* THẺ 2: HUẤN LUYỆN RIÊNG 1:1 */}
-          <div className="bg-[#21090d] border-2 border-[#e31b23] rounded-xl p-8 flex flex-col justify-between shadow-2xl relative">
-            <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#e31b23] text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-sm shadow-lg">
-              🔥 PHỔ BIẾN NHẤT
-            </span>
+              return (
+                <div
+                  key={pkg.id || idx}
+                  className={`rounded-xl p-8 flex flex-col justify-between transition-all duration-300 shadow-2xl relative hover:-translate-y-2 ${
+                    isGold
+                      ? 'bg-[#21090d] border-2 border-[#e31b23] shadow-red-900/30'
+                      : 'bg-[#151926] border border-gray-800/80 hover:border-gray-600'
+                  }`}
+                >
+                  {/* CHỈ GÓI VÀNG MỚI HIỂN THỊ TAG GÓI KHUYÊN DÙNG */}
+                  {isGold && (
+                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#e31b23] text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-sm shadow-lg z-10 whitespace-nowrap">
+                      🔥 GÓI KHUYÊN DÙNG
+                    </span>
+                  )}
 
-            <div>
-              <div className="flex justify-between items-center mb-4 mt-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#e31b23] bg-white px-3 py-1 rounded-sm">
-                  PRIVATE COACHING
-                </span>
-                <span className="text-[#e31b23]">👤</span>
-              </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-4 mt-1">
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-sm ${
+                          isGold
+                            ? 'text-[#e31b23] bg-white'
+                            : 'text-gray-300 bg-[#1e2433] border border-gray-700/80'
+                        }`}
+                      >
+                        {pkg.code || 'PACKAGE'}
+                      </span>
+                      <span className="text-xl">{isGold ? '🏆' : '⭐'}</span>
+                    </div>
 
-              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-3">
-                HUẤN LUYỆN RIÊNG 1:1 / 2:1
-              </h3>
-              <p className="text-xs font-medium text-gray-200 leading-relaxed mb-6">
-                Chương trình cá nhân hóa giúp học viên được hướng dẫn trực tiếp cùng HLV, tập trung tối đa vào kỹ thuật, thể lực và chiến thuật theo mục tiêu riêng.
-              </p>
+                    <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2">
+                      {pkg.name}
+                    </h3>
 
-              <div className="space-y-3 pt-4 border-t border-red-900/40 text-xs">
-                <div className="flex items-start gap-2.5 text-gray-100 font-bold">
-                  <span className="w-5 h-5 rounded bg-[#e31b23] text-white flex items-center justify-center text-[10px] shrink-0">1</span>
-                  Đánh giá kỹ thuật và thể lực trước khi xây dựng giáo án
+                    {/* HỌC PHÍ VÀ THỜI HẠN */}
+                    <div className="mb-6 pb-4 border-b border-gray-800">
+                      <span className="text-3xl font-black text-[#e31b23]">
+                        {pkg.fee ? pkg.fee.toLocaleString('vi-VN') : '0'} <span className="text-sm font-bold text-gray-300">đ</span>
+                      </span>
+                      <span className="text-xs font-semibold text-gray-400 block mt-1">
+                        Thời hạn sử dụng: {pkg.validityMonths || 1} tháng
+                      </span>
+                      {pkg.upgradeDiscountPercent > 0 && (
+                        <span className="inline-block mt-2 text-[11px] font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-700/80 px-2.5 py-0.5 rounded-sm">
+                          Giảm {pkg.upgradeDiscountPercent}% khi nâng cấp cùng lúc đăng ký lớp
+                        </span>
+                      )}
+                    </div>
+
+                    {/* DANH SÁCH QUYỀN LỢI */}
+                    <div className="space-y-3 text-xs">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-2">
+                        Quyền lợi đặc quyền:
+                      </span>
+                      {Array.isArray(pkg.benefits) && pkg.benefits.length > 0 ? (
+                        pkg.benefits.map((benefit, bIdx) => (
+                          <div key={bIdx} className="flex items-start gap-2.5 text-gray-200 font-bold">
+                            <span
+                              className={`w-5 h-5 rounded flex items-center justify-center text-[10px] shrink-0 ${
+                                isGold
+                                  ? 'bg-[#e31b23] text-white'
+                                  : 'bg-gray-800 text-gray-300'
+                              }`}
+                            >
+                              ✓
+                            </span>
+                            <span>{benefit}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-gray-500 italic">Đang cập nhật quyền lợi...</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleRegisterPackageClick(pkg)}
+                    className={`mt-8 w-full py-3.5 font-black text-xs uppercase tracking-wider rounded-md transition-all cursor-pointer ${
+                      isGold
+                        ? 'bg-[#e31b23] hover:bg-[#c4131a] text-white shadow-lg shadow-red-900/40 hover:scale-[1.02]'
+                        : 'bg-[#1e2433] hover:bg-[#e31b23] text-white border border-gray-700/80 hover:border-[#e31b23] hover:scale-[1.02]'
+                    }`}
+                  >
+                    ĐĂNG KÝ GÓI NÀY →
+                  </button>
                 </div>
-                <div className="flex items-start gap-2.5 text-gray-100 font-bold">
-                  <span className="w-5 h-5 rounded bg-[#e31b23] text-white flex items-center justify-center text-[10px] shrink-0">2</span>
-                  Lộ trình cá nhân hóa theo mục tiêu, độ tuổi và lịch sinh hoạt
-                </div>
-                <div className="flex items-start gap-2.5 text-gray-100 font-bold">
-                  <span className="w-5 h-5 rounded bg-[#e31b23] text-white flex items-center justify-center text-[10px] shrink-0">3</span>
-                  Phản hồi trực tiếp trong từng buổi để chỉnh lỗi nhanh
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => openModal('Huấn luyện riêng 1:1')}
-              className="mt-8 w-full py-3.5 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider rounded-md shadow-lg shadow-red-900/40 transition-all cursor-pointer"
-            >
-              TÌM HIỂU THÊM →
-            </button>
+              );
+            })}
           </div>
-
-          {/* THẺ 3: HUẤN LUYỆN THI ĐẤU */}
-          <div className="bg-[#151926] border border-gray-800/80 rounded-xl p-8 flex flex-col justify-between hover:border-gray-700 transition-all shadow-xl">
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-300 bg-[#1e2433] px-3 py-1 rounded-sm border border-gray-700/80">
-                  ELITE COMPETITION
-                </span>
-                <span className="text-gray-400">🏆</span>
-              </div>
-
-              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-3">
-                HUẤN LUYỆN THI ĐẤU
-              </h3>
-              <p className="text-xs font-medium text-gray-300 leading-relaxed mb-6">
-                Dành cho học viên có định hướng thi đấu chuyên nghiệp, chú trọng rèn luyện kỹ năng nâng cao, tâm lý thi đấu và chiến lược thực chiến.
-              </p>
-
-              <div className="space-y-3 pt-4 border-t border-gray-800 text-xs">
-                <div className="flex items-start gap-2.5 text-gray-200 font-bold">
-                  <span className="w-5 h-5 rounded bg-gray-800 text-gray-300 flex items-center justify-center text-[10px] shrink-0">1</span>
-                  Giáo án nâng cao theo tiêu chuẩn thi đấu chuyên nghiệp
-                </div>
-                <div className="flex items-start gap-2.5 text-gray-200 font-bold">
-                  <span className="w-5 h-5 rounded bg-gray-800 text-gray-300 flex items-center justify-center text-[10px] shrink-0">2</span>
-                  Rèn chiến thuật, tâm lý và xử lý áp lực trận đấu
-                </div>
-                <div className="flex items-start gap-2.5 text-gray-200 font-bold">
-                  <span className="w-5 h-5 rounded bg-gray-800 text-gray-300 flex items-center justify-center text-[10px] shrink-0">3</span>
-                  Định hướng tham gia giải đấu và kiểm tra năng lực định kỳ
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => openModal('Huấn luyện thi đấu')}
-              className="mt-8 w-full py-3.5 bg-[#1e2433] hover:bg-[#e31b23] text-white font-black text-xs uppercase tracking-wider rounded-md border border-gray-700/80 hover:border-[#e31b23] transition-all cursor-pointer"
-            >
-              TÌM HIỂU THÊM →
-            </button>
-          </div>
-
-        </div>
+        )}
       </section>
 
-      {/* 5. POPUP MODAL ĐĂNG KÝ TƯ VẤN */}
+      {/* 5. POPUP THÔNG BÁO GIỚI HẠN DÀNH CHO THÀNH VIÊN (ROLE KHÁC MEMBER HOẶC CHƯA LOGGED IN) */}
+      {isMemberOnlyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="relative bg-[#181d2a] border border-gray-700 text-white rounded-2xl p-6 sm:p-8 w-full max-w-md shadow-2xl text-center">
+            <div className="w-14 h-14 rounded-full bg-[#e31b23]/20 border border-[#e31b23]/40 flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">🔒</span>
+            </div>
+
+            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">
+              Khu vực dành cho Thành viên
+            </h3>
+
+            <p className="text-xs sm:text-sm text-gray-300 font-medium leading-relaxed mb-6">
+              Chức năng đăng ký gói hội viên chỉ dành cho tài khoản học viên. Vui lòng đăng nhập với tư cách **Học viên** để tiếp tục.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsMemberOnlyModalOpen(false)}
+                className="flex-1 py-3 bg-[#202736] hover:bg-[#2a3447] text-gray-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => navigate('/dang-nhap')}
+                className="flex-1 py-3 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all cursor-pointer"
+              >
+                Đăng nhập ngay →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. POPUP MODAL ĐĂNG KÝ TƯ VẤN (DÀNH CHO NÚT BƯỚC TUYỂN SINH) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="relative bg-white text-gray-900 rounded-lg p-6 sm:p-8 w-full max-w-md shadow-2xl">
@@ -488,7 +567,7 @@ export default function AdmissionsPage() {
               <div>
                 <input
                   type="text"
-                  placeholder="Độ tuổi học viên *"
+                  placeholder="Độ tuổi học viên"
                   value={studentAge}
                   onChange={(e) => setStudentAge(e.target.value)}
                   className="w-full bg-gray-50 border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#e31b23] transition-all"
@@ -498,7 +577,7 @@ export default function AdmissionsPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-3.5 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider rounded-md shadow-md cursor-pointer disabled:opacity-50 transition-all mt-2"
+                className="w-full py-3.5 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider rounded-md shadow-md cursor-pointer disabled:opacity-50 transition-all mt-2 active:scale-95"
               >
                 {submitting ? 'ĐANG GỬI...' : 'GỬI ĐĂNG KÝ →'}
               </button>
@@ -511,7 +590,7 @@ export default function AdmissionsPage() {
         </div>
       )}
 
-      {/* 6. FOOTER */}
+      {/* 7. FOOTER */}
       <Footer />
     </div>
   );

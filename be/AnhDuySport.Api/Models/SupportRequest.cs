@@ -11,7 +11,7 @@ public class SupportRequest
     public int SupportRequestId { get; set; }
 
     [Column("member_user_id")]
-    public int MemberUserId { get; set; }
+    public int? MemberUserId { get; set; }
 
     [Column("title")]
     public string Title { get; set; } = "";
