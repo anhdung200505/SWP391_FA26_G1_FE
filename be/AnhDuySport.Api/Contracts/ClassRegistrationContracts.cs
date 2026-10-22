@@ -146,7 +146,9 @@ public sealed record ClassRegistrationDto(
     decimal Tuition,
     MembershipPackageQuoteDto? MembershipPackage,
     string PayosQrCode,
-    string PayosQrImage);
+    string PayosQrImage,
+    // Số giây còn lại trước khi đơn chờ thanh toán bị hủy (0 khi không còn chờ).
+    int ExpiresInSeconds);
 
 // Gói nhận kèm lớp. IsFree = true: Hạng Đồng tặng kèm, Price = 0.
 public sealed record MembershipPackageQuoteDto(

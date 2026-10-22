@@ -15,6 +15,14 @@ import {
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 
+// Đơn chờ thanh toán chỉ giữ 3 phút (khớp với backend), quá hạn thì hủy và quay lại form đăng ký.
+const PAYMENT_TIMEOUT_SECONDS = 180;
+const PAID_REDIRECT_SECONDS = 5;
+const MY_COURSES_PATH = '/hoc-vien-dashboard';
+
+const formatCountdown = (seconds) =>
+  `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+
 export default function ClassRegistrationPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -55,6 +63,8 @@ export default function ClassRegistrationPage() {
   // Kết quả & Thanh toán từ Server
   const [registrationResult, setRegistrationResult] = useState(null);
   const [paymentStatusData, setPaymentStatusData] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [redirectLeft, setRedirectLeft] = useState(PAID_REDIRECT_SECONDS);
 
   // 1. Fetch danh sách Gói hội viên, Thông tin Lớp học ban đầu & Danh sách Bộ môn
   useEffect(() => {
@@ -168,6 +178,58 @@ export default function ClassRegistrationPage() {
   // Không tự vẽ QR từ số tài khoản ở frontend.
   const qrImage = registrationResult?.payosQrImage || '';
 
+  const isPaid = paymentStatusData?.paymentStatus === 'paid' || paymentStatusData?.paymentStatus === 'success';
+  const secondsLeft = registrationResult?.deadline
+    ? Math.max(0, Math.ceil((registrationResult.deadline - now) / 1000))
+    : 0;
+
+  // Đếm ngược giữ đơn. Hết giờ: hỏi lại trạng thái lần cuối, chưa trả thì hủy đơn và quay về form đăng ký.
+  useEffect(() => {
+    if (!registrationResult?.deadline || isPaid) return undefined;
+
+    const result = registrationResult;
+    const tick = setInterval(async () => {
+      const current = Date.now();
+      setNow(current);
+      if (current < result.deadline) return;
+
+      clearInterval(tick);
+      try {
+        const status =
+          result.kind === 'membership'
+            ? await confirmMembershipRenewal(user?.id, result.paymentId)
+            : await getClassRegistrationStatus(result.paymentId);
+        if (status?.paymentStatus === 'paid') {
+          setPaymentStatusData(status);
+          return;
+        }
+      } catch {
+        // Không hỏi được thì vẫn hủy đơn
+      }
+
+      await cancelPayment(result.paymentId).catch(() => {});
+      setRegistrationResult(null);
+      setPaymentStatusData(null);
+      setError(`Hết ${PAYMENT_TIMEOUT_SECONDS / 60} phút giữ đơn nên đơn đã bị hủy. Vui lòng bấm đăng ký lại.`);
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [registrationResult, isPaid, user?.id]);
+
+  // Thanh toán xong: hiện lời cảm ơn, đếm lùi rồi tự chuyển về Khóa học của tôi.
+  useEffect(() => {
+    if (!isPaid) return undefined;
+    const until = Date.now() + PAID_REDIRECT_SECONDS * 1000;
+    const tick = setInterval(() => {
+      const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+      setRedirectLeft(left);
+      if (left === 0) {
+        clearInterval(tick);
+        navigate(MY_COURSES_PATH);
+      }
+    }, 250);
+    return () => clearInterval(tick);
+  }, [isPaid, navigate]);
+
   // Logic tính giá Gói hội viên: CHỈ CHIẾT KHẤU KHI CÓ TICK ĐĂNG KÝ KÈM LỚP
   const calculatePackagePrice = (pkg) => {
     if (!pkg) return 0;
@@ -233,7 +295,9 @@ export default function ClassRegistrationPage() {
           payosQrCode: res.qrCode || '',
           payosQrImage: res.qrImage || '',
           isExisting: false,
+          deadline: Date.now() + (res.expiresInSeconds ?? PAYMENT_TIMEOUT_SECONDS) * 1000,
         });
+        setNow(Date.now());
         return;
       }
 
@@ -249,7 +313,11 @@ export default function ClassRegistrationPage() {
       };
 
       const res = await registerClass(payload);
-      setRegistrationResult(res);
+      setRegistrationResult({
+        ...res,
+        deadline: Date.now() + (res.expiresInSeconds ?? PAYMENT_TIMEOUT_SECONDS) * 1000,
+      });
+      setNow(Date.now());
     } catch (err) {
       setError(err.message || 'Đăng ký thất bại. Vui lòng thử lại.');
     } finally {
@@ -269,8 +337,6 @@ export default function ClassRegistrationPage() {
     setRegistrationResult(null);
     setPaymentStatusData(null);
   };
-
-  const isPaid = paymentStatusData?.paymentStatus === 'paid' || paymentStatusData?.paymentStatus === 'success';
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans select-none flex flex-col justify-between">
@@ -332,7 +398,7 @@ export default function ClassRegistrationPage() {
               </h2>
               <p className="text-xs text-slate-500 mt-1">
                 {isPaid
-                  ? paymentStatusData?.message || 'Hệ thống đã ghi nhận dịch vụ của bạn!'
+                  ? 'Cảm ơn bạn đã tin chọn AnhDuy Sport. Hẹn gặp bạn tại lớp học!'
                   : registrationResult.isExisting
                   ? 'Bạn đang có một đơn hàng chờ thanh toán trước đó cho dịch vụ này.'
                   : 'Quét mã VietQR bằng App Ngân hàng bất kỳ để hoàn tất thanh toán.'}
@@ -376,7 +442,11 @@ export default function ClassRegistrationPage() {
                 {isPaid ? (
                   <div className="py-6">
                     <span className="text-5xl block mb-2">🎉</span>
-                    <p className="text-sm font-black text-emerald-600">ĐÃ XÁC NHẬN THANH TOÁN</p>
+                    <p className="text-sm font-black text-emerald-600">CẢM ƠN BẠN ĐÃ THANH TOÁN!</p>
+                    <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
+                      AnhDuy Sport đã ghi nhận đăng ký của bạn. Tự động chuyển về Khóa học của tôi sau{' '}
+                      <span className="font-black text-emerald-600">{redirectLeft}</span> giây...
+                    </p>
                   </div>
                 ) : qrImage ? (
                   <>
@@ -384,6 +454,9 @@ export default function ClassRegistrationPage() {
                       <img src={qrImage} alt="Mã VietQR payOS" className="w-52 h-52 object-contain" />
                     </div>
                     <p className="text-[11px] font-bold text-slate-600">Quét mã VietQR bằng App Ngân Hàng</p>
+                    <p className={`text-xs font-black mt-1 ${secondsLeft <= 30 ? 'text-[#e31b23]' : 'text-amber-600'}`}>
+                      Mã hết hạn sau {formatCountdown(secondsLeft)}
+                    </p>
                     <p className="text-[10px] text-slate-400 mt-1">Trang tự cập nhật khi thanh toán xong.</p>
                   </>
                 ) : (
@@ -416,10 +489,10 @@ export default function ClassRegistrationPage() {
               )}
 
               <button
-                onClick={() => navigate('/hoc-vien-dashboard')}
+                onClick={() => navigate(MY_COURSES_PATH)}
                 className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs uppercase px-8 py-3 rounded-xl shadow transition-all cursor-pointer"
               >
-                Trang cá nhân học viên →
+                {isPaid ? 'Về Khóa học của tôi ngay →' : 'Trang cá nhân học viên →'}
               </button>
             </div>
           </div>
