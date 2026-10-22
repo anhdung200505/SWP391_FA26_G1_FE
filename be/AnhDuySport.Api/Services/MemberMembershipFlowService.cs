@@ -131,12 +131,14 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             .OrderBy(item => item.Fee)
             .ToListAsync();
 
+        var highest = await ClassMembershipBonus.HighestOwnedPackageAsync(db, member.UserId, today);
         return new MembershipManagementDto(
             ToProfileDto(member),
             current,
             endDate,
             history,
-            packages.Select(AccountFlowMapper.ToDto).ToList());
+            packages.Select(AccountFlowMapper.ToDto).ToList(),
+            highest?.MembershipPackageId.ToString());
     }
 
     // ===== Need Consultation? = Yes → hiển thị số chăm sóc khách hàng =====
@@ -397,6 +399,12 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     // Dòng cũ chưa gắn gói (membership_package_id NULL) được coi là gói khác.
     private async Task<RenewalPlan> PlanRenewalAsync(int userId, MembershipPackage package, DateOnly today, bool blockDowngrade)
     {
+        // Xét cả gói đang chờ kích hoạt (vd. Vàng nhận kèm lớp), không chỉ gói đang dùng.
+        if (blockDowngrade)
+        {
+            await ClassMembershipBonus.EnsureNotDowngradeAsync(db, userId, package, today);
+        }
+
         var running = await db.Memberships
             .Include(item => item.Package)
             .Where(item => item.UserId == userId && item.Status == "active" && item.EndDate >= today)
@@ -420,12 +428,6 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         }
         else
         {
-            if (blockDowngrade && latest.Package is not null && package.Fee < latest.Package.Fee)
-            {
-                throw new InvalidOperationException(
-                    $"{latest.PlanName} còn hạn đến {latest.EndDate:dd/MM/yyyy}. Chỉ được gia hạn hoặc nâng cấp lên hạng cao hơn.");
-            }
-
             renewalType = "Nâng cấp";
             endDate = today.AddMonths(package.ValidityMonths).AddDays(-1);
         }
@@ -771,11 +773,9 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             membership.PlanName,
             membership.StartDate,
             membership.EndDate,
-            // Trong DB vẫn là active nhưng đã qua ngày hết hạn thì hiển thị expired;
-            // đơn chờ thanh toán đã bị hủy hoặc quá thời gian giữ đơn thì hiển thị cancelled.
-            membership.Status == "active" && membership.EndDate < today ? "expired"
-            : membership.Status == "pending" && waitingSeconds == 0 ? "cancelled"
-            : membership.Status,
+            // Trong DB vẫn là active nhưng đã qua ngày hết hạn thì hiển thị expired.
+            // Đơn chờ thanh toán giữ nhãn pending (lịch sử có cột thời gian tạo để học viên tự đối chiếu).
+            membership.Status == "active" && membership.EndDate < today ? "expired" : membership.Status,
             // Gói lên cấp kèm lớp gắn với payment của lớp: chỉ tính phần tiền gói.
             membership.Payment is { ClassId: not null } classPayment
                 ? classPayment.UpgradeAmount
