@@ -231,6 +231,39 @@ export function updateMemberProfile(memberUserId, payload) {
   });
 }
 
+// Gửi ảnh đại diện dạng form-data (không dùng request() vì request() luôn đặt Content-Type JSON)
+export async function uploadMemberAvatar(memberUserId, file) {
+  const token = readSession()?.token || localStorage.getItem('token');
+  const form = new FormData();
+  form.append('file', file);
+
+  let response;
+  try {
+    response = await fetch(`/api/members/${memberUserId}/profile/avatar`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: form,
+    });
+  } catch {
+    throw new Error('Không kết nối được máy chủ. Vui lòng kiểm tra lại kết nối mạng hoặc API.');
+  }
+
+  if (response.status === 401) {
+    clearSession();
+    onUnauthorized();
+    throw new Error('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.');
+  }
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.message || 'Tải ảnh đại diện thất bại.');
+  }
+  return body;
+}
+
 // ==========================================
 // API YÊU CẦU HỖ TRỢ & TƯ VẤN (SUPPORT REQUESTS)
 // ==========================================
