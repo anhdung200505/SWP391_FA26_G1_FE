@@ -134,6 +134,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(item => item.Member)
                 .WithMany()
                 .HasForeignKey(item => item.MemberUserId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne(item => item.Assignee)
                 .WithMany()
