@@ -72,8 +72,22 @@ public class ComboPayOsPaymentService(
             payment = await FindPaymentAsync(int.Parse(registration.PaymentId));
         }
 
-        // Đổi lựa chọn lên cấp thì SubmitRegistrationAsync đã chuyển đơn cũ sang 'failed';
-        // đóng luôn mã QR cũ trên payOS để học viên không trả nhầm đơn đã hủy.
+        // Đổi lựa chọn lên cấp: SubmitRegistrationAsync định hủy đơn cũ nhưng đơn đó lấy từ LiveHolds() (AsNoTracking)
+        // nên 'failed' không được lưu, rồi trùng UX_payment_pending_per_class và trả lại đơn cũ.
+        // Ở đây tự hủy đơn cũ (đóng cả QR payOS) rồi tạo lại.
+        var wantedPackageId = (await ClassMembershipBonus.QuoteUpgradeAsync(db, request.UpgradePackageId)).Package?.MembershipPackageId;
+        if (payment.Status == "pending" && payment.UpgradePackageId != wantedPackageId)
+        {
+            await CancelLinkAsync(payment, "Đổi lựa chọn gói lên cấp");
+            await registrations.MarkPaymentFailedAsync(payment.PaymentId, memberUserId);
+            AddHistory(payment.PaymentId, "cancel", "Đổi lựa chọn gói lên cấp, tạo đơn mới");
+            await db.SaveChangesAsync();
+            db.ChangeTracker.Clear();
+            registration = await registrations.SubmitRegistrationAsync(memberUserId, request);
+            payment = await FindPaymentAsync(int.Parse(registration.PaymentId));
+        }
+
+        // Còn mã QR của đơn đã hủy gần đây (cùng lớp) trên payOS thì đóng luôn để học viên không trả nhầm.
         await CancelStaleLinksAsync(payOs, payment);
 
         if (payment.Status == "pending" && !string.IsNullOrWhiteSpace(payment.QrCode))
@@ -87,7 +101,9 @@ public class ComboPayOsPaymentService(
             throw new RegistrationException("Số tiền không hợp lệ để tạo mã QR payOS.");
         }
 
-        payment.PayosOrderCode ??= payment.PaymentId;
+        // Không dùng payment_id làm orderCode: reset DB hoặc nhiều máy dùng chung khóa payOS thì payment_id lặp lại
+        // và payOS báo "Đơn thanh toán đã tồn tại". Mỗi lần xin link dùng mã mới (vẫn tra ngược qua payos_order_code).
+        payment.PayosOrderCode = NewOrderCode(payment.PaymentId);
         var invoiceCode = payment.Invoice?.InvoiceCode ?? "";
         var expiresAt = LinkExpiresAt(payment);
         try
@@ -319,6 +335,11 @@ public class ComboPayOsPaymentService(
         {
         }
     }
+
+    // Mili-giây Unix × 1000 + 3 số cuối payment_id: luôn tăng, không trùng giữa các lần tạo,
+    // và nhỏ hơn 9007199254740991 (giới hạn orderCode của payOS).
+    private static long NewOrderCode(int paymentId) =>
+        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000 + paymentId % 1000;
 
     private static DateTime LinkExpiresAt(Payment payment) =>
         (payment.Invoice?.IssuedAt ?? DateTime.Now).AddMinutes(LinkMinutes);
