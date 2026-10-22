@@ -194,6 +194,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             if (oldPayment.Status == "pending"
                 && item.MembershipPackageId == package.MembershipPackageId
                 && oldPayment.Amount == amount
+                && oldPayment.Invoice is not null
+                && PaymentTimeout.SecondsLeft(oldPayment.Invoice.IssuedAt) > 0
                 && !string.IsNullOrWhiteSpace(oldPayment.CheckoutUrl)
                 && !string.IsNullOrWhiteSpace(oldPayment.QrCode))
             {
@@ -450,6 +452,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
                 Description = description,
                 ReturnUrl = PayOsUrl("PayOS:MembershipReturnUrl", "http://localhost:5173/ho-so"),
                 CancelUrl = PayOsUrl("PayOS:MembershipCancelUrl", "http://localhost:5173/ho-so"),
+                ExpiredAt = new DateTimeOffset(PaymentTimeout.ExpiresAt(payment.Invoice?.IssuedAt ?? DateTime.Now)).ToUnixTimeSeconds(),
             });
             payment.CheckoutUrl = link.CheckoutUrl;
             payment.PaymentLinkId = link.PaymentLinkId;
@@ -628,7 +631,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             payment.CheckoutUrl,
             payment.QrCode,
             message,
-            PayOsQrImage.ToDataUrl(payment.QrCode));
+            PayOsQrImage.ToDataUrl(payment.QrCode),
+            payment.Status == "pending" && payment.Invoice is not null ? PaymentTimeout.SecondsLeft(payment.Invoice.IssuedAt) : 0);
 
     private sealed record RenewalPlan(string Type, DateOnly StartDate, DateOnly EndDate, List<Membership> Running);
 
