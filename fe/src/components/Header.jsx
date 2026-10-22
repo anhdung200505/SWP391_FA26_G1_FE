@@ -227,8 +227,12 @@ export default function Header({ forceWhite = false }) {
                 type="button"
                 className="flex items-center focus:outline-none cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-full bg-[#e31b23] text-white flex items-center justify-center font-bold text-base shadow-md ring-2 ring-white/80 transition-transform duration-200 group-hover:scale-105">
-                  {getInitial(user.fullName || user.userName || user.name)}
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-[#e31b23] text-white flex items-center justify-center font-bold text-base shadow-md ring-2 ring-white/80 transition-transform duration-200 group-hover:scale-105">
+                  {/^(\/|https?:)/.test(user.avatarUrl || '') ? (
+                    <img src={user.avatarUrl} alt="Ảnh đại diện" className="w-full h-full object-cover" />
+                  ) : (
+                    getInitial(user.fullName || user.userName || user.name)
+                  )}
                 </div>
               </button>
 
