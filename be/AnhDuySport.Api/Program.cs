@@ -122,6 +122,16 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+
+// Ảnh học viên tải lên (uploads/avatars) phục vụ ở /api/uploads để đi qua proxy /api của frontend.
+var uploadsPath = Path.Combine(app.Environment.ContentRootPath, AvatarStorage.UploadsFolder);
+Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/api/uploads",
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

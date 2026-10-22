@@ -14,6 +14,15 @@ import {
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
+// Huy chương theo hạng gói: Đồng 🥉, Bạc 🥈, Vàng 🥇
+const packageMedal = (pkg) => {
+  const name = pkg?.name?.toLowerCase() || '';
+  if (pkg?.code === 'PKG-003' || name.includes('vàng')) return '🥇';
+  if (pkg?.code === 'PKG-002' || name.includes('bạc')) return '🥈';
+  if (pkg?.code === 'PKG-001' || name.includes('đồng')) return '🥉';
+  return '🏅';
+};
+
 const formatCountdown = (ms) => {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -341,7 +350,7 @@ export default function HocVienDashboardPage() {
                     to={`/dang-ky-khoa-hoc?packageId=${highestPackage.id}`}
                     className="bg-white text-slate-900 hover:bg-slate-100 font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
                   >
-                    🔄 Gia hạn {highestPackage.name}
+                    {packageMedal(highestPackage)} Gia hạn {highestPackage.name}
                   </Link>
                   {upgradePackages.map((pkg) => (
                     <Link
@@ -349,7 +358,7 @@ export default function HocVienDashboardPage() {
                       to={`/dang-ky-khoa-hoc?packageId=${pkg.id}`}
                       className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
                     >
-                      ⬆ Nâng cấp lên {pkg.name}
+                      {packageMedal(pkg)} Nâng cấp lên {pkg.name}
                     </Link>
                   ))}
                 </div>

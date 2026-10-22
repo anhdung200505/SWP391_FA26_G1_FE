@@ -41,6 +41,24 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [HttpPost("profile/avatar")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(3 * 1024 * 1024)]
+    [EndpointSummary("Edit personal information: học viên đổi ảnh đại diện")]
+    [EndpointDescription("Gửi form-data có field file (JPG, PNG, WebP hoặc GIF, tối đa 2 MB). Trả hồ sơ mới với avatarUrl dạng /api/uploads/avatars/...")]
+    public async Task<ActionResult<MemberProfileMutationResponse>> UploadAvatar(string memberUserId, IFormFile? file)
+    {
+        if (EnsureOwner(memberUserId) is { } denied) return denied;
+        try
+        {
+            return Ok(await flow.UpdateAvatarAsync(memberUserId, file));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
     [HttpGet("membership")]
     [EndpointSummary("View membership management: gói đang dùng, lịch sử và các gói đang bán")]
     public async Task<ActionResult<MembershipManagementDto>> ViewMembershipManagement(string memberUserId)

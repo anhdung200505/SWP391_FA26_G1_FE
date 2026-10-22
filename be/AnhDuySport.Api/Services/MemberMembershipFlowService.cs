@@ -101,6 +101,33 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             ToLogDto(log, member.FullName));
     }
 
+    // ===== Edit personal information → đổi ảnh đại diện =====
+    public async Task<MemberProfileMutationResponse> UpdateAvatarAsync(string memberUserId, IFormFile? file)
+    {
+        var member = await FindActiveMemberAsync(memberUserId);
+        var contentRoot = services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
+        var oldAvatar = member.AvatarUrl;
+        member.AvatarUrl = await AvatarStorage.SaveAsync(contentRoot, member.UserId, file);
+
+        var log = new ActivityLog
+        {
+            ActorUserId = member.UserId,
+            Action = "Cập nhật ảnh đại diện",
+            EntityName = "user",
+            EntityId = member.UserId,
+            Detail = "Đã đổi ảnh đại diện.",
+            CreatedAt = DateTime.Now,
+        };
+        db.ActivityLogs.Add(log);
+        await db.SaveChangesAsync();
+        AvatarStorage.DeleteIfUploaded(contentRoot, oldAvatar);
+
+        return new MemberProfileMutationResponse(
+            ToProfileDto(member),
+            "Cập nhật ảnh đại diện thành công.",
+            ToLogDto(log, member.FullName));
+    }
+
     // ===== Renew/Upgrade Package → View membership management =====
     public async Task<MembershipManagementDto> ViewMembershipManagementAsync(string memberUserId)
     {
@@ -758,7 +785,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             user.Phone ?? "",
             user.DateOfBirth,
             user.Gender ?? "",
-            user.Status);
+            user.Status,
+            user.AvatarUrl);
 
     // Cần có Payment và Payment.Invoice (Include hoặc vừa tạo) trước khi gọi.
     private static MembershipDto ToMembershipDto(Membership membership, DateOnly today)
