@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 export default function CourseDetailPage() {
   const { courseSlug } = useParams();
   const courseStatic = fontDetails[courseSlug];
-  const { user } = useAuth(); // Kiểm tra trạng thái đăng nhập
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [classes, setClasses] = useState([]);
@@ -23,27 +23,65 @@ export default function CourseDetailPage() {
     }
   }, [courseSlug, courseStatic]);
 
-  // Chỉ fetch dữ liệu lớp học khi người dùng ĐÃ ĐĂNG NHẬP
   useEffect(() => {
     let active = true;
 
     async function fetchClassesData() {
-      if (!user) return; // Guest -> Không fetch
+      if (!user) return;
       try {
         setLoadingClasses(true);
-        const sportsList = await getSportsByCenter('1');
-        const currentSport = sportsList.find(
-          (s) => s.code === courseSlug || s.id === courseSlug || courseSlug.includes(s.code)
-        );
-
-        const sportId = currentSport ? currentSport.id : '1';
-        const classData = await getClasses('1', sportId);
-
-        if (active && Array.isArray(classData)) {
-          setClasses(classData);
+        
+        // 1. Lấy tất cả danh sách môn học từ Trung tâm 1
+        const sportsList = await getSportsByCenter('1').catch(() => []);
+        
+        if (!Array.isArray(sportsList) || sportsList.length === 0) {
+          if (active) setClasses([]);
+          return;
         }
-      } catch {
-        // Ignored
+
+        // BẢNG BẮT CẶP TÊN MÔN / SLUG URL / CODE API
+        const slugClean = courseSlug?.toLowerCase().replace(/-/g, '') || '';
+
+        const currentSport = sportsList.find((s) => {
+          const codeClean = (s.code || '').toLowerCase().replace(/-/g, '');
+          const nameClean = (s.name || '').toLowerCase().replace(/ /g, '');
+          
+          return (
+            codeClean === slugClean ||
+            slugClean.includes(codeClean) ||
+            codeClean.includes(slugClean) ||
+            nameClean.includes(slugClean) ||
+            slugClean.includes(nameClean) ||
+            s.id === courseSlug
+          );
+        });
+
+        if (currentSport) {
+          // 2. Gọi API lấy danh sách lớp theo đúng sportId tìm thấy
+          const classData = await getClasses('1', currentSport.id);
+          
+          if (active && Array.isArray(classData)) {
+            // Lọc thêm 1 lần nữa ở client để đảm bảo không bị lẫn lộn dữ liệu môn khác
+            const matchedClasses = classData.filter(
+              (c) => String(c.sportId) === String(currentSport.id) || 
+                     c.sportName?.toLowerCase() === currentSport.name?.toLowerCase()
+            );
+            setClasses(matchedClasses);
+          }
+        } else {
+          // 3. Trường hợp không tìm thấy sportId, lấy tất cả lớp của center 1 và lọc theo tên bộ môn
+          const allClasses = await getClasses('1').catch(() => []);
+          if (active && Array.isArray(allClasses)) {
+            const matchedByStaticTitle = allClasses.filter((c) =>
+              c.sportName?.toLowerCase().includes(courseStatic?.title?.toLowerCase()) ||
+              courseStatic?.title?.toLowerCase().includes(c.sportName?.toLowerCase())
+            );
+            setClasses(matchedByStaticTitle);
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi tải danh sách lớp theo bộ môn:', err);
+        if (active) setClasses([]);
       } finally {
         if (active) setLoadingClasses(false);
       }
@@ -57,6 +95,11 @@ export default function CourseDetailPage() {
       active = false;
     };
   }, [courseSlug, courseStatic, user]);
+
+  // Chuyển hướng sang trang xác nhận thông tin đăng ký
+  const handleRegisterClass = (classItem) => {
+    navigate(`/dang-ky-khoa-hoc?classId=${classItem.id}`);
+  };
 
   if (!courseStatic) {
     return <Navigate to="/khoa-hoc" replace />;
@@ -172,31 +215,33 @@ export default function CourseDetailPage() {
         </div>
       </section>
 
-      {/* BANNER TẬP LUYỆN -> DẪN SANG TRANG TUYỂN SINH */}
-      <section className="relative z-20 w-full bg-[#121622] border-y border-gray-800/80 py-16 px-6 text-center overflow-hidden">
-        <div className="max-w-4xl mx-auto relative z-10">
-          <h2 className="text-3xl sm:text-5xl font-black text-white uppercase tracking-tight mb-4">
-            TẬP LUYỆN CÙNG HLV {headCoach.name}
-          </h2>
+      {/* BANNER TẬP LUYỆN -> DẪN SANG TRANG TUYỂN SINH (CHO GUEST CHƯA ĐĂNG NHẬP) */}
+      {!user && (
+        <section className="relative z-20 w-full bg-[#121622] border-y border-gray-800/80 py-16 px-6 text-center overflow-hidden">
+          <div className="max-w-4xl mx-auto relative z-10">
+            <h2 className="text-3xl sm:text-5xl font-black text-white uppercase tracking-tight mb-4">
+              TẬP LUYỆN CÙNG HLV {headCoach.name}
+            </h2>
 
-          <p className="text-sm sm:text-base font-semibold text-gray-300 max-w-xl mx-auto mb-8">
-            Xem học phí, chọn lộ trình phù hợp và đặt lịch tư vấn cho bộ môn {courseStatic.title}.
-          </p>
+            <p className="text-sm sm:text-base font-semibold text-gray-300 max-w-xl mx-auto mb-8">
+              Xem học phí, chọn lộ trình phù hợp và đặt lịch tư vấn cho bộ môn {courseStatic.title}.
+            </p>
 
-          <button
-            onClick={() => {
-              navigate('/tuyen-sinh');
-              window.scrollTo(0, 0);
-            }}
-            className="inline-flex items-center gap-2 bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-black text-xs uppercase tracking-wider px-8 py-4 rounded-lg shadow-xl shadow-blue-900/40 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-          >
-            <span>ĐĂNG KÝ TUYỂN SINH NGAY</span>
-            <span>→</span>
-          </button>
-        </div>
-      </section>
+            <button
+              onClick={() => {
+                navigate('/tuyen-sinh');
+                window.scrollTo(0, 0);
+              }}
+              className="inline-flex items-center gap-2 bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-black text-xs uppercase tracking-wider px-8 py-4 rounded-lg shadow-xl shadow-blue-900/40 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+            >
+              <span>ĐĂNG KÝ TUYỂN SINH NGAY</span>
+              <span>→</span>
+            </button>
+          </div>
+        </section>
+      )}
 
-      {/* CHỈ HIỂN THỊ BẢNG LỚP HỌC KHI ĐÃ ĐĂNG NHẬP, GUEST SẼ KHÔNG HIỂN THỊ GÌ */}
+      {/* BẢNG LỚP HỌC CHI TIẾT (HIỂN THỊ KHI ĐÃ ĐĂNG NHẬP) */}
       {user && (
         <section className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 py-16">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 pb-4 border-b border-gray-800">
@@ -205,7 +250,7 @@ export default function CourseDetailPage() {
                 LỊCH HỌC & LỚP ĐANG MỞ
               </span>
               <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight">
-                BẢNG LỚP HỌC <span className="text-[#e31b23]">CHI TIẾT</span>
+                BẢNG LỚP HỌC <span className="text-[#e31b23]">{courseStatic.title}</span>
               </h2>
             </div>
           </div>
@@ -213,11 +258,13 @@ export default function CourseDetailPage() {
           {loadingClasses ? (
             <div className="py-16 text-center text-gray-400 font-bold">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#e31b23] border-t-transparent mb-3"></div>
-              <p>Đang tải danh sách lớp...</p>
+              <p>Đang tải danh sách lớp học {courseStatic.title}...</p>
             </div>
           ) : classes.length === 0 ? (
             <div className="bg-[#181d2a] rounded-3xl p-12 text-center border border-gray-800 shadow-xl">
-              <p className="text-lg font-bold text-gray-300">Hiện chưa có lớp học mới cho bộ môn này.</p>
+              <p className="text-lg font-bold text-gray-300">
+                Hiện chưa có lớp học mới mở cho bộ môn {courseStatic.title}.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -267,7 +314,7 @@ export default function CourseDetailPage() {
 
                     <button
                       type="button"
-                      onClick={() => alert(`Đã ghi nhận đăng ký lớp: ${item.name}`)}
+                      onClick={() => handleRegisterClass(item)}
                       className="w-full inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl shadow-lg transition-all cursor-pointer"
                     >
                       Đăng ký học ngay →

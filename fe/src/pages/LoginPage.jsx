@@ -16,10 +16,18 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Nếu đã đăng nhập thì điều hướng theo vai trò
+  // Hàm helper điều hướng theo vai trò người dùng
+  const getRoleRedirectPath = (userInfo) => {
+    const role = userInfo?.roleId || userInfo?.role;
+    if (role === 'RECEPTIONIST') return '/le-tan';
+    if (role === 'ADMIN') return '/quan-ly';
+    if (role === 'STAFF') return '/le-tan';
+    return location.state?.from || '/hoc-vien-dashboard';
+  };
+
+  // Nếu người dùng đã có Session từ trước -> Tự động chuyển đến đúng trang theo Role
   if (user) {
-    const defaultNav = user.roleId === 'ADMIN' || user.roleId === 'STAFF' ? '/quan-ly' : '/home';
-    return <Navigate to={defaultNav} replace />;
+    return <Navigate to={getRoleRedirectPath(user)} replace />;
   }
 
   const submit = async (event) => {
@@ -34,15 +42,16 @@ export default function LoginPage() {
 
     setSaving(true);
     try {
+      let loggedInUser;
       if (portal === 'member') {
-        await loginAsMember(email.trim(), password);
-        const from = location.state?.from || '/home';
-        navigate(from, { replace: true });
+        loggedInUser = await loginAsMember(email.trim(), password);
       } else {
-        await loginAsStaff(email.trim(), password);
-        const from = location.state?.from || '/quan-ly';
-        navigate(from, { replace: true });
+        loggedInUser = await loginAsStaff(email.trim(), password);
       }
+
+      // Điều hướng đến đúng Route theo Role
+      const targetPath = getRoleRedirectPath(loggedInUser);
+      navigate(targetPath, { replace: true });
     } catch (requestError) {
       setError(requestError.message || 'Đăng nhập thất bại.');
       setSaving(false);
@@ -181,7 +190,7 @@ export default function LoginPage() {
               disabled={saving}
               className="w-full rounded-xl bg-[#e31b23] hover:bg-[#c4131a] px-4 py-3.5 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-red-900/40 cursor-pointer disabled:opacity-60 transition-all transform active:scale-[0.99]"
             >
-              {saving ? 'Đang xác thực...' : portal === 'member' ? 'Đăng nhập Học viên' : 'Đăng nhập Quản trị'}
+              {saving ? 'Đang xác thực...' : portal === 'member' ? 'Đăng nhập Học viên' : 'Đăng nhập Quản trị / Lễ tân'}
             </button>
           </form>
 

@@ -108,6 +108,123 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         await db.SaveChangesAsync();
     }
 
+    public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        var email = NormalizeEmail(request.Email);
+        if (email.Length is 0 or > 200 || !email.Contains('@'))
+        {
+            throw new InvalidOperationException("Email không hợp lệ.");
+        }
+
+        var now = DateTime.UtcNow;
+        await db.PasswordResets.Where(row => row.ExpiresAt <= now).ExecuteDeleteAsync();
+
+        var accountStatus = await db.UserAccounts
+            .Where(account => account.Email != null && account.Email.ToLower() == email)
+            .Select(account => account.Status)
+            .FirstOrDefaultAsync();
+        if (accountStatus is null)
+        {
+            throw new InvalidOperationException("Email không tồn tại.");
+        }
+
+        if (accountStatus != "active")
+        {
+            throw new InvalidOperationException("Tài khoản đã bị khóa hoặc ngưng hoạt động.");
+        }
+
+        var reset = await db.PasswordResets.FirstOrDefaultAsync(row => row.Email == email);
+        if (reset is not null && reset.CreatedAt > now.AddMinutes(-1))
+        {
+            throw new InvalidOperationException("Hãy đợi một phút trước khi gửi lại mã.");
+        }
+
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        var body = $"Xin chào,{Environment.NewLine}{Environment.NewLine}Mã OTP đặt lại mật khẩu AnhDuy Sport là {code}. Mã có hiệu lực trong 3 phút. Nếu bạn không yêu cầu mã này, hãy bỏ qua email.";
+        try
+        {
+            await emailSender.SendAsync(email, "[AnhDuy Sport] Mã OTP đặt lại mật khẩu", body);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException("Không gửi được email. Hãy thử lại.", exception);
+        }
+
+        if (reset is null)
+        {
+            reset = new PasswordReset { Email = email };
+            db.PasswordResets.Add(reset);
+        }
+
+        reset.OtpHash = HashOtp(code);
+        reset.Attempts = 0;
+        reset.CreatedAt = now;
+        reset.ExpiresAt = now.AddMinutes(3);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        var email = NormalizeEmail(request.Email);
+        var code = request.Code?.Trim() ?? "";
+        var newPassword = request.NewPassword ?? "";
+        const string invalidCode = "Mã OTP không đúng hoặc đã hết hạn.";
+
+        if (email.Length == 0 || code.Length != 6 || !code.All(char.IsDigit))
+        {
+            throw new InvalidOperationException(invalidCode);
+        }
+
+        var reset = await db.PasswordResets.FirstOrDefaultAsync(row => row.Email == email);
+        if (reset is null || reset.ExpiresAt <= DateTime.UtcNow)
+        {
+            if (reset is not null)
+            {
+                db.PasswordResets.Remove(reset);
+                await db.SaveChangesAsync();
+            }
+
+            throw new InvalidOperationException(invalidCode);
+        }
+
+        if (reset.Attempts >= 5)
+        {
+            db.PasswordResets.Remove(reset);
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException("Bạn đã nhập sai quá số lần. Hãy gửi lại mã.");
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(reset.OtpHash),
+                Encoding.UTF8.GetBytes(HashOtp(code))))
+        {
+            reset.Attempts += 1;
+            if (reset.Attempts >= 5)
+            {
+                db.PasswordResets.Remove(reset);
+            }
+
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException(reset.Attempts >= 5
+                ? "Bạn đã nhập sai quá số lần. Hãy gửi lại mã."
+                : invalidCode);
+        }
+
+        PasswordHasher.EnsureAcceptable(newPassword);
+
+        var user = await db.UserAccounts.FirstOrDefaultAsync(account =>
+            account.Email != null && account.Email.ToLower() == email && account.Status == "active")
+            ?? throw new InvalidOperationException(invalidCode);
+
+        user.PasswordHash = passwords.Hash(newPassword);
+        db.PasswordResets.Remove(reset);
+        await db.SaveChangesAsync();
+    }
+
     public async Task<LoginResponse> RegisterGuestAsync(RegisterGuestRequest request)
     {
         var fullName = request.FullName?.Trim() ?? "";
@@ -350,6 +467,9 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         await using var transaction = await db.Database.BeginTransactionAsync();
         await db.SaveChangesAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM class_registration_log WHERE member_user_id = {user.UserId};
+            UPDATE class_registration_log SET performed_by_user_id = NULL WHERE performed_by_user_id = {user.UserId};
+            UPDATE payment SET registered_by_user_id = NULL WHERE registered_by_user_id = {user.UserId};
             DELETE FROM notification WHERE user_id = {user.UserId};
             DELETE FROM attendance WHERE user_id = {user.UserId};
             DELETE FROM slot_registration WHERE user_id = {user.UserId};
@@ -360,12 +480,17 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             UPDATE support_request SET assigned_to_user_id = NULL WHERE assigned_to_user_id = {user.UserId};
             UPDATE consultation_request SET received_by_user_id = NULL WHERE received_by_user_id = {user.UserId};
             UPDATE audit_log SET user_id = NULL WHERE user_id = {user.UserId};
+            DELETE FROM personal_exercise WHERE user_id = {user.UserId};
+            DELETE FROM ai_workout_recommendation WHERE user_id = {user.UserId};
+            DELETE FROM member_body_metric WHERE user_id = {user.UserId};
+            DELETE FROM coach_training_history WHERE member_user_id = {user.UserId} OR coach_user_id = {user.UserId};
             DELETE FROM membership WHERE user_id = {user.UserId}
                 OR payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
             DELETE FROM payment_history WHERE payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
             DELETE FROM payment WHERE user_id = {user.UserId};
             DELETE FROM invoice WHERE user_id = {user.UserId};
             DELETE FROM pending_registration WHERE email = {email};
+            DELETE FROM password_reset WHERE email = {email};
             DELETE FROM [user] WHERE user_id = {user.UserId};
             """);
         await transaction.CommitAsync();
