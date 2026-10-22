@@ -82,4 +82,6 @@ public sealed record MembershipManagementDto(
     MembershipDto? CurrentMembership,
     DateOnly? MembershipEndDate,
     IReadOnlyList<MembershipDto> History,
-    IReadOnlyList<PackageDto> Packages);
+    IReadOnlyList<PackageDto> Packages,
+    // Gói cao nhất đang có (đang dùng hoặc chờ kích hoạt). Chỉ được mua gói này hoặc gói cao hơn; null khi chưa có gói.
+    string? HighestPackageId);
