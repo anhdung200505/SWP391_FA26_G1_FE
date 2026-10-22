@@ -11,6 +11,8 @@ import {
   getClassRegistrationStatus,
   getPackages,
   cancelPayment,
+  createMembershipRenewal,
+  confirmMembershipRenewal,
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 
@@ -148,7 +150,11 @@ export default function ClassRegistrationPage() {
 
     const checkStatus = async () => {
       try {
-        const status = await getClassRegistrationStatus(registrationResult.paymentId);
+        // Chỉ mua gói: hỏi API xác nhận gói (backend tự hỏi payOS, gọi lặp lại không cộng hạn hai lần)
+        const status =
+          registrationResult.kind === 'membership'
+            ? await confirmMembershipRenewal(user?.id, registrationResult.paymentId)
+            : await getClassRegistrationStatus(registrationResult.paymentId);
         setPaymentStatusData(status);
       } catch {
         // Ignored
@@ -158,7 +164,7 @@ export default function ClassRegistrationPage() {
     checkStatus();
     const interval = setInterval(checkStatus, 5000);
     return () => clearInterval(interval);
-  }, [registrationResult]);
+  }, [registrationResult, user?.id]);
 
   // Mã QR lấy đúng chuỗi VietQR payOS trả về (tài khoản nhận tiền của kênh payOS trung tâm)
   const payosQrCode = registrationResult?.payosQrCode || '';
@@ -231,6 +237,22 @@ export default function ClassRegistrationPage() {
 
     setSubmitting(true);
     try {
+      // Chỉ mua gói (không kèm lớp): dùng API gia hạn gói, payOS trả link và mã QR theo giá gốc của gói
+      if (!includeClass) {
+        const res = await createMembershipRenewal(user?.id, selectedPackage.id);
+        setRegistrationResult({
+          kind: 'membership',
+          paymentId: res.paymentId,
+          invoiceCode: res.invoiceCode,
+          amount: res.amount,
+          status: res.paymentStatus,
+          paymentUrl: res.checkoutUrl || '',
+          payosQrCode: res.qrCode || '',
+          isExisting: false,
+        });
+        return;
+      }
+
       const payload = {
         ...(includeClass ? { sportId: selectedSportId || sportsList[0]?.id || '1' } : {}),
         ...(includeClass && selectedClass?.id ? { classId: selectedClass.id } : {}),
