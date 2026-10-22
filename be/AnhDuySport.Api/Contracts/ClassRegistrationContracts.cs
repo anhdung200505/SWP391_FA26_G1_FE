@@ -130,6 +130,7 @@ public sealed record CreateClassRegistrationRequest(
     string? MembershipPackageId = null);
 
 // Amount = Tuition + MembershipPackage.Price.
+// PaymentUrl: trang thanh toán payOS. PayosQrCode: chuỗi VietQR do payOS trả (vẽ thành ảnh QR). Cả hai rỗng khi máy chưa cấu hình payOS.
 public sealed record ClassRegistrationDto(
     string PaymentId,
     string InvoiceCode,
@@ -142,7 +143,8 @@ public sealed record ClassRegistrationDto(
     RegisteredByDto? RegisteredBy,
     RequestedSlotDto? RequestedSlot,
     decimal Tuition,
-    MembershipPackageQuoteDto? MembershipPackage);
+    MembershipPackageQuoteDto? MembershipPackage,
+    string PayosQrCode);
 
 // Gói nhận kèm lớp. IsFree = true: Hạng Đồng tặng kèm, Price = 0.
 public sealed record MembershipPackageQuoteDto(
