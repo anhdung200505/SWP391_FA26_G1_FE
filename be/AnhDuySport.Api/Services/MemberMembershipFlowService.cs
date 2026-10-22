@@ -627,7 +627,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             payment.Status,
             payment.CheckoutUrl,
             payment.QrCode,
-            message);
+            message,
+            PayOsQrImage.ToDataUrl(payment.QrCode));
 
     private sealed record RenewalPlan(string Type, DateOnly StartDate, DateOnly EndDate, List<Membership> Running);
 
