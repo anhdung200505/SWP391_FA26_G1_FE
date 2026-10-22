@@ -766,8 +766,14 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             membership.PlanName,
             membership.StartDate,
             membership.EndDate,
-            // Trong DB vẫn là active nhưng đã qua ngày hết hạn thì hiển thị expired.
-            membership.Status == "active" && membership.EndDate < today ? "expired" : membership.Status,
+            // Trong DB vẫn là active nhưng đã qua ngày hết hạn thì hiển thị expired;
+            // đơn chờ thanh toán đã bị hủy hoặc quá thời gian giữ đơn thì hiển thị cancelled.
+            membership.Status == "active" && membership.EndDate < today ? "expired"
+            : membership.Status == "pending"
+                && (membership.Payment is { Status: not "pending" }
+                    || (membership.Payment?.Invoice is { } invoice && PaymentTimeout.SecondsLeft(invoice.IssuedAt) == 0))
+                ? "cancelled"
+            : membership.Status,
             // Gói lên cấp kèm lớp gắn với payment của lớp: chỉ tính phần tiền gói.
             membership.Payment is { ClassId: not null } classPayment
                 ? classPayment.UpgradeAmount
