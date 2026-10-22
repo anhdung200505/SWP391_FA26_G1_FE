@@ -17,7 +17,9 @@ public sealed record MemberProfileDto(
     string Phone,
     DateOnly? DateOfBirth,
     string Gender,
-    string Status);
+    string Status,
+    // Đường dẫn ảnh đại diện (vd. /api/uploads/avatars/12-....png), null khi chưa có ảnh.
+    string? AvatarUrl);
 
 public sealed record MemberProfileMutationResponse(MemberProfileDto Profile, string Message, ActivityLogDto Log);
 
