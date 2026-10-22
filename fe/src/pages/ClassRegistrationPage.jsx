@@ -13,6 +13,7 @@ import {
   createMembershipRenewal,
   confirmMembershipRenewal,
   getPendingCheckouts,
+  getMemberMembership,
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 
@@ -45,7 +46,15 @@ export default function ClassRegistrationPage() {
   // State lựa chọn
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedClass, setSelectedClass] = useState(null);
-  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [pickedPackage, setSelectedPackage] = useState(null);
+
+  // Gói cao nhất học viên đang có (đang dùng hoặc chờ kích hoạt): khóa các gói rẻ hơn.
+  // Có Vàng thì chỉ mua Vàng; có Bạc thì mua Bạc hoặc Vàng.
+  const [ownedPackageId, setOwnedPackageId] = useState(null);
+  const ownedPackage = packages.find((pkg) => String(pkg.id) === String(ownedPackageId)) || null;
+  const isPackageLocked = (pkg) => !!ownedPackage && (pkg?.fee || 0) < (ownedPackage.fee || 0);
+  // Gói đang chọn mà bị khóa (vd. mặc định Bạc nhưng đã có Vàng) thì dùng gói đang có.
+  const selectedPackage = pickedPackage && isPackageLocked(pickedPackage) ? ownedPackage : pickedPackage;
 
   const [loading, setLoading] = useState(true);
   const [loadingClasses, setLoadingClasses] = useState(false);
@@ -66,6 +75,8 @@ export default function ClassRegistrationPage() {
   const [paymentStatusData, setPaymentStatusData] = useState(null);
   const [now, setNow] = useState(() => Date.now());
   const [redirectLeft, setRedirectLeft] = useState(PAID_REDIRECT_SECONDS);
+  // Gói hội viên sau khi thanh toán xong (đã gia hạn / nâng cấp) để báo hạn mới
+  const [membershipAfterPay, setMembershipAfterPay] = useState(null);
 
   // 1. Fetch danh sách Gói hội viên, Thông tin Lớp học ban đầu & Danh sách Bộ môn
   useEffect(() => {
@@ -175,6 +186,21 @@ export default function ClassRegistrationPage() {
     return () => clearInterval(interval);
   }, [registrationResult, user?.id]);
 
+  // Gói cao nhất đang có để khóa các gói thấp hơn
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    let active = true;
+    getMemberMembership(user.id)
+      .then((res) => {
+        if (active) setOwnedPackageId(res?.highestPackageId || null);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
   // Quay lại trang khi còn đơn chờ thanh toán (vd. bấm Quay lại rồi vào lại): mở lại đúng màn hình QR của đơn đó.
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -244,6 +270,19 @@ export default function ClassRegistrationPage() {
   // Thanh toán xong: hiện lời cảm ơn, đếm lùi rồi tự chuyển về Khóa học của tôi.
   useEffect(() => {
     if (!isPaid) return undefined;
+    let active = true;
+    if (user?.id) {
+      getMemberMembership(user.id)
+        .then((res) => {
+          if (!active || !res) return;
+          setMembershipAfterPay({
+            planName: res.currentMembership?.planName || '',
+            endDate: res.membershipEndDate || res.currentMembership?.endDate || '',
+          });
+        })
+        .catch(() => {});
+    }
+
     const until = Date.now() + PAID_REDIRECT_SECONDS * 1000;
     const tick = setInterval(() => {
       const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
@@ -253,8 +292,11 @@ export default function ClassRegistrationPage() {
         navigate(MY_COURSES_PATH);
       }
     }, 250);
-    return () => clearInterval(tick);
-  }, [isPaid, navigate]);
+    return () => {
+      active = false;
+      clearInterval(tick);
+    };
+  }, [isPaid, navigate, user?.id]);
 
   // Logic tính giá Gói hội viên: CHỈ CHIẾT KHẤU KHI CÓ TICK ĐĂNG KÝ KÈM LỚP
   const calculatePackagePrice = (pkg) => {
@@ -475,6 +517,12 @@ export default function ClassRegistrationPage() {
                   <div className="py-6">
                     <span className="text-5xl block mb-2">🎉</span>
                     <p className="text-sm font-black text-emerald-600">CẢM ƠN BẠN ĐÃ THANH TOÁN!</p>
+                    {membershipAfterPay?.endDate && (
+                      <p className="text-xs font-bold text-slate-800 mt-2">
+                        Gói hội viên{membershipAfterPay.planName ? ` ${membershipAfterPay.planName}` : ''} có hiệu lực đến hết{' '}
+                        {new Date(membershipAfterPay.endDate).toLocaleDateString('vi-VN')}.
+                      </p>
+                    )}
                     <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
                       AnhDuy Sport đã ghi nhận đăng ký của bạn. Tự động chuyển về Khóa học của tôi sau{' '}
                       <span className="font-black text-emerald-600">{redirectLeft}</span> giây...
@@ -542,8 +590,14 @@ export default function ClassRegistrationPage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
+                  {ownedPackage && (
+                    <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Bạn đang có {ownedPackage.name} nên chỉ gia hạn {ownedPackage.name} hoặc nâng cấp lên hạng cao hơn.
+                    </p>
+                  )}
                   {packages.map((pkg) => {
                     const isSelected = selectedPackage?.id === pkg.id;
+                    const isLocked = isPackageLocked(pkg);
                     const discountedPrice = calculatePackagePrice(pkg);
                     const isBronze = pkg.name?.toLowerCase().includes('đồng') || pkg.code === 'PKG-001';
                     const isSilver = pkg.name?.toLowerCase().includes('bạc') || pkg.code === 'PKG-002';
@@ -551,11 +605,15 @@ export default function ClassRegistrationPage() {
                     return (
                       <div
                         key={pkg.id}
-                        onClick={() => setSelectedPackage(pkg)}
-                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'border-[#e31b23] bg-red-50/40 shadow-sm'
-                            : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+                        onClick={() => {
+                          if (!isLocked) setSelectedPackage(pkg);
+                        }}
+                        className={`p-4 rounded-xl border-2 transition-all flex items-center justify-between ${
+                          isLocked
+                            ? 'border-slate-200 bg-slate-100 opacity-50 cursor-not-allowed'
+                            : isSelected
+                            ? 'border-[#e31b23] bg-red-50/40 shadow-sm cursor-pointer'
+                            : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -563,11 +621,15 @@ export default function ClassRegistrationPage() {
                             type="radio"
                             name="package_select"
                             checked={isSelected}
+                            disabled={isLocked}
                             onChange={() => {}}
                             className="accent-[#e31b23] w-4 h-4 cursor-pointer"
                           />
                           <div>
-                            <p className="text-sm font-black text-slate-900">{pkg.name}</p>
+                            <p className="text-sm font-black text-slate-900">
+                              {pkg.name}
+                              {isLocked && <span className="ml-2 text-[10px] font-bold text-slate-500">🔒 Thấp hơn gói đang có</span>}
+                            </p>
                             <p className="text-[11px] text-slate-500 font-medium">
                               Thời hạn: {pkg.validityMonths || 1} tháng
                             </p>
