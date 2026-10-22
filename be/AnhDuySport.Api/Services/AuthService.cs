@@ -585,5 +585,6 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             user.Phone ?? "",
             user.Role?.RoleCode ?? "",
             user.Role?.RoleName ?? "",
-            hasPaid);
+            hasPaid,
+            user.AvatarUrl);
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
@@ -8,7 +9,7 @@ const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [profile, setProfile] = useState({
     fullName: '',
     email: '',
@@ -36,6 +37,8 @@ export default function ProfilePage() {
             gender: data.gender || 'Nam',
           });
           setAvatarUrl(data.avatarUrl || '');
+          // Phiên đăng nhập cũ chưa có ảnh: đồng bộ để Header hiện đúng ảnh
+          if ((data.avatarUrl || '') !== (user.avatarUrl || '')) updateUser({ avatarUrl: data.avatarUrl || null });
         })
         .catch((err) => setMessage({ type: 'error', text: err.message }))
         .finally(() => setLoading(false));
@@ -45,7 +48,7 @@ export default function ProfilePage() {
           .catch(() => setRequests([]));
       }
     }
-  }, [user]);
+  }, [user, updateUser]);
 
   // Chọn ảnh là tải lên ngay; kiểm tra loại và dung lượng trước để báo lỗi sớm
   const handleAvatarChange = async (e) => {
@@ -66,6 +69,7 @@ export default function ProfilePage() {
     try {
       const res = await uploadMemberAvatar(user.id, file);
       setAvatarUrl(res?.profile?.avatarUrl || '');
+      updateUser({ avatarUrl: res?.profile?.avatarUrl || null });
       setMessage({ type: 'success', text: res?.message || 'Cập nhật ảnh đại diện thành công.' });
     } catch (err) {
       setMessage({ type: 'error', text: err.message || 'Tải ảnh đại diện thất bại.' });
@@ -84,6 +88,9 @@ export default function ProfilePage() {
     try {
       const res = await updateMemberProfile(user.id, profile);
       setMessage({ type: 'success', text: res.message || 'Cập nhật thông tin thành công!' });
+      if (res?.profile) {
+        updateUser({ fullName: res.profile.fullName, email: res.profile.email, phone: res.profile.phone });
+      }
     } catch (err) {
       setMessage({ type: 'error', text: err.message || 'Cập nhật thất bại.' });
     } finally {
@@ -97,6 +104,14 @@ export default function ProfilePage() {
 
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-24 sm:px-6">
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 sm:p-10">
+          {((user?.roleId || user?.role) === 'MEMBER') && (
+            <Link
+              to="/hoc-vien-dashboard"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg transition-all mb-6"
+            >
+              ← Về Khóa học của tôi
+            </Link>
+          )}
           <h1 className="text-2xl font-black text-gray-900 mb-2">Hồ sơ cá nhân</h1>
           <p className="text-sm text-gray-500 mb-8">Quản lý thông tin tài khoản của bạn</p>
 
