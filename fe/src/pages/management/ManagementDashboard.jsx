@@ -253,6 +253,11 @@ export default function ManagementDashboard() {
                           Lý do Lễ tân chuyển: {req.classificationReason}
                         </p>
                       )}
+                      {req.resolutionNote && (
+                        <p className="mt-1 whitespace-pre-line text-[11px] font-semibold text-emerald-700 bg-emerald-50 p-1.5 rounded">
+                          Kết quả xử lý: {req.resolutionNote}
+                        </p>
+                      )}
                     </td>
 
                     <td className="px-5 py-3 align-top">
@@ -274,7 +279,7 @@ export default function ManagementDashboard() {
                     </td>
 
                     <td className="px-5 py-3 align-top text-right whitespace-nowrap">
-                      {req.status === 'PENDING' || req.status === 'ESCALATED' || !req.decision ? (
+                      {req.status === 'pending_manager' ? (
                         <button
                           onClick={() => {
                             setSelectedReq(req);
@@ -343,7 +348,7 @@ export default function ManagementDashboard() {
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 type="button"
-                disabled={submittingDecision}
+                disabled={submittingDecision || !decisionNote.trim()}
                 onClick={() => handleDecision('approved')}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-3 rounded-xl uppercase tracking-wider cursor-pointer disabled:opacity-50"
               >
@@ -352,7 +357,7 @@ export default function ManagementDashboard() {
 
               <button
                 type="button"
-                disabled={submittingDecision}
+                disabled={submittingDecision || !decisionNote.trim()}
                 onClick={() => handleDecision('rejected')}
                 className="bg-red-600 hover:bg-red-700 text-white font-black text-xs py-3 rounded-xl uppercase tracking-wider cursor-pointer disabled:opacity-50"
               >
