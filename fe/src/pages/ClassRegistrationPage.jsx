@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import QRCode from 'qrcode';
 import logoImg from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -55,6 +56,7 @@ export default function ClassRegistrationPage() {
   // Kết quả & Thanh toán từ Server
   const [registrationResult, setRegistrationResult] = useState(null);
   const [paymentStatusData, setPaymentStatusData] = useState(null);
+  const [qrState, setQrState] = useState({ code: '', url: '' });
 
   // 1. Fetch danh sách Gói hội viên, Thông tin Lớp học ban đầu & Danh sách Bộ môn
   useEffect(() => {
@@ -164,6 +166,23 @@ export default function ClassRegistrationPage() {
     return () => clearInterval(interval);
   }, [registrationResult, user?.id]);
 
+  // Không tự vẽ QR từ số tài khoản: phải dùng đúng chuỗi VietQR payOS trả về (tài khoản nhận tiền của kênh payOS trung tâm)
+  const payosQrCode = registrationResult?.payosQrCode || '';
+  useEffect(() => {
+    if (!payosQrCode) return undefined;
+
+    let active = true;
+    QRCode.toDataURL(payosQrCode, { width: 416, margin: 1 })
+      .then((url) => {
+        if (active) setQrState({ code: payosQrCode, url });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [payosQrCode]);
+  const qrImage = payosQrCode && qrState.code === payosQrCode ? qrState.url : '';
+
   // Logic tính giá Gói hội viên: CHỈ CHIẾT KHẤU KHI CÓ TICK ĐĂNG KÝ KÈM LỚP
   const calculatePackagePrice = (pkg) => {
     if (!pkg) return 0;
@@ -263,18 +282,6 @@ export default function ClassRegistrationPage() {
     }
     setRegistrationResult(null);
     setPaymentStatusData(null);
-  };
-
-  // Hàm tạo link ảnh VietQR
-  const getVietQrUrl = (amount, invoiceCode) => {
-    const bankBin = '970422'; // MBBank
-    const accountNo = '0391234567';
-    const accountName = 'ANHDUY SPORT';
-    const finalAmount = amount !== undefined && amount !== null ? amount : calculateTotalFee();
-
-    return `https://img.vietqr.io/image/${bankBin}-${accountNo}-compact2.png?amount=${finalAmount}&addInfo=${encodeURIComponent(
-      invoiceCode || ''
-    )}&accountName=${encodeURIComponent(accountName)}`;
   };
 
   const isPaid = paymentStatusData?.paymentStatus === 'paid' || paymentStatusData?.paymentStatus === 'success';
@@ -385,18 +392,18 @@ export default function ClassRegistrationPage() {
                     <span className="text-5xl block mb-2">🎉</span>
                     <p className="text-sm font-black text-emerald-600">ĐÃ XÁC NHẬN THANH TOÁN</p>
                   </div>
-                ) : (
+                ) : qrImage ? (
                   <>
                     <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200 mb-2">
-                      <img
-                        src={getVietQrUrl(registrationResult.amount, registrationResult.invoiceCode)}
-                        alt="Mã VietQR PayOS"
-                        className="w-52 h-52 object-contain"
-                      />
+                      <img src={qrImage} alt="Mã VietQR payOS" className="w-52 h-52 object-contain" />
                     </div>
                     <p className="text-[11px] font-bold text-slate-600">Quét mã VietQR bằng App Ngân Hàng</p>
                     <p className="text-[10px] text-slate-400 mt-1">Trang tự cập nhật khi thanh toán xong.</p>
                   </>
+                ) : (
+                  <p className="text-xs font-semibold text-slate-500 max-w-xs">
+                    Chưa tạo được mã QR payOS cho đơn này. Vui lòng thanh toán tại quầy lễ tân với mã hóa đơn bên cạnh.
+                  </p>
                 )}
                 {!isPaid && registrationResult.paymentUrl && (
                   <a
