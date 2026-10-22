@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -61,6 +61,31 @@ export default function HocVienDashboardPage() {
 
   const memberUserId = user?.id || user?.userId;
 
+  // Đơn đang chờ thanh toán + lịch sử gói, kèm hạn chót tính theo giờ máy để đếm ngược theo thời gian thực
+  const loadPayments = useCallback(async () => {
+    const [pending, memData] = await Promise.all([
+      getPendingCheckouts().catch(() => []),
+      memberUserId ? getMemberMembership(memberUserId).catch(() => null) : Promise.resolve(null),
+    ]);
+    const loadedAt = Date.now();
+    setPendingCheckouts(
+      (Array.isArray(pending) ? pending : []).map((item) => ({
+        ...item,
+        deadline: loadedAt + item.expiresInSeconds * 1000,
+      }))
+    );
+    if (memData) {
+      setMembershipData({
+        ...memData,
+        history: (memData.history || []).map((item) => ({
+          ...item,
+          deadline: item.paymentExpiresInSeconds > 0 ? loadedAt + item.paymentExpiresInSeconds * 1000 : 0,
+        })),
+      });
+    }
+    setNow(loadedAt);
+  }, [memberUserId]);
+
   // Tải dữ liệu chính của Học viên qua managementApi
   const fetchDashboardData = async () => {
     try {
@@ -70,16 +95,8 @@ export default function HocVienDashboardPage() {
       const classes = await getMyClassRegistrations().catch(() => []);
       if (Array.isArray(classes)) setMyClasses(classes);
 
-      // Đơn đang chờ thanh toán (còn trong 3 phút) để học viên quay lại màn hình QR
-      const pending = await getPendingCheckouts().catch(() => []);
-      const loadedAt = Date.now();
-      setPendingCheckouts(
-        (Array.isArray(pending) ? pending : []).map((item) => ({
-          ...item,
-          deadline: loadedAt + item.expiresInSeconds * 1000,
-        }))
-      );
-      setNow(loadedAt);
+      // Đơn đang chờ thanh toán (còn trong 3 phút) và lịch sử gói hội viên
+      await loadPayments();
 
       // 2. Lấy danh sách yêu cầu hỗ trợ của bản thân
       setLoadingRequests(true);
@@ -88,10 +105,6 @@ export default function HocVienDashboardPage() {
       setLoadingRequests(false);
 
       if (memberUserId) {
-        // 3. Lấy thông tin Membership
-        const memData = await getMemberMembership(memberUserId).catch(() => null);
-        if (memData) setMembershipData(memData);
-
         // 4. Lấy Hotline chăm sóc khách hàng
         const contact = await getConsultationContact(memberUserId).catch(() => null);
         if (contact) setContactData(contact);
@@ -111,13 +124,20 @@ export default function HocVienDashboardPage() {
     fetchDashboardData();
   }, [user]);
 
-  // Đồng hồ cho khung đơn đang chờ: đếm ngược và bỏ đơn hết giờ.
-  const hasPendingCheckouts = pendingCheckouts.some((item) => item.deadline > now);
+  // Còn đơn đang chờ: đồng hồ chạy từng giây (đơn hết giờ tự biến mất / đổi nhãn),
+  // và tải lại ngầm mỗi 10 giây để thấy ngay khi đã thanh toán trên điện thoại.
+  const hasPendingCheckouts =
+    pendingCheckouts.some((item) => item.deadline > now) ||
+    (membershipData?.history || []).some((item) => item.deadline > now);
   useEffect(() => {
     if (!hasPendingCheckouts) return undefined;
     const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, [hasPendingCheckouts]);
+    const refresh = setInterval(() => loadPayments(), 10000);
+    return () => {
+      clearInterval(tick);
+      clearInterval(refresh);
+    };
+  }, [hasPendingCheckouts, loadPayments]);
 
   // Xử lý khi PayOS redirect về (có paymentId)
   useEffect(() => {
@@ -523,6 +543,7 @@ export default function HocVienDashboardPage() {
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
                       <th className="p-3">Gói tập</th>
                       <th className="p-3">Hóa đơn</th>
+                      <th className="p-3">Tạo lúc</th>
                       <th className="p-3">Thời hạn</th>
                       <th className="p-3">Đã thanh toán</th>
                       <th className="p-3">Trạng thái</th>
@@ -533,12 +554,24 @@ export default function HocVienDashboardPage() {
                       <tr key={hItem.id}>
                         <td className="p-3 font-bold text-slate-900">{hItem.planName}</td>
                         <td className="p-3 font-mono text-slate-500">#{hItem.invoiceCode}</td>
+                        <td className="p-3 text-slate-600 whitespace-nowrap">
+                          {hItem.createdAt ? new Date(hItem.createdAt).toLocaleString('vi-VN') : '—'}
+                        </td>
                         <td className="p-3 text-slate-600">{hItem.startDate} ~ {hItem.endDate}</td>
                         <td className="p-3 font-bold text-emerald-600">{hItem.amountPaid?.toLocaleString('vi-VN')}đ</td>
                         <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${historyStatus(hItem.status).className}`}>
-                            {historyStatus(hItem.status).label}
-                          </span>
+                          {(() => {
+                            // Đơn chờ thanh toán hết giờ thì đổi nhãn ngay, không cần tải lại trang
+                            const waiting = hItem.status === 'pending' && hItem.deadline > now;
+                            const status = hItem.status === 'pending' && !waiting ? 'cancelled' : hItem.status;
+                            const badge = historyStatus(status);
+                            return (
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${badge.className}`}>
+                                {badge.label}
+                                {waiting ? ` · còn ${formatCountdown(hItem.deadline - now)}` : ''}
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))}
