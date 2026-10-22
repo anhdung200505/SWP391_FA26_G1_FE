@@ -22,7 +22,7 @@ IF OBJECT_ID(N'dbo.support_request', N'U') IS NULL
 BEGIN
     CREATE TABLE support_request (
         support_request_id      INT IDENTITY(1,1) NOT NULL,
-        member_user_id          INT            NOT NULL,
+        member_user_id          INT            NULL,
         title                   NVARCHAR(200)  NOT NULL,
         description             NVARCHAR(MAX)  NOT NULL,
         system_category         NVARCHAR(30)   NOT NULL,

@@ -75,22 +75,12 @@ public class CustomerServiceFlowService(
             throw new InvalidOperationException("Ghi chú quá dài.");
         }
 
-        var member = await FindConsultationMemberAsync(email);
-        var description = string.Join(
-            Environment.NewLine,
-            new[]
-            {
-                $"Họ tên: {fullName}",
-                $"Số điện thoại: {phone}",
-                $"Email: {email ?? member.Email}",
-                $"Môn: {sports ?? "Chưa chọn"}",
-                $"Độ tuổi: {(request.Age is int age ? age.ToString() : "Chưa nhập")}",
-                note is null ? null : $"Gói quan tâm: {note}",
-            }.Where(line => line is not null));
+        var member = await TryFindConsultationMemberAsync(email);
+        var description = BuildEnrollmentDescription(fullName, phone, email ?? member?.Email ?? "Chưa nhập", sports, request.Age, note);
         var now = DateTime.Now;
         var item = new SupportRequest
         {
-            MemberUserId = member.UserId,
+            MemberUserId = member?.UserId,
             Title = title,
             Description = description,
             SystemCategory = "consultation_account",
@@ -101,7 +91,7 @@ public class CustomerServiceFlowService(
         db.SupportRequests.Add(item);
         var log = new ActivityLog
         {
-            ActorUserId = member.UserId,
+            ActorUserId = member?.UserId,
             Action = "Tạo yêu cầu hỗ trợ",
             EntityName = "support_request",
             Detail = $"{title} → lễ tân",
@@ -160,20 +150,26 @@ public class CustomerServiceFlowService(
         {
             var resolution = RequireText(request.ResolutionNote, "Nhập kết quả xử lý tư vấn khách.", 2000);
             var result = $"Lễ tân đã xử lý tư vấn khách hàng. {resolution}";
-            var member = item.Member ?? throw new KeyNotFoundException("Không tìm thấy học viên.");
-            var emailNotice = await emailNotifications.SendSupportResultEmailAsync(member, title, result);
+            if (item.Member is not null)
+            {
+                var emailNotice = await emailNotifications.SendSupportResultEmailAsync(item.Member, title, result);
+                db.Notifications.Add(new AccountNotification
+                {
+                    UserId = item.Member.UserId,
+                    Title = emailNotice.Subject,
+                    Content = emailNotice.Body,
+                    IsRead = false,
+                    CreatedAt = now,
+                });
+            }
+            else if (email.Contains('@'))
+            {
+                await emailNotifications.SendGuestResultEmailAsync(email, fullName, title, result);
+            }
             item.Status = "resolved";
             item.ReceptionistCategory = "consultation";
             item.ResolutionNote = result;
             item.ResolvedAt = now;
-            db.Notifications.Add(new AccountNotification
-            {
-                UserId = member.UserId,
-                Title = emailNotice.Subject,
-                Content = emailNotice.Body,
-                IsRead = false,
-                CreatedAt = now,
-            });
             action = "Giải quyết đơn tư vấn khách";
             detail = result;
         }
@@ -191,7 +187,7 @@ public class CustomerServiceFlowService(
         return await ToDtoAsync(item.SupportRequestId);
     }
 
-    private async Task<UserAccount> FindConsultationMemberAsync(string? email)
+    private async Task<UserAccount?> TryFindConsultationMemberAsync(string? email)
     {
         if (actor.UserId != 0)
         {
@@ -214,7 +210,7 @@ public class CustomerServiceFlowService(
             }
         }
 
-        throw new InvalidOperationException("Hãy đăng nhập tài khoản học viên, hoặc nhập email của tài khoản học viên, để gửi yêu cầu tư vấn.");
+        return null;
     }
 
     public async Task<IReadOnlyList<SupportRequestDto>> AccessMemberRequestsAsync(string memberUserId)
@@ -610,8 +606,8 @@ public class CustomerServiceFlowService(
             {
                 item.SupportRequestId,
                 item.MemberUserId,
-                MemberName = item.Member!.FullName,
-                MemberEmail = item.Member.Email,
+                MemberName = item.Member != null ? item.Member.FullName : "",
+                MemberEmail = item.Member != null ? item.Member.Email : "",
                 item.Title,
                 item.Description,
                 item.SystemCategory,
@@ -632,7 +628,7 @@ public class CustomerServiceFlowService(
             .OrderBy(row => order[row.SupportRequestId])
             .Select(row => new SupportRequestDto(
                 row.SupportRequestId.ToString(),
-                row.MemberUserId.ToString(),
+                row.MemberUserId?.ToString() ?? "",
                 row.MemberName,
                 row.MemberEmail ?? "",
                 row.Title,
