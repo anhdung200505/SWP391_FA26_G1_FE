@@ -14,6 +14,11 @@ import {
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
+const formatCountdown = (ms) => {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+};
+
 // Nhãn trạng thái trong lịch sử gói: đơn chờ thanh toán / đã hủy không hiện như đã hoàn tất.
 const historyStatus = (status) => {
   switch (status) {
@@ -39,6 +44,7 @@ export default function HocVienDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [myClasses, setMyClasses] = useState([]);
   const [pendingCheckouts, setPendingCheckouts] = useState([]);
+  const [now, setNow] = useState(() => Date.now());
   const [membershipData, setMembershipData] = useState(null);
   const [profileData, setProfileData] = useState(null);
   const [contactData, setContactData] = useState(null);
@@ -66,7 +72,14 @@ export default function HocVienDashboardPage() {
 
       // Đơn đang chờ thanh toán (còn trong 3 phút) để học viên quay lại màn hình QR
       const pending = await getPendingCheckouts().catch(() => []);
-      setPendingCheckouts(Array.isArray(pending) ? pending : []);
+      const loadedAt = Date.now();
+      setPendingCheckouts(
+        (Array.isArray(pending) ? pending : []).map((item) => ({
+          ...item,
+          deadline: loadedAt + item.expiresInSeconds * 1000,
+        }))
+      );
+      setNow(loadedAt);
 
       // 2. Lấy danh sách yêu cầu hỗ trợ của bản thân
       setLoadingRequests(true);
@@ -97,6 +110,14 @@ export default function HocVienDashboardPage() {
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
+
+  // Đồng hồ cho khung đơn đang chờ: đếm ngược và bỏ đơn hết giờ.
+  const hasPendingCheckouts = pendingCheckouts.some((item) => item.deadline > now);
+  useEffect(() => {
+    if (!hasPendingCheckouts) return undefined;
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [hasPendingCheckouts]);
 
   // Xử lý khi PayOS redirect về (có paymentId)
   useEffect(() => {
@@ -182,6 +203,8 @@ export default function HocVienDashboardPage() {
   const displayPhone = profileData?.phone || user?.phone || 'Chưa cập nhật';
   const currentMembership = membershipData?.currentMembership;
   const historyList = membershipData?.history || [];
+  // Chỉ hiện đơn còn trong thời gian giữ; hết giờ thì tự biến mất.
+  const livePendingCheckouts = pendingCheckouts.filter((item) => item.deadline > now);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col justify-between">
@@ -285,14 +308,14 @@ export default function HocVienDashboardPage() {
           )}
 
           {/* ĐƠN ĐANG CHỜ THANH TOÁN */}
-          {pendingCheckouts.length > 0 && (
+          {livePendingCheckouts.length > 0 && (
             <section className="bg-amber-50 rounded-3xl p-6 sm:p-8 border border-amber-200 shadow-xs">
               <h2 className="text-lg font-black text-slate-900 uppercase mb-1">ĐƠN ĐANG CHỜ THANH TOÁN</h2>
               <p className="text-xs text-slate-500 mb-4">
                 Mỗi đơn chỉ giữ 3 phút. Quá thời gian chưa thanh toán thì đơn tự hủy và bạn cần đăng ký lại.
               </p>
               <div className="space-y-3">
-                {pendingCheckouts.map((item) => (
+                {livePendingCheckouts.map((item) => (
                   <div
                     key={item.paymentId}
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white rounded-2xl p-4 border border-amber-200"
@@ -305,6 +328,7 @@ export default function HocVienDashboardPage() {
                       </p>
                       <p className="font-mono text-slate-500">#{item.invoiceCode}</p>
                       <p className="font-bold text-emerald-600">{item.amount?.toLocaleString('vi-VN')}đ</p>
+                      <p className="font-bold text-amber-700">Còn {formatCountdown(item.deadline - now)}</p>
                     </div>
                     <Link
                       to="/dang-ky-khoa-hoc"
