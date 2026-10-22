@@ -31,6 +31,7 @@ builder.Services.AddScoped<UserAccountFlowService>();
 builder.Services.AddScoped<MembershipPackageFlowService>();
 builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
+builder.Services.AddScoped<ClassManagementFlowService>();
 builder.Services.AddScoped<ReceptionFlowService>();
 builder.Services.AddScoped<SlotFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();

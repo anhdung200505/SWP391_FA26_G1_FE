@@ -23,7 +23,8 @@ $migrations = @(
     '12_membership_package_discount.sql',
     '13_class_registration_log.sql',
     '14_class_membership_bonus.sql',
-    '10_support_request_guest.sql'
+    '10_support_request_guest.sql',
+    '15_training_plan_sport.sql'
 )
 
 foreach ($script in @('01_schema.sql', '02_seed.sql') + $migrations) {
