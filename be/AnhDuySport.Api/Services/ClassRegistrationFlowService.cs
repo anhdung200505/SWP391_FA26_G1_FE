@@ -319,6 +319,11 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
 
         var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.MembershipPackageId);
+        if (upgrade.Package is not null)
+        {
+            await ClassMembershipBonus.EnsureNotDowngradeAsync(db, member.UserId, upgrade.Package, today);
+        }
+
         var pending = await FindPendingPaymentAsync(member.UserId, classId);
         if (pending is not null && pending.UpgradePackageId == upgrade.Package?.MembershipPackageId)
         {
