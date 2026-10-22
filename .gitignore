@@ -28,3 +28,6 @@ be/AnhDuySport.Api/mailbox/
 *.njsproj
 *.sln
 *.sw?
+
+# Ảnh học viên tải lên (ảnh đại diện), chỉ là dữ liệu trên từng máy
+be/AnhDuySport.Api/uploads/
