@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import QRCode from 'qrcode';
 import logoImg from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -53,6 +54,7 @@ export default function ClassRegistrationPage() {
   // Kết quả & Thanh toán từ Server
   const [registrationResult, setRegistrationResult] = useState(null);
   const [paymentStatusData, setPaymentStatusData] = useState(null);
+  const [qrState, setQrState] = useState({ code: '', url: '' });
 
   // 1. Fetch danh sách Gói hội viên, Thông tin Lớp học ban đầu & Danh sách Bộ môn
   useEffect(() => {
@@ -158,6 +160,23 @@ export default function ClassRegistrationPage() {
     return () => clearInterval(interval);
   }, [registrationResult]);
 
+  // Mã QR lấy đúng chuỗi VietQR payOS trả về (tài khoản nhận tiền của kênh payOS trung tâm)
+  const payosQrCode = registrationResult?.payosQrCode || '';
+  useEffect(() => {
+    if (!payosQrCode) return undefined;
+
+    let active = true;
+    QRCode.toDataURL(payosQrCode, { width: 416, margin: 1 })
+      .then((url) => {
+        if (active) setQrState({ code: payosQrCode, url });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [payosQrCode]);
+  const qrImage = payosQrCode && qrState.code === payosQrCode ? qrState.url : '';
+
   // Logic tính giá Gói hội viên: CHỈ CHIẾT KHẤU KHI CÓ TICK ĐĂNG KÝ KÈM LỚP
   const calculatePackagePrice = (pkg) => {
     if (!pkg) return 0;
@@ -216,7 +235,7 @@ export default function ClassRegistrationPage() {
         ...(includeClass ? { sportId: selectedSportId || sportsList[0]?.id || '1' } : {}),
         ...(includeClass && selectedClass?.id ? { classId: selectedClass.id } : {}),
         ...(includeClass && selectedClass?.nextSlot?.id ? { slotId: selectedClass.nextSlot.id } : {}),
-        ...(!isBronze && selectedPackage?.id ? { upgradePackageId: selectedPackage.id } : {}),
+        ...(!isBronze && selectedPackage?.id ? { membershipPackageId: selectedPackage.id } : {}),
         fullName: fullName.trim(),
         phone: phone.trim(),
         ...(dateOfBirth ? { dateOfBirth } : {}),
@@ -225,10 +244,6 @@ export default function ClassRegistrationPage() {
 
       const res = await registerClass(payload);
       setRegistrationResult(res);
-
-      if (res.paymentUrl) {
-        window.location.href = res.paymentUrl;
-      }
     } catch (err) {
       setError(err.message || 'Đăng ký thất bại. Vui lòng thử lại.');
     } finally {
@@ -247,18 +262,6 @@ export default function ClassRegistrationPage() {
     }
     setRegistrationResult(null);
     setPaymentStatusData(null);
-  };
-
-  // Render mã VietQR PayOS
-  const renderPayOSVietQR = (amount, invoiceCode) => {
-    const bankBin = '970422'; // MBBank
-    const accountNo = '0391234567';
-    const accountName = 'ANHDUY SPORT';
-    const finalAmount = amount !== undefined && amount !== null ? amount : calculateTotalFee();
-
-    return `https://img.vietqr.io/image/${bankBin}-${accountNo}-compact2.png?amount=${finalAmount}&addInfo=${encodeURIComponent(
-      invoiceCode
-    )}&accountName=${encodeURIComponent(accountName)}`;
   };
 
   const isPaid = paymentStatusData?.paymentStatus === 'paid' || paymentStatusData?.paymentStatus === 'success';
@@ -364,17 +367,34 @@ export default function ClassRegistrationPage() {
               </div>
 
               <div className="flex flex-col items-center text-center">
-                <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200 mb-2">
-                  <img
-                    src={renderPayOSVietQR(
-                      registrationResult.amount,
-                      registrationResult.invoiceCode
-                    )}
-                    alt="VietQR PayOS"
-                    className="w-52 h-52 object-contain"
-                  />
-                </div>
-                <p className="text-[11px] font-bold text-slate-600">Quét mã VietQR bằng App Ngân Hàng</p>
+                {isPaid ? (
+                  <div className="py-6">
+                    <span className="text-5xl block mb-2">🎉</span>
+                    <p className="text-sm font-black text-emerald-600">ĐÃ XÁC NHẬN THANH TOÁN</p>
+                  </div>
+                ) : qrImage ? (
+                  <>
+                    <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200 mb-2">
+                      <img src={qrImage} alt="Mã VietQR payOS" className="w-52 h-52 object-contain" />
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-600">Quét mã VietQR bằng App Ngân Hàng</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Trang tự cập nhật khi thanh toán xong.</p>
+                  </>
+                ) : (
+                  <p className="text-xs font-semibold text-slate-500 max-w-xs">
+                    Chưa tạo được mã QR payOS cho đơn này. Vui lòng thanh toán tại quầy lễ tân với mã hóa đơn bên cạnh.
+                  </p>
+                )}
+                {!isPaid && registrationResult.paymentUrl && (
+                  <a
+                    href={registrationResult.paymentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 text-[11px] font-bold text-[#e31b23] hover:underline"
+                  >
+                    Mở trang thanh toán payOS ↗
+                  </a>
+                )}
               </div>
             </div>
 
