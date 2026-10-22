@@ -10,7 +10,8 @@ public class ReceptionFlowService(
     AppDbContext db,
     CurrentActor actor,
     ClassRegistrationFlowService registrations,
-    SlotFlowService slots)
+    SlotFlowService slots,
+    PayOsPaymentService payOs)
 {
     // Chỉ tìm đúng 1 học viên theo email hoặc số điện thoại đầy đủ, không liệt kê danh sách học viên.
     public async Task<ReceptionMemberDto> LookupMemberAsync(string? keyword)
@@ -64,6 +65,7 @@ public class ReceptionFlowService(
         }
 
         var result = await registrations.MarkPaymentPaidAsync(id, performer.UserId, methodLabel);
+        await payOs.CancelLinkQuietlyAsync(payment.PayosOrderCode, "Đã thu học phí tại quầy");
         ClassRegistrationLogs.Add(db, payment.UserId, payment.ClassId!.Value, ClassRegistrationLogs.ConfirmPayment, performer,
             DateTime.Now, reason: $"Thu {payment.Amount:N0} ({methodLabel})", paymentId: payment.PaymentId);
         await db.SaveChangesAsync();
