@@ -141,6 +141,11 @@ export function getClassRegistrationStatus(paymentId) {
   return request(`/class-registrations/${paymentId}`);
 }
 
+// Đơn đang chờ thanh toán còn trong 3 phút (đăng ký lớp và mua gói), mới nhất lên đầu
+export function getPendingCheckouts() {
+  return request('/class-registrations/pending');
+}
+
 export function payRegistration(payload) {
   return request('/registrations/pay', {
     method: 'POST',

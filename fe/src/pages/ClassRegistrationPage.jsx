@@ -12,6 +12,7 @@ import {
   cancelPayment,
   createMembershipRenewal,
   confirmMembershipRenewal,
+  getPendingCheckouts,
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 
@@ -173,6 +174,31 @@ export default function ClassRegistrationPage() {
     const interval = setInterval(checkStatus, 5000);
     return () => clearInterval(interval);
   }, [registrationResult, user?.id]);
+
+  // Quay lại trang khi còn đơn chờ thanh toán (vd. bấm Quay lại rồi vào lại): mở lại đúng màn hình QR của đơn đó.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    let active = true;
+    const restorePending = async () => {
+      const pending = await getPendingCheckouts().catch(() => []);
+      const latest = Array.isArray(pending) ? pending[0] : null;
+      if (!active || !latest) return;
+      setRegistrationResult((current) =>
+        current || {
+          ...latest,
+          packageName: latest.packageName || (latest.kind === 'class' ? 'Hạng Đồng (tặng kèm lớp)' : null),
+          isExisting: true,
+          deadline: Date.now() + latest.expiresInSeconds * 1000,
+        }
+      );
+      setNow(Date.now());
+    };
+    restorePending();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   // Ảnh QR do backend vẽ sẵn từ mã VietQR payOS (tài khoản nhận tiền của kênh payOS trung tâm).
   // Không tự vẽ QR từ số tài khoản ở frontend.
@@ -417,15 +443,18 @@ export default function ClassRegistrationPage() {
                 <div>
                   <span className="text-slate-400 font-bold uppercase block">Gói hội viên</span>
                   <span className="text-sm font-bold text-slate-800">
-                    Gói {selectedPackage?.name}
+                    Gói{' '}
+                    {registrationResult.packageName ||
+                      registrationResult.membershipPackage?.name ||
+                      selectedPackage?.name}
                   </span>
                 </div>
 
-                {includeClass && selectedClass && (
+                {(registrationResult.className || (includeClass && selectedClass)) && (
                   <div>
                     <span className="text-slate-400 font-bold uppercase block">Khóa học đăng ký kèm</span>
                     <span className="text-xs font-semibold text-slate-700">
-                      {selectedClass.name}
+                      {registrationResult.className || selectedClass?.name}
                     </span>
                   </div>
                 )}

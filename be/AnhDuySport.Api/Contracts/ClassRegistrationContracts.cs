@@ -150,6 +150,22 @@ public sealed record ClassRegistrationDto(
     // Số giây còn lại trước khi đơn chờ thanh toán bị hủy (0 khi không còn chờ).
     int ExpiresInSeconds);
 
+// Đơn đang chờ thanh toán còn trong thời gian giữ, để học viên quay lại màn hình QR.
+// Kind: class (đăng ký lớp, có thể kèm gói) hoặc membership (chỉ mua gói).
+public sealed record PendingCheckoutDto(
+    string Kind,
+    string PaymentId,
+    string InvoiceCode,
+    decimal Amount,
+    string? ClassId,
+    string? ClassName,
+    string? PackageId,
+    string? PackageName,
+    string PaymentUrl,
+    string PayosQrCode,
+    string PayosQrImage,
+    int ExpiresInSeconds);
+
 // Gói nhận kèm lớp. IsFree = true: Hạng Đồng tặng kèm, Price = 0.
 public sealed record MembershipPackageQuoteDto(
     string Id,

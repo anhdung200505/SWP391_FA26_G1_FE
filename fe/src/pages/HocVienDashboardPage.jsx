@@ -9,9 +9,28 @@ import {
   createMembershipRenewal,
   confirmMembershipRenewal,
   getMySupportRequests,
+  getPendingCheckouts,
 } from '../api/managementApi';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+
+// Nhãn trạng thái trong lịch sử gói: đơn chờ thanh toán / đã hủy không hiện như đã hoàn tất.
+const historyStatus = (status) => {
+  switch (status) {
+    case 'pending':
+      return { label: 'Chờ thanh toán', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+    case 'cancelled':
+      return { label: 'Đã hủy', className: 'bg-slate-100 text-slate-500 border-slate-200' };
+    case 'expired':
+      return { label: 'Hết hạn', className: 'bg-slate-100 text-slate-500 border-slate-200' };
+    case 'scheduled':
+      return { label: 'Chờ kích hoạt', className: 'bg-blue-50 text-blue-700 border-blue-200' };
+    case 'active':
+      return { label: 'Đang dùng', className: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
+    default:
+      return { label: status || 'Hoàn tất', className: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
+  }
+};
 
 export default function HocVienDashboardPage() {
   const { user } = useAuth();
@@ -19,6 +38,7 @@ export default function HocVienDashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [myClasses, setMyClasses] = useState([]);
+  const [pendingCheckouts, setPendingCheckouts] = useState([]);
   const [membershipData, setMembershipData] = useState(null);
   const [profileData, setProfileData] = useState(null);
   const [contactData, setContactData] = useState(null);
@@ -43,6 +63,10 @@ export default function HocVienDashboardPage() {
       // 1. Lấy danh sách lớp học đã ghi danh
       const classes = await getMyClassRegistrations().catch(() => []);
       if (Array.isArray(classes)) setMyClasses(classes);
+
+      // Đơn đang chờ thanh toán (còn trong 3 phút) để học viên quay lại màn hình QR
+      const pending = await getPendingCheckouts().catch(() => []);
+      setPendingCheckouts(Array.isArray(pending) ? pending : []);
 
       // 2. Lấy danh sách yêu cầu hỗ trợ của bản thân
       setLoadingRequests(true);
@@ -260,6 +284,40 @@ export default function HocVienDashboardPage() {
             </section>
           )}
 
+          {/* ĐƠN ĐANG CHỜ THANH TOÁN */}
+          {pendingCheckouts.length > 0 && (
+            <section className="bg-amber-50 rounded-3xl p-6 sm:p-8 border border-amber-200 shadow-xs">
+              <h2 className="text-lg font-black text-slate-900 uppercase mb-1">ĐƠN ĐANG CHỜ THANH TOÁN</h2>
+              <p className="text-xs text-slate-500 mb-4">
+                Mỗi đơn chỉ giữ 3 phút. Quá thời gian chưa thanh toán thì đơn tự hủy và bạn cần đăng ký lại.
+              </p>
+              <div className="space-y-3">
+                {pendingCheckouts.map((item) => (
+                  <div
+                    key={item.paymentId}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white rounded-2xl p-4 border border-amber-200"
+                  >
+                    <div className="text-xs space-y-0.5">
+                      <p className="font-black text-slate-900 text-sm">
+                        {item.kind === 'class'
+                          ? `Đăng ký lớp ${item.className || ''}${item.packageName ? ` + Gói ${item.packageName}` : ''}`
+                          : `Mua gói ${item.packageName || ''}`}
+                      </p>
+                      <p className="font-mono text-slate-500">#{item.invoiceCode}</p>
+                      <p className="font-bold text-emerald-600">{item.amount?.toLocaleString('vi-VN')}đ</p>
+                    </div>
+                    <Link
+                      to="/dang-ky-khoa-hoc"
+                      className="text-center bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
+                    >
+                      Tiếp tục thanh toán →
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* ======================================================== */}
           {/* BLOCK 1: KHÓA HỌC & LỚP ĐÃ GHI DANH */}
           {/* ======================================================== */}
@@ -454,8 +512,8 @@ export default function HocVienDashboardPage() {
                         <td className="p-3 text-slate-600">{hItem.startDate} ~ {hItem.endDate}</td>
                         <td className="p-3 font-bold text-emerald-600">{hItem.amountPaid?.toLocaleString('vi-VN')}đ</td>
                         <td className="p-3">
-                          <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">
-                            {hItem.status || 'Hoàn tất'}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${historyStatus(hItem.status).className}`}>
+                            {historyStatus(hItem.status).label}
                           </span>
                         </td>
                       </tr>
