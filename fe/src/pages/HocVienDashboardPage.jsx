@@ -157,7 +157,6 @@ export default function HocVienDashboardPage() {
   const displayEmail = profileData?.email || user?.email || 'Chưa cập nhật';
   const displayPhone = profileData?.phone || user?.phone || 'Chưa cập nhật';
   const currentMembership = membershipData?.currentMembership;
-  const packageList = membershipData?.packages || [];
   const historyList = membershipData?.history || [];
 
   return (
@@ -348,79 +347,6 @@ export default function HocVienDashboardPage() {
                 </Link>
               </div>
             )}
-          </section>
-
-          {/* ======================================================== */}
-          {/* BLOCK 2: DANH SÁCH GÓI HỘI VIÊN MỚI */}
-          {/* ======================================================== */}
-          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-              <div>
-                <span className="inline-block bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full mb-1">
-                  ƯU ĐÃI GIA HẠN & NÂNG CẤP
-                </span>
-                <h2 className="text-lg font-black text-slate-900 uppercase">
-                  DANH SÁCH GÓI HỘI VIÊN MỚI
-                </h2>
-              </div>
-
-              {contactData && (
-                <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl text-xs">
-                  <span className="text-slate-400 font-medium block text-[10px] uppercase">Cần tư vấn thêm?</span>
-                  <strong className="text-[#e31b23] font-black">📞 {contactData.phone}</strong>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {packageList.map((pkg) => (
-                <div
-                  key={pkg.id}
-                  className="bg-slate-50 hover:bg-slate-100/80 rounded-3xl p-6 border border-slate-200 transition-all flex flex-col justify-between space-y-4"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-md">
-                        {pkg.code}
-                      </span>
-                      {pkg.upgradeDiscountPercent > 0 && (
-                        <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                          Giảm {pkg.upgradeDiscountPercent}%
-                        </span>
-                      )}
-                    </div>
-
-                    <h3 className="text-base font-black text-slate-900 uppercase">
-                      {pkg.name}
-                    </h3>
-
-                    <div className="mt-3">
-                      <span className="text-2xl font-black text-[#e31b23]">
-                        {pkg.fee?.toLocaleString('vi-VN')}đ
-                      </span>
-                      <span className="text-xs text-slate-400 font-medium"> / {pkg.validityMonths} tháng</span>
-                    </div>
-
-                    <ul className="mt-4 space-y-2 text-xs text-slate-600">
-                      {pkg.benefits?.map((benefit, bIdx) => (
-                        <li key={bIdx} className="flex items-center gap-2">
-                          <span className="text-emerald-500 font-bold">✓</span>
-                          <span>{benefit}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={() => handleCreateRenewal(pkg)}
-                    disabled={isProcessing}
-                    className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase py-3 rounded-xl shadow transition-all cursor-pointer disabled:opacity-50 mt-4"
-                  >
-                    {isProcessing ? 'Đang tạo đơn...' : 'Gia hạn / Nâng cấp ngay →'}
-                  </button>
-                </div>
-              ))}
-            </div>
           </section>
 
           {/* ======================================================== */}
