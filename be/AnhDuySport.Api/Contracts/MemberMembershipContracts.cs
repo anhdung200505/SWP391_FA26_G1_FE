@@ -70,7 +70,11 @@ public sealed record MembershipDto(
     string Status,
     decimal AmountPaid,
     string InvoiceCode,
-    string PaymentMethod);
+    string PaymentMethod,
+    // Lúc tạo thanh toán (phát hành hóa đơn). Null với gói tặng kèm không có thanh toán.
+    DateTime? CreatedAt,
+    // Số giây còn lại của đơn đang chờ thanh toán; 0 khi không còn chờ.
+    int PaymentExpiresInSeconds);
 
 // View membership management
 public sealed record MembershipManagementDto(
