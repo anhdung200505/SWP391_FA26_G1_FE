@@ -17,6 +17,13 @@ public class EmailNotificationService(SmtpEmailSender emailSender)
         return SendAsync(user, subject, body);
     }
 
+    public async Task SendGuestResultEmailAsync(string to, string fullName, string requestSubject, string result)
+    {
+        var subject = "[AnhDuy Sport] Yêu cầu hỗ trợ đã được xử lý";
+        var body = $"Xin chào {fullName}, yêu cầu \"{requestSubject}\" đã có kết quả. {result}";
+        await emailSender.SendAsync(to, subject, body);
+    }
+
     public Task<EmailDto> SendSupportResultEmailAsync(UserAccount member, string requestSubject, string result)
     {
         var subject = "[AnhDuy Sport] Yêu cầu hỗ trợ đã được xử lý";
