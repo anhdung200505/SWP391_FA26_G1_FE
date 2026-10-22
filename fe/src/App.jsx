@@ -20,6 +20,7 @@ import PackageEditorPage from './pages/management/PackageEditorPage';
 import RequireAuth from './components/RequireAuth';
 import { AccountManagementProvider } from './context/AccountManagementContext';
 import { AuthProvider } from './context/AuthContext';
+import ClassListPage from './pages/management/ClassListPage';
 
 function Protected({ children, allowedRoles }) {
   return <RequireAuth allowedRoles={allowedRoles}>{children}</RequireAuth>;
@@ -85,6 +86,7 @@ export default function App() {
             <Route path="/quan-ly/goi" element={<Protected allowedRoles={['ADMIN']}><PackageListPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="create" /></Protected>} />
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
+            <Route path="/quan-ly/lop-hoc" element={<ClassListPage />} />
             
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
