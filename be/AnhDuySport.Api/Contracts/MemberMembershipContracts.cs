@@ -47,7 +47,9 @@ public sealed record MembershipCheckoutDto(
     string? QrCode,
     string Message,
     // Ảnh PNG của QrCode (data URL), dùng thẳng làm src của <img>.
-    string QrImage);
+    string QrImage,
+    // Số giây còn lại trước khi đơn chờ thanh toán bị hủy (0 khi không còn chờ).
+    int ExpiresInSeconds);
 
 // Display Success Message + Receive Updated Membership Info
 // Kết quả kiểm tra thanh toán. Membership chỉ chuyển active khi payment đã paid.

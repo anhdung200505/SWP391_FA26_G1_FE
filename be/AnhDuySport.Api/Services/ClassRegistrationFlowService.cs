@@ -1054,11 +1054,11 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         return payment;
     }
 
-    // Người gọi phải Include(Invoice). Đơn pending được tạo link payOS (hết hạn trước khi nhả chỗ 2 phút).
+    // Người gọi phải Include(Invoice). Đơn pending được tạo link payOS, hết hạn cùng lúc nhả chỗ.
     private async Task<ClassRegistrationDto> ToRegistrationDtoAsync(Payment payment, string className, bool isExisting)
     {
         var linked = payment.Status == "pending"
-            ? await payOs.EnsureRegistrationLinkAsync(payment.PaymentId, payment.Invoice!.IssuedAt.AddMinutes(HoldMinutes - 2))
+            ? await payOs.EnsureRegistrationLinkAsync(payment.PaymentId, PaymentTimeout.ExpiresAt(payment.Invoice!.IssuedAt))
             : null;
         return new(
             payment.PaymentId.ToString(),
@@ -1074,7 +1074,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             payment.Amount - payment.UpgradeAmount,
             await ClassMembershipBonus.QuoteOfPaymentAsync(db, payment),
             linked?.QrCode ?? "",
-            PayOsQrImage.ToDataUrl(linked?.QrCode));
+            PayOsQrImage.ToDataUrl(linked?.QrCode),
+            payment.Status == "pending" ? PaymentTimeout.SecondsLeft(payment.Invoice!.IssuedAt) : 0);
     }
 
     // Người gọi phải Include(Invoice), nếu không InvoiceCode và InvoiceStatus sẽ rỗng.
@@ -1177,9 +1178,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
 
     private static string Shorten(string value, int max) => value.Length > max ? value[..max] : value;
 
-    // Đơn pending giữ chỗ HoldMinutes phút kể từ lúc phát hành hóa đơn. Khi nối payOS, link phải hết hạn sớm hơn 1-2 phút
-    // (expiredAt = IssuedAt + HoldMinutes - 2) để QR đã hết hạn thì chỗ mới được nhả.
-    private const int HoldMinutes = 10;
+    // Đơn pending giữ chỗ HoldMinutes phút kể từ lúc phát hành hóa đơn; link payOS hết hạn cùng lúc nên QR hết hạn thì chỗ được nhả.
+    private const int HoldMinutes = PaymentTimeout.Minutes;
     private const int MaxHoldsPerMember = 3;
 
     private static DateTime HoldSince() => DateTime.Now.AddMinutes(-HoldMinutes);
