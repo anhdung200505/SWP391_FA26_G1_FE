@@ -136,6 +136,96 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
         await MarkPaidAsync(payment);
     }
 
+    // Link payOS cho đơn đăng ký lớp (POST /api/class-registrations), đúng số tiền của đơn.
+    // Máy chưa cấu hình payOS hoặc payOS từ chối thì trả null: đơn vẫn pending để lễ tân thu tại quầy.
+    public async Task<Payment?> EnsureRegistrationLinkAsync(int paymentId, DateTime holdUntil)
+    {
+        if (PayOsClient is not PayOSClient payOs)
+        {
+            return null;
+        }
+
+        var payment = await db.Payments
+            .Include(item => item.Invoice)
+            .FirstOrDefaultAsync(item => item.PaymentId == paymentId && item.Status == "pending");
+        if (payment is null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(payment.CheckoutUrl))
+        {
+            return payment;
+        }
+
+        if (payment.Amount < 2000 || payment.Amount != decimal.Truncate(payment.Amount) || payment.Amount > int.MaxValue)
+        {
+            return null;
+        }
+
+        // Mã đơn payOS không được trùng trong cả kênh thanh toán, kể cả sau khi dựng lại database: ghép thời gian.
+        payment.PayosOrderCode ??= long.Parse(DateTime.Now.ToString("yyMMddHHmmss")) * 1000 + payment.PaymentId % 1000;
+        var invoiceCode = payment.Invoice?.InvoiceCode ?? "";
+        try
+        {
+            var link = await payOs.PaymentRequests.CreateAsync(new CreatePaymentLinkRequest
+            {
+                OrderCode = payment.PayosOrderCode.Value,
+                Amount = decimal.ToInt32(payment.Amount),
+                Description = invoiceCode.Length <= 25 ? invoiceCode : invoiceCode[..25],
+                ReturnUrl = PayOsUrl("PayOS:ReturnUrl", "http://localhost:5173/payment/result"),
+                CancelUrl = PayOsUrl("PayOS:CancelUrl", "http://localhost:5173/payment/cancel"),
+                ExpiredAt = new DateTimeOffset(holdUntil).ToUnixTimeSeconds(),
+            });
+            payment.CheckoutUrl = link.CheckoutUrl;
+            payment.PaymentLinkId = link.PaymentLinkId;
+            payment.QrCode = link.QrCode;
+            AddHistory(payment, "pending", "Tạo mã QR payOS cho đơn đăng ký lớp");
+            await db.SaveChangesAsync();
+            return payment;
+        }
+        catch (ApiException)
+        {
+            payment.PayosOrderCode = null;
+            return null;
+        }
+    }
+
+    // Trạng thái link payOS (PAID, PENDING, CANCELLED, EXPIRED...), null nếu không hỏi được.
+    public async Task<string?> PayOsStatusAsync(long? orderCode)
+    {
+        if (orderCode is not long code || PayOsClient is not PayOSClient payOs)
+        {
+            return null;
+        }
+
+        try
+        {
+            return (await payOs.PaymentRequests.GetAsync(code)).Status.ToString();
+        }
+        catch (ApiException)
+        {
+            return null;
+        }
+    }
+
+    // Lễ tân thu tiền tại quầy: hủy link payOS để học viên không trả lần nữa. Lỗi thì bỏ qua.
+    public async Task CancelLinkQuietlyAsync(long? orderCode, string reason)
+    {
+        if (orderCode is not long code || PayOsClient is not PayOSClient payOs)
+        {
+            return;
+        }
+
+        try
+        {
+            await payOs.PaymentRequests.CancelAsync(code, reason);
+        }
+        catch (ApiException)
+        {
+        }
+    }
+
     private async Task TryConfirmFromPayOsAsync(Payment payment)
     {
         if (payment.PayosOrderCode is not long orderCode)
