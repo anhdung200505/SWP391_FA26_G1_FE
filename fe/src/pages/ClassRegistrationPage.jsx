@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import QRCode from 'qrcode';
 import logoImg from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -56,7 +55,6 @@ export default function ClassRegistrationPage() {
   // Kết quả & Thanh toán từ Server
   const [registrationResult, setRegistrationResult] = useState(null);
   const [paymentStatusData, setPaymentStatusData] = useState(null);
-  const [qrState, setQrState] = useState({ code: '', url: '' });
 
   // 1. Fetch danh sách Gói hội viên, Thông tin Lớp học ban đầu & Danh sách Bộ môn
   useEffect(() => {
@@ -166,22 +164,9 @@ export default function ClassRegistrationPage() {
     return () => clearInterval(interval);
   }, [registrationResult, user?.id]);
 
-  // Không tự vẽ QR từ số tài khoản: phải dùng đúng chuỗi VietQR payOS trả về (tài khoản nhận tiền của kênh payOS trung tâm)
-  const payosQrCode = registrationResult?.payosQrCode || '';
-  useEffect(() => {
-    if (!payosQrCode) return undefined;
-
-    let active = true;
-    QRCode.toDataURL(payosQrCode, { width: 416, margin: 1 })
-      .then((url) => {
-        if (active) setQrState({ code: payosQrCode, url });
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [payosQrCode]);
-  const qrImage = payosQrCode && qrState.code === payosQrCode ? qrState.url : '';
+  // Ảnh QR do backend vẽ sẵn từ mã VietQR payOS (tài khoản nhận tiền của kênh payOS trung tâm).
+  // Không tự vẽ QR từ số tài khoản ở frontend.
+  const qrImage = registrationResult?.payosQrImage || '';
 
   // Logic tính giá Gói hội viên: CHỈ CHIẾT KHẤU KHI CÓ TICK ĐĂNG KÝ KÈM LỚP
   const calculatePackagePrice = (pkg) => {
@@ -246,6 +231,7 @@ export default function ClassRegistrationPage() {
           status: res.paymentStatus,
           paymentUrl: res.checkoutUrl || '',
           payosQrCode: res.qrCode || '',
+          payosQrImage: res.qrImage || '',
           isExisting: false,
         });
         return;
