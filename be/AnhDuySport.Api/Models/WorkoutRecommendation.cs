@@ -22,6 +22,10 @@ public class TrainingPlan
     [Column("duration_weeks")]
     public int? DurationWeeks { get; set; }
 
+    // Giáo án chuẩn của một môn; giáo án AI gợi ý cho học viên thì để null.
+    [Column("sport_id")]
+    public int? SportId { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }
 }
