@@ -376,12 +376,15 @@ export default function ClassRegistrationPage() {
             </span>
           </Link>
 
-          <button
-            onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-[#e31b23] bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-all cursor-pointer"
-          >
-            ← Quay lại
-          </button>
+          {/* Màn hình QR đã có nút điều hướng ở dưới nên ẩn nút Quay lại ở trên */}
+          {!registrationResult && (
+            <button
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-[#e31b23] bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-all cursor-pointer"
+            >
+              ← Quay lại
+            </button>
+          )}
         </div>
       </header>
 
