@@ -28,7 +28,7 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     [AllowAnonymous]
     [HttpPost("enrollment")]
     [EndpointSummary("Khách gửi tư vấn ghi danh")]
-    [EndpointDescription("title là tiêu đề đơn, ví dụ Tư vấn ghi danh hoặc Đăng ký tư vấn. Gắn với học viên đang đăng nhập, hoặc học viên có cùng email.")]
+    [EndpointDescription("Không cần tài khoản học viên. title là tiêu đề đơn, ví dụ Tư vấn ghi danh hoặc Đăng ký tư vấn. Nếu người gửi đang đăng nhập bằng tài khoản học viên, hoặc email trùng học viên, đơn vẫn được gắn với học viên đó.")]
     public async Task<ActionResult<SupportRequestCreatedDto>> CreateEnrollment(CreateEnrollmentConsultationRequest request)
     {
         try
