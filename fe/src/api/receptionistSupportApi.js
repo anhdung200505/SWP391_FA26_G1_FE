@@ -98,16 +98,16 @@ export function updateEnrollmentConsultation(requestId, payload) {
  * Payload: { category: "account_issue" | "consultation" }
  */
 export function classifySupportRequest(requestId, category) {
-  return request(`/support-requests/${requestId}/classify`, {
+  return request(`/support-requests/${requestId}/handle`, {
     method: 'POST',
-    body: JSON.stringify({ category }),
+    body: JSON.stringify({ action: 'classify', category }),
   });
 }
 
 export function resolveMemberSupport(requestId, note) {
-  return request(`/support-requests/${requestId}/resolve`, {
+  return request(`/support-requests/${requestId}/handle`, {
     method: 'POST',
-    body: JSON.stringify({ note }),
+    body: JSON.stringify({ action: 'resolve', note }),
   });
 }
 
@@ -116,9 +116,9 @@ export function resolveMemberSupport(requestId, note) {
  * Payload: { note: "Nội dung giải quyết..." }
  */
 export function resolveAccountIssue(requestId, note) {
-  return request(`/support-requests/${requestId}/resolve-account`, {
+  return request(`/support-requests/${requestId}/handle`, {
     method: 'POST',
-    body: JSON.stringify({ note }),
+    body: JSON.stringify({ action: 'resolve', category: 'account_issue', note }),
   });
 }
 
@@ -128,9 +128,9 @@ export function resolveAccountIssue(requestId, note) {
  * Payload: { note: "Nội dung tư vấn..." }
  */
 export function provideConsultation(requestId, note) {
-  return request(`/support-requests/${requestId}/provide-consultation`, {
+  return request(`/support-requests/${requestId}/handle`, {
     method: 'POST',
-    body: JSON.stringify({ note }),
+    body: JSON.stringify({ action: 'resolve', category: 'consultation', note }),
   });
 }
 
@@ -140,9 +140,9 @@ export function provideConsultation(requestId, note) {
  * Payload: { reason: "Lý do vượt phạm vi..." }
  */
 export function escalateSupportRequest(requestId, reason) {
-  return request(`/support-requests/${requestId}/escalate`, {
+  return request(`/support-requests/${requestId}/handle`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ action: 'escalate', note: reason }),
   });
 }
 
