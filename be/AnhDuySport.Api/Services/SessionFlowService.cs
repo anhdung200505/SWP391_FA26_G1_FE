@@ -45,6 +45,14 @@ public class SessionFlowService(AppDbContext db)
         return await ProjectAsync(FilterDates(query, from, to));
     }
 
+    // Lịch dạy của HLV theo HLV của từng buổi (session.coach_user_id), không theo HLV của lớp, vì HLV có thể được đổi cho riêng một buổi.
+    public async Task<IReadOnlyList<SessionDto>> AccessCoachSessionsAsync(int coachUserId, DateOnly? from, DateOnly? to)
+    {
+        var query = db.ClassSessions.AsNoTracking()
+            .Where(session => session.CoachUserId == coachUserId && session.Status != "cancelled");
+        return await ProjectAsync(FilterDates(query, from, to));
+    }
+
     public async Task<IReadOnlyList<TimeSlotDto>> AccessTimeSlotsAsync(string? kind)
     {
         var query = db.TimeSlots.AsNoTracking().Where(slot => slot.IsActive);
@@ -70,7 +78,7 @@ public class SessionFlowService(AppDbContext db)
             .ToList();
     }
 
-    private static IQueryable<ClassSession> FilterDates(IQueryable<ClassSession> query, DateOnly? from, DateOnly? to)
+    internal static IQueryable<ClassSession> FilterDates(IQueryable<ClassSession> query, DateOnly? from, DateOnly? to)
     {
         if (from is { } start && to is { } end && end < start)
         {
@@ -82,7 +90,7 @@ public class SessionFlowService(AppDbContext db)
         return to is { } until ? query.Where(session => session.SessionDate <= until) : query;
     }
 
-    private async Task<List<SessionDto>> ProjectAsync(IQueryable<ClassSession> query)
+    internal async Task<List<SessionDto>> ProjectAsync(IQueryable<ClassSession> query)
     {
         var rows = await query
             .OrderBy(session => session.SessionDate)
