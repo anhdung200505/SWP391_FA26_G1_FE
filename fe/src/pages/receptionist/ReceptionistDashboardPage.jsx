@@ -2,13 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../assets/logo.png';
+
+// Components Lễ tân
 import ReceptionistPage from '../../components/receptionist/ReceptionistPage';
+import ReceptionClassRegistration from '../../components/receptionist/ReceptionClassRegistration';
+import ReceptionRegistrationsList from '../../components/receptionist/ReceptionRegistrationsList';
 
 export default function ReceptionistDashboardPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('support'); // 'support' | 'registrations' | 'checkin' | 'members'
-  const [searchTerm, setSearchTerm] = useState('');
+  const [subTab, setSubTab] = useState('register_form'); // 'register_form' | 'registrations_list'
 
   useEffect(() => {
     document.title = 'Lễ tân Dashboard · AnhDuy Sport';
@@ -64,7 +68,7 @@ export default function ReceptionistDashboardPage() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Duyệt Đăng ký
+              Đăng ký & Lớp học
             </button>
 
             <button
@@ -127,7 +131,7 @@ export default function ReceptionistDashboardPage() {
           <div className="flex items-center gap-4">
             <h1 className="text-lg font-black uppercase text-white tracking-wide">
               {activeTab === 'support' && 'Quản lý Đơn Hỗ trợ & Tư vấn khách hàng'}
-              {activeTab === 'registrations' && 'Quản lý Duyệt Đăng ký Lớp học'}
+              {activeTab === 'registrations' && 'Đăng ký Lớp tại Quầy & Quản lý Danh sách Ghi danh'}
               {activeTab === 'checkin' && 'Điểm danh & Check-in Học viên'}
               {activeTab === 'members' && 'Danh sách & Tra cứu Hồ sơ Học viên'}
             </h1>
@@ -144,16 +148,39 @@ export default function ReceptionistDashboardPage() {
         <main className="flex-1 overflow-y-auto bg-slate-50 text-slate-800">
           {activeTab === 'support' && <ReceptionistPage />}
 
+          {/* TAB ĐĂNG KÝ LỚP HỌC TẠI QUẦY & DANH SÁCH */}
           {activeTab === 'registrations' && (
-            <div className="p-8 space-y-6">
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-2">
-                  Duyệt đăng ký khóa học
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Tính năng xem danh sách và xác nhận thanh toán/duyệt lớp cho học viên.
-                </p>
+            <div className="p-6 sm:p-8 space-y-6">
+              {/* THANH THAO TÁC CON */}
+              <div className="flex gap-3 border-b border-slate-200 pb-4">
+                <button
+                  onClick={() => setSubTab('register_form')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    subTab === 'register_form' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  ➕ Đăng ký lớp tại quầy (Guest / Member)
+                </button>
+                <button
+                  onClick={() => setSubTab('registrations_list')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    subTab === 'registrations_list' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  📋 Xem danh sách học viên đã ghi danh
+                </button>
               </div>
+
+              {subTab === 'register_form' && (
+                <ReceptionClassRegistration
+                  onRegistrationSuccess={() => {
+                    // Chuyển sang xem danh sách sau khi ghi danh thành công
+                    setSubTab('registrations_list');
+                  }}
+                />
+              )}
+
+              {subTab === 'registrations_list' && <ReceptionRegistrationsList />}
             </div>
           )}
 

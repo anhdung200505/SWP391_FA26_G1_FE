@@ -101,6 +101,33 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             ToLogDto(log, member.FullName));
     }
 
+    // ===== Edit personal information → đổi ảnh đại diện =====
+    public async Task<MemberProfileMutationResponse> UpdateAvatarAsync(string memberUserId, IFormFile? file)
+    {
+        var member = await FindActiveMemberAsync(memberUserId);
+        var contentRoot = services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
+        var oldAvatar = member.AvatarUrl;
+        member.AvatarUrl = await AvatarStorage.SaveAsync(contentRoot, member.UserId, file);
+
+        var log = new ActivityLog
+        {
+            ActorUserId = member.UserId,
+            Action = "Cập nhật ảnh đại diện",
+            EntityName = "user",
+            EntityId = member.UserId,
+            Detail = "Đã đổi ảnh đại diện.",
+            CreatedAt = DateTime.Now,
+        };
+        db.ActivityLogs.Add(log);
+        await db.SaveChangesAsync();
+        AvatarStorage.DeleteIfUploaded(contentRoot, oldAvatar);
+
+        return new MemberProfileMutationResponse(
+            ToProfileDto(member),
+            "Cập nhật ảnh đại diện thành công.",
+            ToLogDto(log, member.FullName));
+    }
+
     // ===== Renew/Upgrade Package → View membership management =====
     public async Task<MembershipManagementDto> ViewMembershipManagementAsync(string memberUserId)
     {
@@ -131,12 +158,14 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             .OrderBy(item => item.Fee)
             .ToListAsync();
 
+        var highest = await ClassMembershipBonus.HighestOwnedPackageAsync(db, member.UserId, today);
         return new MembershipManagementDto(
             ToProfileDto(member),
             current,
             endDate,
             history,
-            packages.Select(AccountFlowMapper.ToDto).ToList());
+            packages.Select(AccountFlowMapper.ToDto).ToList(),
+            highest?.MembershipPackageId.ToString());
     }
 
     // ===== Need Consultation? = Yes → hiển thị số chăm sóc khách hàng =====
@@ -194,6 +223,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             if (oldPayment.Status == "pending"
                 && item.MembershipPackageId == package.MembershipPackageId
                 && oldPayment.Amount == amount
+                && oldPayment.Invoice is not null
+                && PaymentTimeout.SecondsLeft(oldPayment.Invoice.IssuedAt) > 0
                 && !string.IsNullOrWhiteSpace(oldPayment.CheckoutUrl)
                 && !string.IsNullOrWhiteSpace(oldPayment.QrCode))
             {
@@ -395,6 +426,12 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     // Dòng cũ chưa gắn gói (membership_package_id NULL) được coi là gói khác.
     private async Task<RenewalPlan> PlanRenewalAsync(int userId, MembershipPackage package, DateOnly today, bool blockDowngrade)
     {
+        // Xét cả gói đang chờ kích hoạt (vd. Vàng nhận kèm lớp), không chỉ gói đang dùng.
+        if (blockDowngrade)
+        {
+            await ClassMembershipBonus.EnsureNotDowngradeAsync(db, userId, package, today);
+        }
+
         var running = await db.Memberships
             .Include(item => item.Package)
             .Where(item => item.UserId == userId && item.Status == "active" && item.EndDate >= today)
@@ -418,12 +455,6 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         }
         else
         {
-            if (blockDowngrade && latest.Package is not null && package.Fee < latest.Package.Fee)
-            {
-                throw new InvalidOperationException(
-                    $"{latest.PlanName} còn hạn đến {latest.EndDate:dd/MM/yyyy}. Chỉ được gia hạn hoặc nâng cấp lên hạng cao hơn.");
-            }
-
             renewalType = "Nâng cấp";
             endDate = today.AddMonths(package.ValidityMonths).AddDays(-1);
         }
@@ -450,6 +481,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
                 Description = description,
                 ReturnUrl = PayOsUrl("PayOS:MembershipReturnUrl", "http://localhost:5173/ho-so"),
                 CancelUrl = PayOsUrl("PayOS:MembershipCancelUrl", "http://localhost:5173/ho-so"),
+                ExpiredAt = new DateTimeOffset(PaymentTimeout.ExpiresAt(payment.Invoice?.IssuedAt ?? DateTime.Now)).ToUnixTimeSeconds(),
             });
             payment.CheckoutUrl = link.CheckoutUrl;
             payment.PaymentLinkId = link.PaymentLinkId;
@@ -628,7 +660,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             payment.CheckoutUrl,
             payment.QrCode,
             message,
-            PayOsQrImage.ToDataUrl(payment.QrCode));
+            PayOsQrImage.ToDataUrl(payment.QrCode),
+            payment.Status == "pending" && payment.Invoice is not null ? PaymentTimeout.SecondsLeft(payment.Invoice.IssuedAt) : 0);
 
     private sealed record RenewalPlan(string Type, DateOnly StartDate, DateOnly EndDate, List<Membership> Running);
 
@@ -752,24 +785,34 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             user.Phone ?? "",
             user.DateOfBirth,
             user.Gender ?? "",
-            user.Status);
+            user.Status,
+            user.AvatarUrl);
 
     // Cần có Payment và Payment.Invoice (Include hoặc vừa tạo) trước khi gọi.
-    private static MembershipDto ToMembershipDto(Membership membership, DateOnly today) =>
-        new(
+    private static MembershipDto ToMembershipDto(Membership membership, DateOnly today)
+    {
+        var issuedAt = membership.Payment?.Invoice?.IssuedAt;
+        var waitingSeconds = membership.Status == "pending" && membership.Payment is { Status: "pending" } && issuedAt is DateTime issued
+            ? PaymentTimeout.SecondsLeft(issued)
+            : 0;
+        return new(
             membership.MembershipId.ToString(),
             membership.MembershipPackageId?.ToString(),
             membership.PlanName,
             membership.StartDate,
             membership.EndDate,
             // Trong DB vẫn là active nhưng đã qua ngày hết hạn thì hiển thị expired.
+            // Đơn chờ thanh toán giữ nhãn pending (lịch sử có cột thời gian tạo để học viên tự đối chiếu).
             membership.Status == "active" && membership.EndDate < today ? "expired" : membership.Status,
             // Gói lên cấp kèm lớp gắn với payment của lớp: chỉ tính phần tiền gói.
             membership.Payment is { ClassId: not null } classPayment
                 ? classPayment.UpgradeAmount
                 : membership.Payment?.Amount ?? 0,
             membership.Payment?.Invoice?.InvoiceCode ?? "",
-            membership.Payment?.PaymentMethod ?? "");
+            membership.Payment?.PaymentMethod ?? "",
+            issuedAt,
+            waitingSeconds);
+    }
 
     private static ActivityLogDto ToLogDto(ActivityLog log, string memberName) =>
         new(

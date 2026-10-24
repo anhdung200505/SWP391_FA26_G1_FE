@@ -37,7 +37,7 @@ builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<ClassManagementFlowService>();
 builder.Services.AddScoped<ReceptionFlowService>();
-builder.Services.AddScoped<SlotFlowService>();
+builder.Services.AddScoped<SessionFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
 builder.Services.AddScoped<PayOsPaymentService>();
@@ -122,18 +122,23 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+
+// Ảnh học viên tải lên (uploads/avatars) phục vụ ở /api/uploads để đi qua proxy /api của frontend.
+var uploadsPath = Path.Combine(app.Environment.ContentRootPath, AvatarStorage.UploadsFolder);
+Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/api/uploads",
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
-    var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
-    await auth.EnsurePendingRegistrationTableAsync();
-    await auth.EnsureBootstrapAdminPasswordAsync();
-    var workouts = scope.ServiceProvider.GetRequiredService<WorkoutRecommendationFlowService>();
-    await workouts.EnsureTablesAsync();
-    await scope.ServiceProvider.GetRequiredService<ReceptionFlowService>().EnsureSchemaAsync();
+    await scope.ServiceProvider.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 
 app.Run();

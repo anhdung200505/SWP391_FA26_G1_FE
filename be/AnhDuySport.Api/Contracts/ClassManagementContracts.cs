@@ -22,9 +22,22 @@ public sealed record AdminClassDto(
     string RoomId,
     string RoomName,
     string CenterId,
-    string CenterName);
+    string CenterName,
+    IReadOnlyList<ClassScheduleDto> Schedule,
+    int SessionCount);
 
-// PUT thay toàn bộ 6 trường: StartDate, EndDate, Capacity để null nghĩa là bỏ giá trị đó.
+// Một dòng lịch tuần. Weekday: 2..7 = thứ 2..thứ 7. TimeSlotId lấy từ GET /api/time-slots?kind=group.
+public sealed class ClassScheduleRequest
+{
+    [Range(2, 7)]
+    public int Weekday { get; set; }
+
+    [Required]
+    public string TimeSlotId { get; set; } = "";
+}
+
+// PUT thay toàn bộ các trường: StartDate, EndDate, Capacity để null nghĩa là bỏ giá trị đó.
+// Schedules để null thì giữ lịch tuần cũ, gửi [] thì bỏ lịch. Buổi học được sinh lại theo lịch và khoảng ngày mới.
 public sealed class UpdateClassRequest
 {
     [Required]
@@ -42,9 +55,12 @@ public sealed class UpdateClassRequest
 
     [Required]
     public string RoomId { get; set; } = "";
+
+    public List<ClassScheduleRequest>? Schedules { get; set; }
 }
 
 // Thêm lớp: lớp luôn tạo ở trạng thái open, giáo án tự chọn theo môn của khóa học.
+// Có Schedules (kèm StartDate, EndDate) thì sinh luôn toàn bộ buổi học của lớp.
 public sealed class CreateClassRequest
 {
     [Required]
@@ -65,6 +81,8 @@ public sealed class CreateClassRequest
 
     [Required]
     public string RoomId { get; set; } = "";
+
+    public List<ClassScheduleRequest>? Schedules { get; set; }
 }
 
 public sealed record CourseOptionDto(
@@ -81,6 +99,6 @@ public sealed record RoomOptionDto(
     string Code,
     string Name,
     string Type,
-    int? Capacity,
+    int Capacity,
     string CenterId,
     string CenterName);
