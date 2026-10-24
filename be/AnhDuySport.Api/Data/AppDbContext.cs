@@ -39,6 +39,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ClassAttendance> ClassAttendances => Set<ClassAttendance>();
     public DbSet<CoachEvaluation> CoachEvaluations => Set<CoachEvaluation>();
     public DbSet<CoachTrainingHistory> CoachTrainingHistories => Set<CoachTrainingHistory>();
+    public DbSet<CoachCourseBrief> CoachCourseBriefs => Set<CoachCourseBrief>();
+    public DbSet<CoachCoursePlan> CoachCoursePlans => Set<CoachCoursePlan>();
+    public DbSet<CoachCourseExercise> CoachCourseExercises => Set<CoachCourseExercise>();
+    public DbSet<CoachCourseExamQuestion> CoachCourseExamQuestions => Set<CoachCourseExamQuestion>();
+    public DbSet<CoachCourseRubricItem> CoachCourseRubricItems => Set<CoachCourseRubricItem>();
     public DbSet<AiTokenUsage> AiTokenUsages => Set<AiTokenUsage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -197,6 +202,37 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<CoachEvaluation>()
             .Property(item => item.Score)
+            .HasPrecision(4, 1);
+
+        modelBuilder.Entity<CoachCoursePlan>(entity =>
+        {
+            entity.HasIndex(item => new { item.ClassId, item.Slot }).IsUnique();
+            entity.HasMany(item => item.Exercises)
+                .WithOne()
+                .HasForeignKey(item => item.PlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(item => item.Questions)
+                .WithOne()
+                .HasForeignKey(item => item.PlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(item => item.Rubric)
+                .WithOne()
+                .HasForeignKey(item => item.PlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CoachCourseExercise>()
+            .HasOne<ClassSession>()
+            .WithMany()
+            .HasForeignKey(item => item.SessionId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<CoachCourseExamQuestion>()
+            .Property(item => item.Points)
+            .HasPrecision(4, 1);
+
+        modelBuilder.Entity<CoachCourseRubricItem>()
+            .Property(item => item.MaxScore)
             .HasPrecision(4, 1);
 
         modelBuilder.Entity<AiTokenUsage>(entity =>

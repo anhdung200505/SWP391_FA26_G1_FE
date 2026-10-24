@@ -227,16 +227,11 @@ export default function ReceptionistPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 sm:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+    <div className="space-y-6 text-slate-800">
+        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <span className="inline-block bg-[#e31b23]/10 text-[#e31b23] text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-1">
-              PORTAL LỄ TÂN & CHĂM SÓC KHÁCH HÀNG
-            </span>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase">
-              QUẢN LÝ YÊU CẦU HỖ TRỢ & TƯ VẤN
+            <h1 className="text-xl font-black text-balance text-slate-900 sm:text-2xl">
+              Hỗ trợ và tư vấn
             </h1>
           </div>
 
@@ -265,25 +260,27 @@ export default function ReceptionistPage() {
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex gap-2 border-b md:border-b-0 pb-2 md:pb-0 border-slate-100">
             <button
+              type="button"
               onClick={() => setActiveTab('enrollment')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              className={`rounded-lg px-4 py-2 text-sm font-semibold tabular-nums ${
                 activeTab === 'enrollment'
-                  ? 'bg-[#e31b23] text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-[#12141d] text-white'
+                  : 'border border-gray-200 bg-white text-gray-700'
               }`}
             >
-              📞 Tư vấn tuyển sinh ({enrollments.length})
+              Tư vấn tuyển sinh ({enrollments.length})
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab('service')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              className={`rounded-lg px-4 py-2 text-sm font-semibold tabular-nums ${
                 activeTab === 'service'
-                  ? 'bg-[#e31b23] text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-[#12141d] text-white'
+                  : 'border border-gray-200 bg-white text-gray-700'
               }`}
             >
-              🎧 Hỗ trợ học viên ({serviceRequests.length})
+              Hỗ trợ học viên ({serviceRequests.length})
             </button>
           </div>
 
@@ -317,7 +314,6 @@ export default function ReceptionistPage() {
             openActionModal={openActionModal}
           />
         </div>
-      </div>
 
       {/* POPUP MODAL THAO TÁC */}
       <ReceptionistModals

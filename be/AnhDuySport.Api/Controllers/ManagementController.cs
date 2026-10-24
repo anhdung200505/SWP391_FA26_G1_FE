@@ -16,7 +16,7 @@ public class ManagementController(ManagementDashboardService dashboard) : Contro
 
     [HttpGet("ai-token-usage")]
     [EndpointSummary("Xem token AI đã dùng")]
-    [EndpointDescription("Quản trị trung tâm xem hạn mức AI của từng gói và token từng học viên đang dùng gói đó. packageId dùng để chỉnh hạn mức của cả gói.")]
+    [EndpointDescription("Quản trị trung tâm xem hạn mức AI của từng gói, token từng học viên đang dùng gói đó, và tổng token 12 tháng gần nhất. packageId dùng để chỉnh hạn mức của cả gói.")]
     public async Task<ActionResult<AiTokenUsageReportDto>> AiTokenUsage() =>
         Ok(await dashboard.ListAiTokenUsageAsync());
 

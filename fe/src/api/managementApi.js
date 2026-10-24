@@ -51,6 +51,13 @@ async function request(path, options = {}) {
 // API XÁC THỰC (AUTHENTICATION)
 // ==========================================
 
+export function changePassword(payload) {
+  return request('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function loginStaff(email, password, portal = 'staff') {
   return request('/auth/login', {
     method: 'POST',
@@ -345,6 +352,13 @@ export function updateAccountStatus(userId, status) {
   return request(`/user-accounts/${userId}/status`, {
     method: 'PUT',
     body: JSON.stringify({ status }),
+  });
+}
+
+export function updateCoachSports(userId, sportIds) {
+  return request(`/user-accounts/${userId}/sports`, {
+    method: 'PUT',
+    body: JSON.stringify({ sportIds }),
   });
 }
 

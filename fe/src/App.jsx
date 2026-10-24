@@ -14,6 +14,7 @@ import ClassRegistrationPage from './pages/ClassRegistrationPage';
 import ReceptionistDashboardPage from './pages/receptionist/ReceptionistDashboardPage'; // Import trang Lễ tân
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
+import CreateStaffAccountPage from './pages/management/CreateStaffAccountPage';
 import UserAccountPage from './pages/management/UserAccountPage';
 import PackageListPage from './pages/management/PackageListPage';
 import PackageEditorPage from './pages/management/PackageEditorPage';
@@ -25,7 +26,8 @@ import ClassSchedulePage from './pages/management/ClassSchedulePage';
 import CreateClassPage from './pages/management/CreateClassPage';
 import AiWorkoutPage from './pages/AiWorkoutPage';
 import AiQuotaPage from './pages/management/AiQuotaPage';
-import CoachTrainingHistoryPage from './pages/CoachTrainingHistoryPage';
+import CoachCoursePage from './pages/CoachCoursePage';
+import MemberCoursePlanPage from './pages/MemberCoursePlanPage';
 
 function Protected({ children, allowedRoles }) {
   return <RequireAuth allowedRoles={allowedRoles}>{children}</RequireAuth>;
@@ -75,6 +77,15 @@ export default function App() {
             />
 
             <Route
+              path="/hoc-vien/bai-tap-lop"
+              element={
+                <Protected allowedRoles={['MEMBER']}>
+                  <MemberCoursePlanPage />
+                </Protected>
+              }
+            />
+
+            <Route
               path="/hoc-vien/giao-an-ai"
               element={
                 <Protected allowedRoles={['MEMBER']}>
@@ -84,13 +95,15 @@ export default function App() {
             />
 
             <Route
-              path="/hlv/lich-su-tap"
+              path="/hlv/lop-hoc"
               element={
                 <Protected allowedRoles={['COACH']}>
-                  <CoachTrainingHistoryPage />
+                  <CoachCoursePage />
                 </Protected>
               }
             />
+
+            <Route path="/hlv/lich-su-tap" element={<Navigate to="/hlv/lop-hoc?tab=history" replace />} />
 
             {/* Route LỄ TÂN DASHBOARD (Không chứa Header/Footer chung) */}
             <Route 
@@ -105,8 +118,7 @@ export default function App() {
             {/* Khai báo các route Quản lý (ADMIN) */}
             <Route path="/quan-ly" element={<Protected allowedRoles={['ADMIN']}><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected allowedRoles={['ADMIN']}><UserAccountListPage /></Protected>} />
-            
-            {/* Route chi tiết tài khoản */}
+            <Route path="/quan-ly/tai-khoan/moi" element={<Protected allowedRoles={['ADMIN']}><CreateStaffAccountPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected allowedRoles={['ADMIN']}><UserAccountPage /></Protected>} />
             
             <Route path="/quan-ly/goi" element={<Protected allowedRoles={['ADMIN']}><PackageListPage /></Protected>} />

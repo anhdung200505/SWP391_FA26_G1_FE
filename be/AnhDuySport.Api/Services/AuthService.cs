@@ -486,6 +486,11 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             DELETE FROM ai_workout_recommendation WHERE user_id = {user.UserId};
             DELETE FROM member_body_metric WHERE user_id = {user.UserId};
             DELETE FROM coach_training_history WHERE member_user_id = {user.UserId} OR coach_user_id = {user.UserId};
+            DELETE FROM coach_course_exercise WHERE plan_id IN (SELECT plan_id FROM coach_course_plan WHERE coach_user_id = {user.UserId});
+            DELETE FROM coach_course_exam_question WHERE plan_id IN (SELECT plan_id FROM coach_course_plan WHERE coach_user_id = {user.UserId});
+            DELETE FROM coach_course_rubric WHERE plan_id IN (SELECT plan_id FROM coach_course_plan WHERE coach_user_id = {user.UserId});
+            DELETE FROM coach_course_plan WHERE coach_user_id = {user.UserId};
+            DELETE FROM coach_course_brief WHERE coach_user_id = {user.UserId};
             DELETE FROM membership WHERE user_id = {user.UserId}
                 OR payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
             DELETE FROM payment_history WHERE payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
