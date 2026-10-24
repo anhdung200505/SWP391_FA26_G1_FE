@@ -148,6 +148,14 @@ public class SessionManagementFlowService(AppDbContext db, CurrentActor actor, S
         if (changes.Count > 0)
         {
             AddLog(session, "Đổi HLV hoặc phòng", $"Quản trị cập nhật: {string.Join("; ", changes)}.");
+
+            var moves = changes.Where(change => change.StartsWith("HLV ") || change.StartsWith("Phòng ")).ToList();
+            if (moves.Count > 0)
+            {
+                var why = string.IsNullOrEmpty(note) ? "" : $" Lý do: {note}.";
+                await NotifyEnrolledAsync(session, "Thay đổi thông tin buổi học", $"{Describe(session)}: {string.Join("; ", moves)}.{why}");
+            }
+
             await SaveAsync();
         }
 
@@ -169,6 +177,7 @@ public class SessionManagementFlowService(AppDbContext db, CurrentActor actor, S
         session.Status = "cancelled";
         session.Note = reason;
         AddLog(session, "Hủy buổi học", $"Quản trị hủy buổi. Lý do: {reason}.");
+        await NotifyEnrolledAsync(session, "Buổi học bị hủy", $"{Describe(session)} đã bị hủy. Lý do: {reason}.");
         await SaveAsync();
 
         return await sessions.SelectSessionAsync(session.SessionId.ToString());
@@ -206,6 +215,32 @@ public class SessionManagementFlowService(AppDbContext db, CurrentActor actor, S
             throw new RegistrationException($"Buổi học đã kết thúc, không {verb} được.");
         }
     }
+
+    // Báo cho học viên đang ghi danh lớp của buổi. Chỉ thêm vào context, được lưu cùng lần SaveChanges với thay đổi
+    // nên khi trigger từ chối (trùng lịch) thì không có thông báo nào được ghi.
+    private async Task NotifyEnrolledAsync(ClassSession session, string title, string content)
+    {
+        var memberIds = await db.ClassEnrollments.AsNoTracking()
+            .Where(enrollment => enrollment.ClassId == session.ClassId && enrollment.Status == "enrolled")
+            .Select(enrollment => enrollment.UserId)
+            .ToListAsync();
+
+        var now = DateTime.Now;
+        foreach (var memberId in memberIds)
+        {
+            db.Notifications.Add(new AccountNotification
+            {
+                UserId = memberId,
+                Title = title,
+                Content = content,
+                IsRead = false,
+                CreatedAt = now,
+            });
+        }
+    }
+
+    private static string Describe(ClassSession session) =>
+        $"{ClassSessionPlanner.SessionTitle(session.SessionNo)} lớp {session.Class!.ClassName} ngày {session.SessionDate:dd/MM/yyyy} ({session.StartTime:HH\\:mm}-{session.EndTime:HH\\:mm})";
 
     private void AddLog(ClassSession session, string action, string detail) =>
         db.ActivityLogs.Add(new ActivityLog
