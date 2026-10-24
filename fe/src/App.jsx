@@ -21,7 +21,7 @@ import RequireAuth from './components/RequireAuth';
 import { AccountManagementProvider } from './context/AccountManagementContext';
 import { AuthProvider } from './context/AuthContext';
 import ClassListPage from './pages/management/ClassListPage';
-import SessionSchedulePage from './pages/management/SessionSchedulePage';
+import ClassSchedulePage from './pages/management/ClassSchedulePage';
 import CreateClassPage from './pages/management/CreateClassPage';
 
 function Protected({ children, allowedRoles }) {
@@ -93,7 +93,7 @@ export default function App() {
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
             <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/moi" element={<Protected allowedRoles={['ADMIN']}><CreateClassPage /></Protected>} />
-            <Route path="/quan-ly/lich-hoc" element={<Protected allowedRoles={['ADMIN']}><SessionSchedulePage /></Protected>} />
+            <Route path="/quan-ly/lop-hoc/:classId/lich" element={<Protected allowedRoles={['ADMIN']}><ClassSchedulePage /></Protected>} />
             
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
