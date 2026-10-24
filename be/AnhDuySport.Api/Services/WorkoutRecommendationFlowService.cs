@@ -1,10 +1,8 @@
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Data;
 using AnhDuySport.Api.Models;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
@@ -18,31 +16,9 @@ namespace AnhDuySport.Api.Services;
 //      ├─ Yes → Enter Required Changes → Send New Analysis Request → Generate lại
 //      └─ No  → Save Plan to Member Account → Sync Schedule to Personal Calendar
 //             → View Daily Exercise Routine
-public class WorkoutRecommendationFlowService(AppDbContext db, IWebHostEnvironment environment, GeminiWorkoutClient gemini)
+public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClient gemini)
 {
     private static readonly TimeOnly DefaultStart = new(18, 0);
-
-    public async Task EnsureTablesAsync()
-    {
-        var path = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "..", "..", "database", "08_ai_workout_recommendation.sql"));
-        if (!File.Exists(path))
-        {
-            throw new InvalidOperationException($"Không tìm thấy script bảng giáo án AI: {path}");
-        }
-
-        var script = await File.ReadAllTextAsync(path);
-        var batches = Regex.Split(script, @"^\s*GO\s*;?\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-        foreach (var batch in batches)
-        {
-            var sql = batch.Trim();
-            if (sql.Length == 0)
-            {
-                continue;
-            }
-
-            await db.Database.ExecuteSqlRawAsync(sql);
-        }
-    }
 
     // ===== Access AI Recommendation =====
     public async Task<AiRecommendationAccessDto> AccessAsync(string memberUserId)
@@ -407,11 +383,12 @@ public class WorkoutRecommendationFlowService(AppDbContext db, IWebHostEnvironme
 
         var busy = await (
             from enrollment in db.ClassEnrollments.AsNoTracking()
-            join slot in db.ClassSlots.AsNoTracking() on enrollment.ClassId equals slot.ClassId
+            join session in db.ClassSessions.AsNoTracking() on enrollment.ClassId equals session.ClassId
             where enrollment.UserId == member.UserId
                 && enrollment.Status == "enrolled"
-                && slot.SlotDate >= today
-            select slot.SlotDate).Distinct().ToListAsync();
+                && session.Status != "cancelled"
+                && session.SessionDate >= today
+            select session.SessionDate).Distinct().ToListAsync();
         var calendar = BuildCalendar(member.UserId, recommendation, today.AddDays(1), busy.ToHashSet(), out var moved, out var skipped);
         db.PersonalExercises.AddRange(calendar);
         var log = AddLog(member, "Lưu giáo án AI", $"Đồng bộ {calendar.Count} buổi vào lịch cá nhân.", now);
@@ -440,33 +417,33 @@ public class WorkoutRecommendationFlowService(AppDbContext db, IWebHostEnvironme
 
     private async Task<TrainingHistory> CollectHistoryAsync(int userId)
     {
-        var slots = await (
+        var sessions = await (
             from enrollment in db.ClassEnrollments.AsNoTracking()
             join trainingClass in db.Classes.AsNoTracking() on enrollment.ClassId equals trainingClass.ClassId
             join course in db.Courses.AsNoTracking() on trainingClass.CourseId equals course.CourseId
-            join slot in db.ClassSlots.AsNoTracking() on trainingClass.ClassId equals slot.ClassId
-            where enrollment.UserId == userId && enrollment.Status == "enrolled"
-            orderby slot.SlotDate, slot.StartTime
+            join session in db.ClassSessions.AsNoTracking() on trainingClass.ClassId equals session.ClassId
+            where enrollment.UserId == userId && enrollment.Status == "enrolled" && session.Status != "cancelled"
+            orderby session.SessionDate, session.StartTime
             select new
             {
                 course.CourseName,
-                slot.SlotDate,
-                slot.StartTime,
-                slot.EndTime,
-                slot.Title,
+                session.SessionDate,
+                session.StartTime,
+                session.EndTime,
+                session.SessionNo,
             }).ToListAsync();
 
-        var scheduleLines = slots
+        var scheduleLines = sessions
             .GroupBy(item => item.CourseName)
             .Select(group =>
             {
                 var times = string.Join("; ", group.Take(6).Select(item =>
-                    $"{item.SlotDate:dd/MM/yyyy} {WeekdayName(item.SlotDate.DayOfWeek)} {item.StartTime:HH:mm}-{item.EndTime:HH:mm} {item.Title}"));
-                return $"{group.Key}: {group.Count()} slot vào {times}";
+                    $"{item.SessionDate:dd/MM/yyyy} {WeekdayName(item.SessionDate.DayOfWeek)} {item.StartTime:HH:mm}-{item.EndTime:HH:mm} {ClassSessionPlanner.SessionTitle(item.SessionNo)}"));
+                return $"{group.Key}: {group.Count()} buổi vào {times}";
             })
             .ToList();
         var classSchedule = scheduleLines.Count == 0
-            ? "Học viên chưa có slot môn học."
+            ? "Học viên chưa có buổi học môn nào."
             : string.Join(" | ", scheduleLines);
 
         var histories = await (
@@ -483,12 +460,12 @@ public class WorkoutRecommendationFlowService(AppDbContext db, IWebHostEnvironme
             ? "Coach chưa nhập lịch sử tập."
             : string.Join(" | ", histories.Select(item =>
                 $"{item.CourseName}, {item.FullName}, {item.RecordedAt:dd/MM/yyyy}: {item.Content}"));
-        var weekdays = slots.Select(item => item.SlotDate.DayOfWeek).Distinct().ToList();
+        var weekdays = sessions.Select(item => item.SessionDate.DayOfWeek).Distinct().ToList();
         return new TrainingHistory(
             summary,
             classSchedule,
-            slots.Select(item => item.CourseName).Distinct().Count(),
-            slots.Count,
+            sessions.Select(item => item.CourseName).Distinct().Count(),
+            sessions.Count,
             weekdays,
             histories.Count);
     }
@@ -646,7 +623,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, IWebHostEnvironme
             _ => "Trung bình",
         };
         var weeks = history.EnrollmentCount > 0 ? 6 : 4;
-        if (history.SlotCount >= 4)
+        if (history.SessionCount >= 4)
         {
             weeks = Math.Max(weeks, 8);
         }
@@ -1124,7 +1101,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, IWebHostEnvironme
         string Summary,
         string ClassSchedule,
         int EnrollmentCount,
-        int SlotCount,
+        int SessionCount,
         IReadOnlyList<DayOfWeek> ClassWeekdays,
         int EntryCount);
 

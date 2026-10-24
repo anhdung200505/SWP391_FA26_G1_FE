@@ -10,7 +10,6 @@ public class ReceptionFlowService(
     AppDbContext db,
     CurrentActor actor,
     ClassRegistrationFlowService registrations,
-    SlotFlowService slots,
     PayOsPaymentService payOs)
 {
     // Chỉ tìm đúng 1 học viên theo email hoặc số điện thoại đầy đủ, không liệt kê danh sách học viên.
@@ -72,65 +71,6 @@ public class ReceptionFlowService(
         return result;
     }
 
-    public async Task<SlotRegistrationDto> RegisterSlotAsync(string memberUserId, string slotId)
-    {
-        var performer = await PerformerAsync();
-        var registered = await slots.RegisterAsync(slotId, new SlotMemberRequest(memberUserId), performer.UserId);
-        ClassRegistrationLogs.Add(db, int.Parse(registered.MemberUserId), int.Parse(registered.Slot.ClassId),
-            ClassRegistrationLogs.SlotRegister, performer, DateTime.Now,
-            reason: $"{registered.Slot.Title} {registered.Slot.Date:dd/MM/yyyy} {registered.Slot.StartTime:HH\\:mm}",
-            slotId: int.Parse(registered.SlotId));
-        await db.SaveChangesAsync();
-        return registered;
-    }
-
-    // Slot cũ hủy, slot mới đăng ký trong cùng giao dịch: slot mới đầy thì học viên vẫn giữ slot cũ.
-    public async Task<SlotRegistrationDto> MoveSlotAsync(string memberUserId, string slotId, MoveSlotRequest request)
-    {
-        var performer = await PerformerAsync();
-        var fromId = ParseId(slotId, "Không tìm thấy slot.");
-        var toId = ParseId(request.ToSlotId, "Không tìm thấy slot muốn dời sang.");
-        if (fromId == toId)
-        {
-            throw new RegistrationException("Slot mới trùng slot cũ.");
-        }
-
-        var classIds = await db.ClassSlots.AsNoTracking()
-            .Where(slot => slot.SlotId == fromId || slot.SlotId == toId)
-            .Select(slot => slot.ClassId)
-            .ToListAsync();
-        if (classIds.Count < 2)
-        {
-            throw new KeyNotFoundException("Không tìm thấy slot.");
-        }
-
-        if (classIds.Distinct().Count() > 1)
-        {
-            throw new RegistrationException("Chỉ dời sang slot cùng lớp.");
-        }
-
-        await using var transaction = await db.Database.BeginTransactionAsync();
-        await slots.CancelAsync(slotId, new SlotMemberRequest(memberUserId), performer.UserId);
-        var moved = await slots.RegisterAsync(request.ToSlotId, new SlotMemberRequest(memberUserId), performer.UserId);
-        var reason = request.Reason?.Trim();
-        ClassRegistrationLogs.Add(db, int.Parse(moved.MemberUserId), int.Parse(moved.Slot.ClassId),
-            ClassRegistrationLogs.SlotMove, performer, DateTime.Now,
-            reason: $"Slot {fromId} → {toId}" + (string.IsNullOrEmpty(reason) ? "" : $". Lý do: {reason}"),
-            slotId: toId);
-        db.ActivityLogs.Add(new ActivityLog
-        {
-            ActorUserId = performer.UserId,
-            Action = "Dời slot cho học viên",
-            EntityName = "slot_registration",
-            EntityId = toId,
-            Detail = $"{moved.MemberName}: slot {fromId} → {toId}" + (string.IsNullOrEmpty(reason) ? "" : $". Lý do: {reason}"),
-            CreatedAt = DateTime.Now,
-        });
-        await db.SaveChangesAsync();
-        await transaction.CommitAsync();
-        return moved;
-    }
-
     public async Task<ReceptionEnrollmentDto> MoveOutAsync(string memberUserId, string classId, MoveOutRequest request)
     {
         var performer = await PerformerAsync();
@@ -149,19 +89,7 @@ public class ReceptionFlowService(
         }
 
         var now = DateTime.Now;
-        var today = DateOnly.FromDateTime(now);
         enrollment.Status = "cancelled";
-        var futureSlots = await db.SlotRegistrations
-            .Where(item => item.UserId == memberId
-                && item.Status == "registered"
-                && item.Slot!.ClassId == id
-                && item.Slot.SlotDate >= today)
-            .ToListAsync();
-        foreach (var slot in futureSlots)
-        {
-            slot.Status = "cancelled";
-        }
-
         ClassRegistrationLogs.Add(db, memberId, id, ClassRegistrationLogs.MoveOut, performer, now, reason: reason);
         db.Notifications.Add(new AccountNotification
         {
@@ -172,7 +100,7 @@ public class ReceptionFlowService(
             CreatedAt = now,
         });
         AddActivity(performer, $"Cho {member.FullName} ra khỏi lớp {className}", enrollment.ClassEnrollmentId,
-            $"Lý do: {reason}. Hủy {futureSlots.Count} buổi đã đăng ký sắp tới.", now);
+            $"Lý do: {reason}.", now);
         await db.SaveChangesAsync();
 
         return new ReceptionEnrollmentDto(
@@ -297,7 +225,7 @@ public class ReceptionFlowService(
             $"Đã đăng ký học lại lớp {target.ClassName} cho {member.FullName}.");
     }
 
-    // Mỗi dòng là 1 học viên trong 1 lớp với đủ thông tin: học viên, lớp, đơn thanh toán, ai đăng ký, ai xếp lớp, slot và lịch sử.
+    // Mỗi dòng là 1 học viên trong 1 lớp với đủ thông tin: học viên, lớp, đơn thanh toán, ai đăng ký, ai xếp lớp, buổi học sắp tới và lịch sử.
     // scope = mine (mặc định): chỉ học viên mà tài khoản đang đăng nhập đã thao tác. scope = all: tất cả, kể cả học viên tự đăng ký.
     public async Task<IReadOnlyList<ReceptionRegistrationDto>> AccessRegistrationsAsync(
         string? scope,
@@ -387,28 +315,22 @@ public class ReceptionFlowService(
                 payment.PaymentMethod,
                 payment.Status,
                 payment.PaidAt,
-                payment.RequestedSlotId,
                 payment.UpgradePackageId,
                 payment.UpgradeAmount,
             })
             .ToListAsync();
         var packages = await db.MembershipPackages.AsNoTracking().ToListAsync();
         var bronze = packages.FirstOrDefault(item => item.PackageCode == ClassMembershipBonus.BronzeCode);
-        var slotRegistrations = await db.SlotRegistrations.AsNoTracking()
-            .Where(item => memberIds.Contains(item.UserId) && classIds.Contains(item.Slot!.ClassId))
-            .Select(item => new { item.UserId, item.Slot!.ClassId, item.SlotId, item.Status })
-            .ToListAsync();
-        var slotIds = slotRegistrations.Select(item => item.SlotId)
-            .Concat(payments.Select(payment => payment.RequestedSlotId).OfType<int>())
-            .Distinct();
-        var slotDetails = new Dictionary<int, RequestedSlotDto>();
-        foreach (var slotId in slotIds)
-        {
-            if (await registrations.RequestedSlotAsync(slotId) is { } slot)
-            {
-                slotDetails[slotId] = slot;
-            }
-        }
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var nextSessions = (await db.ClassSessions.AsNoTracking()
+                .Where(session => classIds.Contains(session.ClassId)
+                    && session.Status != "cancelled"
+                    && session.SessionDate >= today)
+                .ToListAsync())
+            .GroupBy(session => session.ClassId)
+            .ToDictionary(
+                group => group.Key,
+                group => ClassSessionPlanner.ToSlotDto(group.OrderBy(session => session.SessionDate).ThenBy(session => session.StartTime).First()));
 
         var rows = history
             .GroupBy(row => (row.Log.MemberUserId, row.Log.ClassId))
@@ -423,8 +345,6 @@ public class ReceptionFlowService(
                     .FirstOrDefault();
                 var register = group.FirstOrDefault(row => row.Log.Action == ClassRegistrationLogs.Register);
                 var assigned = group.FirstOrDefault(row => row.Log.ClassAssignedBy is not null);
-                var memberSlots = slotRegistrations.Where(item => item.UserId == memberId && item.ClassId == rowClassId).ToList();
-                var requestedSlotId = payment?.RequestedSlotId;
                 return new ReceptionRegistrationDto(
                     ToMemberDto(member),
                     classes[rowClassId],
@@ -446,24 +366,13 @@ public class ReceptionFlowService(
                                 : null),
                     register is null ? null : ToPerformerDto(register.Log, register.PerformerName),
                     assigned is null ? null : ToClassAssignedDto(assigned.Log, assigned.PerformerName),
-                    requestedSlotId is int requested ? slotDetails.GetValueOrDefault(requested) : null,
-                    requestedSlotId is int requestedId
-                        ? memberSlots.FirstOrDefault(item => item.SlotId == requestedId)?.Status
-                        : null,
-                    memberSlots
-                        .Where(item => item.Status == "registered")
-                        .Select(item => slotDetails.GetValueOrDefault(item.SlotId))
-                        .OfType<RequestedSlotDto>()
-                        .OrderBy(item => item.Date)
-                        .ThenBy(item => item.StartTime)
-                        .ToList(),
+                    nextSessions.GetValueOrDefault(rowClassId),
                     group
                         .Select(row => new ReceptionHistoryDto(
                             row.Log.ClassRegistrationLogId.ToString(),
                             row.Log.Action,
                             ClassRegistrationLogs.ActionLabel(row.Log.Action),
                             row.Log.Reason,
-                            row.Log.SlotId?.ToString(),
                             row.Log.PaymentId?.ToString(),
                             ToPerformerDto(row.Log, row.PerformerName),
                             row.Log.CreatedAt))
@@ -501,72 +410,6 @@ public class ReceptionFlowService(
 
     private static ReceptionMemberDto ToMemberDto(UserAccount user) =>
         new(user.UserId.ToString(), user.FullName, user.Email ?? "", user.Phone ?? "", user.Status);
-
-    public async Task EnsureSchemaAsync()
-    {
-        await db.Database.ExecuteSqlRawAsync(
-            """
-            SET QUOTED_IDENTIFIER ON;
-            IF COL_LENGTH(N'dbo.payment', N'registered_by_user_id') IS NULL
-            BEGIN
-                ALTER TABLE payment ADD registered_by_user_id INT NULL
-                    CONSTRAINT FK_payment_registered_by REFERENCES [user] (user_id);
-                EXEC(N'UPDATE payment SET registered_by_user_id = user_id WHERE class_id IS NOT NULL;');
-            END
-            IF COL_LENGTH(N'dbo.payment', N'requested_slot_id') IS NULL
-            BEGIN
-                ALTER TABLE payment ADD requested_slot_id INT NULL
-                    CONSTRAINT FK_payment_requested_slot REFERENCES slot (slot_id);
-            END
-            IF OBJECT_ID(N'dbo.class_registration_log', N'U') IS NULL
-            BEGIN
-                CREATE TABLE class_registration_log (
-                    class_registration_log_id INT IDENTITY(1,1) NOT NULL,
-                    member_user_id            INT            NOT NULL,
-                    class_id                  INT            NOT NULL,
-                    payment_id                INT            NULL,
-                    action                    NVARCHAR(30)   NOT NULL,
-                    reason                    NVARCHAR(500)  NULL,
-                    performed_by_user_id      INT            NULL,
-                    performed_by_role         NVARCHAR(50)   NOT NULL,
-                    created_at                DATETIME2(0)   NOT NULL,
-                    CONSTRAINT PK_class_registration_log PRIMARY KEY (class_registration_log_id),
-                    CONSTRAINT FK_class_registration_log_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
-                    CONSTRAINT FK_class_registration_log_class FOREIGN KEY (class_id) REFERENCES class (class_id),
-                    CONSTRAINT FK_class_registration_log_payment FOREIGN KEY (payment_id) REFERENCES payment (payment_id),
-                    CONSTRAINT FK_class_registration_log_performer FOREIGN KEY (performed_by_user_id) REFERENCES [user] (user_id),
-                    CONSTRAINT CK_class_registration_log_action CHECK (action IN (N'register', N'move_out', N're_enroll'))
-                );
-                CREATE INDEX IX_class_registration_log_member ON class_registration_log (member_user_id, class_id, created_at);
-                INSERT INTO class_registration_log (member_user_id, class_id, payment_id, action, performed_by_user_id, performed_by_role, created_at)
-                SELECT p.user_id, p.class_id, p.payment_id, N'register', p.user_id, N'MEMBER', COALESCE(i.issued_at, p.paid_at, SYSUTCDATETIME())
-                FROM payment AS p
-                LEFT JOIN invoice AS i ON i.invoice_id = p.invoice_id
-                WHERE p.class_id IS NOT NULL;
-            END
-            IF COL_LENGTH(N'dbo.class_registration_log', N'class_assigned_by') IS NULL
-            BEGIN
-                ALTER TABLE class_registration_log ADD class_assigned_by NVARCHAR(50) NULL;
-                EXEC(N'UPDATE class_registration_log SET class_assigned_by = performed_by_role WHERE action IN (N''register'', N''re_enroll'');');
-            END
-            IF COL_LENGTH(N'dbo.class_registration_log', N'slot_id') IS NULL
-            BEGIN
-                ALTER TABLE class_registration_log ADD slot_id INT NULL
-                    CONSTRAINT FK_class_registration_log_slot REFERENCES slot (slot_id);
-            END
-            IF EXISTS (
-                SELECT 1 FROM sys.check_constraints
-                WHERE name = N'CK_class_registration_log_action' AND definition NOT LIKE N'%slot_move%')
-            BEGIN
-                ALTER TABLE class_registration_log DROP CONSTRAINT CK_class_registration_log_action;
-            END
-            IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_class_registration_log_action')
-            BEGIN
-                ALTER TABLE class_registration_log ADD CONSTRAINT CK_class_registration_log_action CHECK (action IN (
-                    N'register', N'move_out', N're_enroll', N'confirm_payment', N'slot_register', N'slot_move'));
-            END
-            """);
-    }
 
     private async Task<RegistrationActor> PerformerAsync()
     {

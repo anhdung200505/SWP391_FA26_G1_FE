@@ -15,6 +15,10 @@ if (File.Exists(databaseConfigPath))
     builder.Configuration.AddJsonFile(databaseConfigPath, optional: false, reloadOnChange: true);
 }
 
+// Khóa payOS dùng chung cả nhóm: đọc ở mọi môi trường (user-secrets chỉ có trên máy đã đặt và chỉ khi Development).
+var payOsConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "payos.json"));
+builder.Configuration.AddJsonFile(payOsConfigPath, optional: true, reloadOnChange: true);
+
 var connectionString = builder.Configuration["connectionString"]
     ?? builder.Configuration.GetConnectionString("AnhDuySport")
     ?? throw new InvalidOperationException("Thiếu chuỗi kết nối AnhDuySport.");
@@ -31,8 +35,9 @@ builder.Services.AddScoped<UserAccountFlowService>();
 builder.Services.AddScoped<MembershipPackageFlowService>();
 builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
+builder.Services.AddScoped<ClassManagementFlowService>();
 builder.Services.AddScoped<ReceptionFlowService>();
-builder.Services.AddScoped<SlotFlowService>();
+builder.Services.AddScoped<SessionFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
 builder.Services.AddScoped<PayOsPaymentService>();
@@ -54,7 +59,7 @@ if (!string.IsNullOrWhiteSpace(payOsClientId)
 }
 else
 {
-    Console.WriteLine("payOS chưa có khóa. API vẫn chạy. Tạo mã QR sẽ báo thiếu PayOS:ClientId, PayOS:ApiKey, PayOS:ChecksumKey.");
+    Console.WriteLine($"payOS chưa có khóa (kiểm tra {payOsConfigPath}). API vẫn chạy nhưng không tạo được mã QR.");
 }
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
@@ -117,18 +122,23 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+
+// Ảnh học viên tải lên (uploads/avatars) phục vụ ở /api/uploads để đi qua proxy /api của frontend.
+var uploadsPath = Path.Combine(app.Environment.ContentRootPath, AvatarStorage.UploadsFolder);
+Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/api/uploads",
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
-    var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
-    await auth.EnsurePendingRegistrationTableAsync();
-    await auth.EnsureBootstrapAdminPasswordAsync();
-    var workouts = scope.ServiceProvider.GetRequiredService<WorkoutRecommendationFlowService>();
-    await workouts.EnsureTablesAsync();
-    await scope.ServiceProvider.GetRequiredService<ReceptionFlowService>().EnsureSchemaAsync();
+    await scope.ServiceProvider.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 
 app.Run();
