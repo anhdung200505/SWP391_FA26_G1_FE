@@ -36,17 +36,21 @@ public sealed class ClassScheduleRequest
     public string TimeSlotId { get; set; } = "";
 }
 
-// PUT thay toàn bộ các trường: StartDate, EndDate, Capacity để null nghĩa là bỏ giá trị đó.
-// Schedules để null thì giữ lịch tuần cũ, gửi [] thì bỏ lịch. Buổi học được sinh lại theo lịch và khoảng ngày mới.
+// PUT thay toàn bộ các trường, bắt buộc có StartDate, EndDate, Capacity.
+// Schedules để null thì giữ lịch tuần cũ, không được gửi [] (lớp phải có lịch). Buổi học được sinh lại theo lịch và khoảng ngày mới.
 public sealed class UpdateClassRequest
 {
     [Required]
     [StringLength(200, MinimumLength = 1)]
     public string ClassName { get; set; } = "";
 
+    [Required]
     public DateOnly? StartDate { get; set; }
+
+    [Required]
     public DateOnly? EndDate { get; set; }
 
+    [Required]
     [Range(1, int.MaxValue)]
     public int? Capacity { get; set; }
 
@@ -56,11 +60,12 @@ public sealed class UpdateClassRequest
     [Required]
     public string RoomId { get; set; } = "";
 
+    [MinLength(1)]
     public List<ClassScheduleRequest>? Schedules { get; set; }
 }
 
 // Thêm lớp: lớp luôn tạo ở trạng thái open, giáo án tự chọn theo môn của khóa học.
-// Có Schedules (kèm StartDate, EndDate) thì sinh luôn toàn bộ buổi học của lớp.
+// Bắt buộc StartDate, EndDate, Capacity và ít nhất một dòng Schedules; toàn bộ buổi học của lớp được sinh luôn.
 public sealed class CreateClassRequest
 {
     [Required]
@@ -70,9 +75,13 @@ public sealed class CreateClassRequest
     [StringLength(200, MinimumLength = 1)]
     public string ClassName { get; set; } = "";
 
+    [Required]
     public DateOnly? StartDate { get; set; }
+
+    [Required]
     public DateOnly? EndDate { get; set; }
 
+    [Required]
     [Range(1, int.MaxValue)]
     public int? Capacity { get; set; }
 
@@ -82,6 +91,8 @@ public sealed class CreateClassRequest
     [Required]
     public string RoomId { get; set; } = "";
 
+    [Required]
+    [MinLength(1)]
     public List<ClassScheduleRequest>? Schedules { get; set; }
 }
 
