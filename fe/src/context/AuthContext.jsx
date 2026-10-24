@@ -7,6 +7,7 @@ import {
   sendRegisterOtp as sendRegisterOtpRequest,
   setUnauthorizedHandler,
 } from '../api/managementApi';
+import { resetProfileNoticeSession } from '../auth/profileNotice';
 import { clearSession, readSession, writeSession } from '../auth/session';
 
 const AuthContext = createContext(null);
@@ -26,6 +27,8 @@ export function AuthProvider({ children }) {
     const next = { token: result.token, user: result.user };
     writeSession(next);
     setSession(next);
+    const role = result.user.roleId || result.user.role;
+    if (role === 'RECEPTIONIST' || role === 'COACH') resetProfileNoticeSession(result.user.id);
     return next.user;
   };
 
