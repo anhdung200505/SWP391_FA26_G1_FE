@@ -234,7 +234,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
 
         session.Status = "cancelled";
         session.Note = reason;
-        await NotifyMembersAsync(session, $"Hủy buổi học lớp {session.Class!.ClassName}", $"{When(session)} bị hủy. Lý do: {reason}.");
+        await NotifyMembersAsync(session, $"Hủy buổi học lớp {session.Class!.ClassName}", $"{When(session)} bị hủy. Lý do: {TextFormat.Sentence(reason)}");
         AddLog("Hủy buổi học", session, reason);
         await SaveAsync();
         return await SelectSessionAsync(sessionId);
@@ -359,7 +359,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
     private static string When(ClassSession session) =>
         $"{ClassSessionPlanner.SessionTitle(session.SessionNo)} ngày {session.SessionDate:dd/MM/yyyy} {session.StartTime:HH\\:mm}-{session.EndTime:HH\\:mm}";
 
-    private static string NoteSuffix(string? note) => string.IsNullOrWhiteSpace(note) ? "" : $" Ghi chú: {note}.";
+    private static string NoteSuffix(string? note) => string.IsNullOrWhiteSpace(note) ? "" : $" Ghi chú: {TextFormat.Sentence(note)}";
 
     private static string? NormalizeNote(string? note)
     {
