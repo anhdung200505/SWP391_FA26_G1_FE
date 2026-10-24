@@ -123,6 +123,90 @@ export function getCoachesBySport(sportId) {
 }
 
 // ==========================================
+// API QUẢN LÝ LỚP HỌC (ADMIN)
+// ==========================================
+
+function toQuery(params = {}) {
+  const query = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, value]) => value)),
+  ).toString();
+  return query ? `?${query}` : '';
+}
+
+// Mọi trạng thái lớp, kèm lịch tuần (schedule) và số buổi (sessionCount)
+export function getManagementClasses(params = {}) {
+  return request(`/management/classes${toQuery(params)}`);
+}
+
+export function getManagementCourses(sportId) {
+  return request(`/management/courses${toQuery({ sportId })}`);
+}
+
+export function getManagementCoaches(sportId) {
+  return request(`/management/coaches${toQuery({ sportId })}`);
+}
+
+export function getManagementRooms(sportId) {
+  return request(`/management/rooms${toQuery({ sportId })}`);
+}
+
+export function getTimeSlots(kind = 'group') {
+  return request(`/time-slots${toQuery({ kind })}`);
+}
+
+// { courseId, startDate, endDate, capacity, schedules: [{ weekday, timeSlotId }] } → số buổi, HLV/phòng kèm isBusy
+export function checkClassAvailability(payload) {
+  return request('/management/classes/availability', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createClass(payload) {
+  return request('/management/classes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// ==========================================
+// API LỊCH BUỔI HỌC (SESSIONS)
+// ==========================================
+
+// params: classId, sportId, from, to (yyyy-MM-dd). Mặc định từ hôm nay trở đi.
+export function getSessions(params = {}) {
+  return request(`/sessions${toQuery(params)}`);
+}
+
+// HLV và phòng có thể đổi cho buổi, kèm isBusy / busyReason
+export function getSessionOptions(sessionId) {
+  return request(`/sessions/${sessionId}/options`);
+}
+
+// Quản trị: { coachUserId?, roomId?, note? }
+export function updateSession(sessionId, payload) {
+  return request(`/sessions/${sessionId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+// Lễ tân (và quản trị): { coachUserId, note? }
+export function changeSessionCoach(sessionId, payload) {
+  return request(`/sessions/${sessionId}/coach`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function cancelSession(sessionId, reason) {
+  return request(`/sessions/${sessionId}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+// ==========================================
 // API ĐĂNG KÝ & THANH TOÁN (REGISTRATIONS & PAYMENTS)
 // ==========================================
 
