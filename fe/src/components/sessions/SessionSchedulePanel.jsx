@@ -345,7 +345,7 @@ function optionLabel(option) {
   return `${option.name}${capacity}`;
 }
 
-function EditSessionModal({ session, isAdmin, onClose, onSaved }) {
+export function EditSessionModal({ session, isAdmin, onClose, onSaved }) {
   const [options, setOptions] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [coachId, setCoachId] = useState(session.coachUserId);
@@ -474,7 +474,7 @@ function EditSessionModal({ session, isAdmin, onClose, onSaved }) {
   );
 }
 
-function CancelSessionModal({ session, onClose, onSaved }) {
+export function CancelSessionModal({ session, onClose, onSaved }) {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
