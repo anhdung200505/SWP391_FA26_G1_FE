@@ -479,9 +479,18 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             UPDATE support_request SET assigned_to_user_id = NULL WHERE assigned_to_user_id = {user.UserId};
             UPDATE audit_log SET user_id = NULL WHERE user_id = {user.UserId};
             DELETE FROM personal_exercise WHERE user_id = {user.UserId};
+            DELETE FROM ai_token_usage WHERE user_id = {user.UserId}
+                OR membership_id IN (
+                    SELECT membership_id FROM membership WHERE user_id = {user.UserId}
+                        OR payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId}));
             DELETE FROM ai_workout_recommendation WHERE user_id = {user.UserId};
             DELETE FROM member_body_metric WHERE user_id = {user.UserId};
             DELETE FROM coach_training_history WHERE member_user_id = {user.UserId} OR coach_user_id = {user.UserId};
+            DELETE FROM coach_course_exercise WHERE plan_id IN (SELECT plan_id FROM coach_course_plan WHERE coach_user_id = {user.UserId});
+            DELETE FROM coach_course_exam_question WHERE plan_id IN (SELECT plan_id FROM coach_course_plan WHERE coach_user_id = {user.UserId});
+            DELETE FROM coach_course_rubric WHERE plan_id IN (SELECT plan_id FROM coach_course_plan WHERE coach_user_id = {user.UserId});
+            DELETE FROM coach_course_plan WHERE coach_user_id = {user.UserId};
+            DELETE FROM coach_course_brief WHERE coach_user_id = {user.UserId};
             DELETE FROM membership WHERE user_id = {user.UserId}
                 OR payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});
             DELETE FROM payment_history WHERE payment_id IN (SELECT payment_id FROM payment WHERE user_id = {user.UserId});

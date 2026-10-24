@@ -1,6 +1,7 @@
 export function pathForRole(roleId) {
   if (roleId === 'ADMIN') return '/quan-ly';
-  if (roleId === 'COACH' || roleId === 'RECEPTIONIST') return '/nhan-su';
+  if (roleId === 'COACH') return '/hlv/lop-hoc';
+  if (roleId === 'RECEPTIONIST') return '/le-tan';
   return '/home';
 }
 
