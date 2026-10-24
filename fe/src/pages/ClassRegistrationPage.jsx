@@ -11,6 +11,7 @@ import {
   getPackages,
   cancelPayment,
   confirmMembershipRenewal,
+  createMembershipRenewal,
   getPendingCheckouts,
   getMemberMembership,
 } from '../api/managementApi';
@@ -40,9 +41,11 @@ export default function ClassRegistrationPage() {
   const [packages, setPackages] = useState([]);
 
   // Lớp là phần bắt buộc. Gói hội viên chỉ mua kèm trên cùng đơn và được giảm theo upgrade_discount_percent.
-  const courseFirst = true;
-  const includeClass = true;
-  const [includeMembership, setIncludeMembership] = useState(!!initialPackageId);
+  // Ngoại lệ: học viên đã có gói bấm Gia hạn / Nâng cấp (mode=renew) thì chỉ mua gói, giá gốc, không chọn lớp.
+  const renewOnly = searchParams.get('mode') === 'renew';
+  const courseFirst = !renewOnly;
+  const includeClass = !renewOnly;
+  const [includeMembership, setIncludeMembership] = useState(renewOnly || !!initialPackageId);
 
   // State lựa chọn
   const [selectedSportId, setSelectedSportId] = useState('');
@@ -324,6 +327,31 @@ export default function ClassRegistrationPage() {
     if (submitting) return;
     setError('');
 
+    if (renewOnly) {
+      if (!selectedPackage?.id) {
+        setError('Vui lòng chọn một gói hội viên.');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const res = await createMembershipRenewal(user?.id, selectedPackage.id);
+        setRegistrationResult({
+          ...res,
+          kind: 'membership',
+          packageName: res.planName,
+          payosQrImage: res.qrImage,
+          paymentUrl: res.checkoutUrl,
+          deadline: Date.now() + (res.expiresInSeconds ?? PAYMENT_TIMEOUT_SECONDS) * 1000,
+        });
+        setNow(Date.now());
+      } catch (err) {
+        setError(err.message || 'Không tạo được đơn gia hạn. Vui lòng thử lại.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     if (!includeClass) {
       setError('Gói hội viên chỉ mua kèm khi đăng ký lớp học.');
       return;
@@ -420,7 +448,7 @@ export default function ClassRegistrationPage() {
             {includeClass && includeMembership
               ? 'ĐĂNG KÝ KHÓA HỌC & GÓI HỘI VIÊN'
               : includeMembership
-                ? 'MUA GÓI HỘI VIÊN'
+                ? 'GIA HẠN / NÂNG CẤP GÓI HỘI VIÊN'
                 : 'ĐĂNG KÝ KHÓA HỌC'}
           </h1>
         </div>
@@ -580,7 +608,7 @@ export default function ClassRegistrationPage() {
                     <p className="mt-1 text-xs text-slate-500">
                       {courseFirst
                         ? 'Bỏ trống nếu chỉ mua khóa học. Mua kèm để được giảm giá gói.'
-                        : 'Mua riêng để dùng giáo án AI, giá gốc. Đăng ký kèm lớp ở mục dưới để được giảm giá.'}
+                        : 'Gia hạn gói đang có hoặc nâng cấp lên hạng cao hơn. Không cần đăng ký lớp, tính giá gốc của gói.'}
                     </p>
                   </div>
                   {courseFirst && (
@@ -664,6 +692,7 @@ export default function ClassRegistrationPage() {
                 )}
               </div>
 
+              {includeClass && (
               <div className={`bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4 ${courseFirst ? 'order-1' : 'order-2'}`}>
                 <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100">
                   <div>
@@ -751,8 +780,10 @@ export default function ClassRegistrationPage() {
                   </div>
                 ) : null}
               </div>
+              )}
 
-              {/* MỤC 3: ĐIỀN THÔNG TIN CÁ NHÂN */}
+              {/* MỤC 3: ĐIỀN THÔNG TIN CÁ NHÂN (gia hạn gói không cần) */}
+              {!renewOnly && (
               <div className="order-3 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <button
                   type="button"
@@ -835,6 +866,7 @@ export default function ClassRegistrationPage() {
                   </div>
                 )}
               </div>
+              )}
 
             </div>
 

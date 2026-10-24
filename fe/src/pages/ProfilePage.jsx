@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { getMemberProfile, updateMemberProfile, getMySupportRequests, uploadMemberAvatar } from '../api/managementApi';
 import { confirmProfileNotice } from '../auth/profileNotice';
 import { useHasClassRegistration } from '../components/workspace/studentNav';
+import ChangePasswordDialog from '../components/account/ChangePasswordDialog';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -26,6 +27,7 @@ export default function ProfilePage() {
   const [requests, setRequests] = useState([]);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   useEffect(() => {
     document.title = 'Hồ sơ cá nhân · AnhDuy Sport';
@@ -143,6 +145,14 @@ export default function ProfilePage() {
               Về trang lễ tân
             </Link>
           )}
+          {((user?.roleId || user?.role) === 'ADMIN') && (
+            <Link
+              to="/quan-ly"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg mb-6"
+            >
+              Về trang quản trị
+            </Link>
+          )}
           <h1 className="text-2xl font-black text-gray-900 mb-2">Hồ sơ cá nhân</h1>
           <p className="text-sm text-gray-500 mb-8">Quản lý thông tin tài khoản của bạn</p>
 
@@ -163,7 +173,7 @@ export default function ProfilePage() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* ẢNH ĐẠI DIỆN */}
-              <div className="flex items-center gap-5">
+              <div className="flex flex-wrap items-center gap-5">
                 <div className="relative w-24 h-24 rounded-full overflow-hidden bg-[#e31b23] text-white flex items-center justify-center text-3xl font-black shadow-md border-4 border-white ring-1 ring-gray-200">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Ảnh đại diện" className="w-full h-full object-cover" />
@@ -177,22 +187,35 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <div>
-                  <label
-                    className={`inline-block px-5 py-2.5 rounded-xl text-xs font-bold uppercase transition-colors ${
-                      uploadingAvatar
-                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                        : 'bg-gray-900 text-white hover:bg-gray-700 cursor-pointer'
-                    }`}
-                  >
-                    {uploadingAvatar ? 'Đang tải ảnh...' : avatarUrl ? 'Đổi ảnh đại diện' : 'Tải ảnh đại diện'}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      disabled={uploadingAvatar}
-                      onChange={handleAvatarChange}
-                    />
-                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label
+                      className={`inline-block px-5 py-2.5 rounded-xl text-xs font-bold uppercase transition-colors ${
+                        uploadingAvatar
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          : 'bg-gray-900 text-white hover:bg-gray-700 cursor-pointer'
+                      }`}
+                    >
+                      {uploadingAvatar ? 'Đang tải ảnh...' : avatarUrl ? 'Đổi ảnh đại diện' : 'Tải ảnh đại diện'}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        disabled={uploadingAvatar}
+                        onChange={handleAvatarChange}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setPasswordOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-bold uppercase text-gray-700 hover:border-[#e31b23] hover:text-[#e31b23] cursor-pointer"
+                    >
+                      <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="5" y="11" width="14" height="10" rx="2" strokeWidth="2" />
+                        <path strokeLinecap="round" strokeWidth="2" d="M8 11V7a4 4 0 0 1 8 0v4" />
+                      </svg>
+                      Đổi mật khẩu
+                    </button>
+                  </div>
                   <p className="text-[11px] text-gray-500 mt-2">JPG, PNG, WebP hoặc GIF, tối đa 2 MB.</p>
                 </div>
               </div>
@@ -275,6 +298,8 @@ export default function ProfilePage() {
               </div>
             </form>
           )}
+
+          {passwordOpen && <ChangePasswordDialog onClose={() => setPasswordOpen(false)} />}
 
           {((user?.roleId || user?.role) === 'MEMBER') && (
             <section className="mt-10 border-t border-gray-100 pt-8">
