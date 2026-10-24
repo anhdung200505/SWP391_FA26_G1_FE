@@ -3,11 +3,13 @@ using System.ComponentModel.DataAnnotations;
 namespace AnhDuySport.Api.Contracts;
 
 // CanEdit = lớp open, chưa có học viên enrolled và chưa tới ngày bắt đầu.
+// CanDelete = chưa ai đăng ký: không có thanh toán (kể cả đơn giữ chỗ), ghi danh, lịch sử đăng ký hay đánh giá.
 public sealed record AdminClassDto(
     string Id,
     string Name,
     string Status,
     bool CanEdit,
+    bool CanDelete,
     DateOnly? StartDate,
     DateOnly? EndDate,
     int? Capacity,

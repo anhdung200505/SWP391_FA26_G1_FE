@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Data;
 using AnhDuySport.Api.Models;
@@ -406,26 +407,17 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         var item = await db.Classes.FirstOrDefaultAsync(current => current.ClassId == id)
             ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        var enrolledCount = await db.ClassEnrollments.CountAsync(enrollment => enrollment.ClassId == id && enrollment.Status == "enrolled");
-        if (!IsEditable(item.Status, enrolledCount, item.StartDate, today))
+        if (!await db.Classes.Where(current => current.ClassId == id).AnyAsync(NoRegistration))
         {
-            throw new RegistrationException("Chỉ xóa được lớp đang open, chưa có học viên ghi danh và chưa tới ngày bắt đầu.");
+            throw new RegistrationException("Lớp đã có học viên đăng ký (thanh toán, ghi danh hoặc lịch sử) nên không thể xóa.");
         }
 
-        var hasHistory = await db.Payments.AnyAsync(payment => payment.ClassId == id)
-            || await db.ClassEnrollments.AnyAsync(enrollment => enrollment.ClassId == id)
-            || await db.ClassRegistrationLogs.AnyAsync(log => log.ClassId == id)
-            || await db.CoachEvaluations.AnyAsync(evaluation => evaluation.ClassId == id)
-            || await db.CoachTrainingHistories.AnyAsync(history => history.ClassId == id);
-        if (hasHistory)
-        {
-            throw new RegistrationException("Lớp đã có thanh toán, ghi danh hoặc lịch sử liên quan nên không thể xóa.");
-        }
-
-        await EnsureSessionsUnusedAsync(id, "Buổi học của lớp đã có bài tập hoặc điểm danh nên không thể xóa lớp.");
+        await EnsureSessionsUnusedAsync(id, "Buổi học của lớp đã có điểm danh hoặc đánh giá nên không thể xóa lớp.");
 
         await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.ClassAssignments
+            .Where(assignment => db.ClassSessions.Any(session => session.SessionId == assignment.SessionId && session.ClassId == id))
+            .ExecuteDeleteAsync();
         await db.ClassSessions.Where(session => session.ClassId == id).ExecuteDeleteAsync();
         await db.ClassSchedules.Where(schedule => schedule.ClassId == id).ExecuteDeleteAsync();
         db.Classes.Remove(item);
@@ -435,7 +427,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             Action = Shorten($"Xóa lớp {item.ClassName}", 100),
             EntityName = "class",
             EntityId = id,
-            Detail = $"Quản trị xóa lớp {item.ClassName} (chưa bắt đầu, chưa có học viên).",
+            Detail = $"Quản trị xóa lớp {item.ClassName} (chưa có học viên đăng ký).",
             CreatedAt = DateTime.Now,
         });
         await db.SaveChangesAsync();
@@ -609,6 +601,14 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
 
     private sealed record BookedSession(DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int CoachUserId, int RoomId, string ClassName);
 
+    // Xóa được khi chưa ai đăng ký: không có thanh toán (kể cả đơn giữ chỗ), ghi danh, lịch sử đăng ký, đánh giá hay lịch sử tập.
+    private Expression<Func<TrainingClass, bool>> NoRegistration =>
+        item => !item.Enrollments.Any()
+            && !db.Payments.Any(payment => payment.ClassId == item.ClassId)
+            && !db.ClassRegistrationLogs.Any(log => log.ClassId == item.ClassId)
+            && !db.CoachEvaluations.Any(evaluation => evaluation.ClassId == item.ClassId)
+            && !db.CoachTrainingHistories.Any(history => history.ClassId == item.ClassId);
+
     private static bool IsEditable(string status, int enrolledCount, DateOnly? startDate, DateOnly today) =>
         status == "open" && enrolledCount == 0 && (startDate is null || startDate > today);
 
@@ -645,6 +645,12 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             .ToListAsync();
 
         var classIds = rows.Select(row => row.ClassId).ToList();
+        var deletable = (await db.Classes.AsNoTracking()
+                .Where(item => classIds.Contains(item.ClassId))
+                .Where(NoRegistration)
+                .Select(item => item.ClassId)
+                .ToListAsync())
+            .ToHashSet();
         var schedules = (await db.ClassSchedules.AsNoTracking()
                 .Include(schedule => schedule.TimeSlot)
                 .Where(schedule => classIds.Contains(schedule.ClassId))
@@ -665,6 +671,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
                 row.ClassName,
                 row.Status,
                 IsEditable(row.Status, row.EnrolledCount, row.StartDate, today),
+                deletable.Contains(row.ClassId),
                 row.StartDate,
                 row.EndDate,
                 row.Capacity,
