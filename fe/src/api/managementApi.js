@@ -207,6 +207,23 @@ export function cancelSession(sessionId, reason) {
 }
 
 // ==========================================
+// API THÔNG BÁO CỦA TÔI (chuông ở header học viên)
+// ==========================================
+
+// { unreadCount, items: [{ id, title, content, isRead, createdAt }] }, mới nhất trước
+export function getMyNotifications(limit = 30) {
+  return request(`/notifications/mine?limit=${limit}`);
+}
+
+export function markNotificationRead(notificationId) {
+  return request(`/notifications/${notificationId}/read`, { method: 'POST' });
+}
+
+export function markAllNotificationsRead() {
+  return request('/notifications/read-all', { method: 'POST' });
+}
+
+// ==========================================
 // API ĐĂNG KÝ & THANH TOÁN (REGISTRATIONS & PAYMENTS)
 // ==========================================
 
