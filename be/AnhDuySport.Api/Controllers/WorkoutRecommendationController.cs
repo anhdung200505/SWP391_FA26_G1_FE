@@ -45,7 +45,7 @@ public class WorkoutRecommendationController(WorkoutRecommendationFlowService fl
 
     [HttpPost("goals")]
     [EndpointSummary("Input Personal Goals")]
-    [EndpointDescription("Nhập mục tiêu, số buổi/tuần (2-6) và số phút/buổi (20-90). Hệ thống lấy lịch sử tập coach đã nhập và lịch slot của môn, rồi gọi Google Gemini. Coach phải nhập lịch sử tập trước. Ví dụ: { \"goal\": \"Giảm cân\", \"sessionsPerWeek\": 3, \"sessionMinutes\": 45 }.")]
+    [EndpointDescription("Nhập mục tiêu, số buổi/tuần (2-6) và số phút/buổi (20-90). Hệ thống lấy lịch sử tập coach đã nhập và lịch buổi học của môn, rồi gọi Google Gemini. Coach phải nhập lịch sử tập trước. Ví dụ: { \"goal\": \"Giảm cân\", \"sessionsPerWeek\": 3, \"sessionMinutes\": 45 }.")]
     public async Task<ActionResult<WorkoutPlanResponse>> InputGoals(string memberUserId, PersonalGoalsRequest request)
     {
         try
@@ -75,7 +75,7 @@ public class WorkoutRecommendationController(WorkoutRecommendationFlowService fl
 
     [HttpPost("regenerate")]
     [EndpointSummary("Member yêu cầu tạo lại giáo án")]
-    [EndpointDescription("Dùng khi đã có giáo án, kể cả giáo án đã lưu. Hệ thống lấy lại lịch sử tập coach đã nhập và lịch slot của môn, rồi gọi Google Gemini tạo giáo án mới. Ví dụ: { \"changes\": \"Bổ trợ môn bơi theo lịch sử tập coach đã nhập, tránh ngày có slot\" }.")]
+    [EndpointDescription("Dùng khi đã có giáo án, kể cả giáo án đã lưu. Hệ thống lấy lại lịch sử tập coach đã nhập và lịch buổi học của môn, rồi gọi Google Gemini tạo giáo án mới. Ví dụ: { \"changes\": \"Bổ trợ môn bơi theo lịch sử tập coach đã nhập, tránh ngày có buổi học\" }.")]
     public async Task<ActionResult<WorkoutPlanResponse>> Regenerate(string memberUserId, RegenerateWorkoutRequest request)
     {
         try

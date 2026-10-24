@@ -15,11 +15,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AccountNotification> Notifications => Set<AccountNotification>();
     public DbSet<Center> Centers => Set<Center>();
     public DbSet<Room> Rooms => Set<Room>();
+    public DbSet<SportRoom> SportRooms => Set<SportRoom>();
+    public DbSet<CoachSport> CoachSports => Set<CoachSport>();
     public DbSet<Sport> Sports => Set<Sport>();
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<TrainingClass> Classes => Set<TrainingClass>();
-    public DbSet<ClassSlot> ClassSlots => Set<ClassSlot>();
-    public DbSet<SlotRegistration> SlotRegistrations => Set<SlotRegistration>();
+    public DbSet<TimeSlot> TimeSlots => Set<TimeSlot>();
+    public DbSet<ClassSchedule> ClassSchedules => Set<ClassSchedule>();
+    public DbSet<ClassSession> ClassSessions => Set<ClassSession>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<ClassEnrollment> ClassEnrollments => Set<ClassEnrollment>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
@@ -89,23 +92,33 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(item => item.Room)
                 .WithMany()
                 .HasForeignKey(item => item.RoomId);
-            entity.HasMany(item => item.Slots)
-                .WithOne(slot => slot.Class)
-                .HasForeignKey(slot => slot.ClassId);
+            entity.HasMany(item => item.Schedules)
+                .WithOne()
+                .HasForeignKey(schedule => schedule.ClassId);
+            entity.HasMany(item => item.Sessions)
+                .WithOne(session => session.Class)
+                .HasForeignKey(session => session.ClassId);
             entity.HasMany(item => item.Enrollments)
                 .WithOne()
                 .HasForeignKey(enrollment => enrollment.ClassId);
         });
 
-        modelBuilder.Entity<SlotRegistration>(entity =>
+        modelBuilder.Entity<ClassSchedule>()
+            .HasOne(item => item.TimeSlot)
+            .WithMany()
+            .HasForeignKey(item => item.TimeSlotId);
+
+        modelBuilder.Entity<ClassSession>(entity =>
         {
-            entity.ToTable("slot_registration", table => table.HasTrigger("TR_slot_registration_limit"));
-            entity.HasOne(item => item.Slot)
-                .WithMany(slot => slot.Registrations)
-                .HasForeignKey(item => item.SlotId);
-            entity.HasOne(item => item.Member)
+            entity.ToTable("session", table => table.HasTrigger("TR_session_rules"));
+            entity.HasOne(item => item.Coach)
                 .WithMany()
-                .HasForeignKey(item => item.UserId);
+                .HasForeignKey(item => item.CoachUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(item => item.Room)
+                .WithMany()
+                .HasForeignKey(item => item.RoomId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<Invoice>()
