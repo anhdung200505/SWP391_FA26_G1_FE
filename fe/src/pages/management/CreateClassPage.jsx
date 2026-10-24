@@ -282,7 +282,7 @@ export default function CreateClassPage() {
                     <option value="">Chọn khóa học...</option>
                     {courses.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.sportName} · {item.name} ({item.level}) · {item.tuition?.toLocaleString('vi-VN')} đ
+                        {item.sportName} · {item.name} ·{item.tuition?.toLocaleString('vi-VN')} đ
                       </option>
                     ))}
                   </select>

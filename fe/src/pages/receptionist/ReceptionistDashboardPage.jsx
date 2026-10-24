@@ -7,7 +7,7 @@ import logoImg from '../../assets/logo.png';
 import ReceptionistPage from '../../components/receptionist/ReceptionistPage';
 import ReceptionClassRegistration from '../../components/receptionist/ReceptionClassRegistration';
 import ReceptionRegistrationsList from '../../components/receptionist/ReceptionRegistrationsList';
-import SessionSchedulePanel from '../../components/sessions/SessionSchedulePanel';
+import ReceptionClassSchedule from '../../components/classes/ReceptionClassSchedule';
 
 export default function ReceptionistDashboardPage() {
   const { user, logout } = useAuth();
@@ -202,7 +202,7 @@ export default function ReceptionistDashboardPage() {
 
           {activeTab === 'schedule' && (
             <div className="p-6 sm:p-8">
-              <SessionSchedulePanel mode="reception" />
+              <ReceptionClassSchedule />
             </div>
           )}
 
