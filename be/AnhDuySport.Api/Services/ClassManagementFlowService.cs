@@ -158,7 +158,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         var fields = await ValidateFieldsAsync(
             request.ClassName, request.StartDate, request.EndDate, request.Capacity, request.CoachUserId, request.RoomId, course.SportId);
         var schedule = await ResolveScheduleAsync(request.Schedules ?? []);
-        EnsureDatesForSchedule(schedule, request.StartDate, request.EndDate);
+        EnsureScheduleFitsDates(schedule, request.StartDate, request.EndDate);
 
         if (request.StartDate is { } start && start <= today)
         {
@@ -233,7 +233,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         var schedule = request.Schedules is null
             ? currentSchedule.Select(current => (current.Weekday, current.TimeSlot!)).ToList()
             : await ResolveScheduleAsync(request.Schedules);
-        EnsureDatesForSchedule(schedule, request.StartDate, request.EndDate);
+        EnsureScheduleFitsDates(schedule, request.StartDate, request.EndDate);
         await EnsureSessionsUnusedAsync(id, "Buổi học của lớp đã có bài tập hoặc điểm danh nên không thể sửa lớp.");
 
         var changed = new List<string>();
@@ -417,11 +417,30 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         return schedule;
     }
 
-    private static void EnsureDatesForSchedule(IReadOnlyCollection<(byte Weekday, TimeSlot Slot)> schedule, DateOnly? startDate, DateOnly? endDate)
+    // Lớp phải có lịch tuần, và mỗi dòng lịch phải rơi vào ít nhất một ngày trong [startDate, endDate], nếu không lớp có lịch mà không có buổi nào.
+    // Lịch rỗng chỉ xảy ra khi PUT không gửi schedules trên lớp cũ chưa có lịch (POST và PUT đã chặn danh sách rỗng ở contract).
+    private static void EnsureScheduleFitsDates(IReadOnlyCollection<(byte Weekday, TimeSlot Slot)> schedule, DateOnly? startDate, DateOnly? endDate)
     {
-        if (schedule.Count > 0 && (startDate is null || endDate is null))
+        if (schedule.Count == 0)
+        {
+            throw new RegistrationException("Lớp chưa có lịch học tuần, cần gửi schedules.");
+        }
+
+        // Phòng thủ: startDate, endDate đã [Required] ở contract nên nhánh này không tới được qua API.
+        if (startDate is not { } start || endDate is not { } end)
         {
             throw new RegistrationException("Cần ngày bắt đầu và ngày kết thúc để xếp lịch học.");
+        }
+
+        foreach (var (weekday, _) in schedule)
+        {
+            var hasSession = Enumerable.Range(0, 7)
+                .Select(offset => start.AddDays(offset))
+                .Any(date => date <= end && ClassSessionPlanner.WeekdayOf(date) == weekday);
+            if (!hasSession)
+            {
+                throw new RegistrationException($"Khoảng ngày không có buổi nào vào {ClassSessionPlanner.WeekdayName(weekday)}.");
+            }
         }
     }
 
