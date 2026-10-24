@@ -1,4 +1,5 @@
 import { readSession, clearSession } from '../auth/session';
+import { notifyDataChanged } from './dataChanged';
 
 // Hàm gửi request dùng chung
 async function request(path, options = {}) {
@@ -36,6 +37,7 @@ async function request(path, options = {}) {
     throw new Error(message);
   }
 
+  notifyDataChanged(rest.method);
   if (response.status === 204) return null;
   return response.json();
 }

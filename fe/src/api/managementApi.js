@@ -1,4 +1,5 @@
 import { clearSession, readSession } from '../auth/session';
+import { notifyDataChanged } from './dataChanged';
 
 let onUnauthorized = () => {};
 
@@ -41,6 +42,7 @@ async function request(path, options = {}) {
     throw new Error(message);
   }
 
+  notifyDataChanged(rest.method);
   if (response.status === 204) return null;
   return response.json();
 }
@@ -120,6 +122,147 @@ export function getClassDetail(classId) {
 
 export function getCoachesBySport(sportId) {
   return request(`/catalog/sports/${sportId}/coaches`);
+}
+
+// ==========================================
+// API QUẢN LÝ LỚP HỌC (ADMIN)
+// ==========================================
+
+function toQuery(params = {}) {
+  const query = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, value]) => value)),
+  ).toString();
+  return query ? `?${query}` : '';
+}
+
+// Mọi trạng thái lớp, kèm lịch tuần (schedule) và số buổi (sessionCount)
+export function getManagementClasses(params = {}) {
+  return request(`/management/classes${toQuery(params)}`);
+}
+
+export function getManagementCourses(sportId) {
+  return request(`/management/courses${toQuery({ sportId })}`);
+}
+
+export function getManagementCoaches(sportId) {
+  return request(`/management/coaches${toQuery({ sportId })}`);
+}
+
+export function getManagementRooms(sportId) {
+  return request(`/management/rooms${toQuery({ sportId })}`);
+}
+
+export function getTimeSlots(kind = 'group') {
+  return request(`/time-slots${toQuery({ kind })}`);
+}
+
+// { courseId, startDate, endDate, capacity, schedules: [{ weekday, timeSlotId }] } → số buổi, HLV/phòng kèm isBusy
+export function checkClassAvailability(payload) {
+  return request('/management/classes/availability', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createClass(payload) {
+  return request('/management/classes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// { remainingSessions, firstSession, coaches: [{ id, name, isCurrent, isBusy, busyReason }] }
+export function getClassCoachOptions(classId) {
+  return request(`/management/classes/${classId}/coach-options`);
+}
+
+// Đổi HLV cho mọi buổi chưa diễn ra của lớp; học viên của lớp nhận thông báo. { coachUserId, note }
+export function changeClassCoach(classId, payload) {
+  return request(`/management/classes/${classId}/coach`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+// Chỉ lớp canDelete = true (chưa ai đăng ký). Xóa cùng lịch tuần và buổi học. Trả null (204).
+export function deleteClass(classId) {
+  return request(`/management/classes/${classId}`, { method: 'DELETE' });
+}
+
+// ==========================================
+// API LỊCH BUỔI HỌC (SESSIONS)
+// ==========================================
+
+// params: classId, sportId, from, to (yyyy-MM-dd). Mặc định từ hôm nay trở đi.
+export function getSessions(params = {}) {
+  return request(`/sessions${toQuery(params)}`);
+}
+
+// Học viên: lịch học của mình (kể cả buổi đã hủy), mỗi buổi kèm attendanceStatus: present | late | absent | null.
+// params: from, to (yyyy-MM-dd). Mặc định từ hôm nay trở đi.
+export function getMySessions(params = {}) {
+  return request(`/sessions/mine${toQuery(params)}`);
+}
+
+// Học viên: lịch sử thanh toán (mua khóa học, mua/gia hạn/nâng hạng gói), mới nhất trước.
+// { id, invoiceCode, kind: class | membership, title, amount, paymentMethod, status, createdAt, paidAt }
+export function getMyPayments() {
+  return request('/payments/mine');
+}
+
+// HLV và phòng có thể đổi cho buổi, kèm isBusy / busyReason
+export function getSessionOptions(sessionId) {
+  return request(`/sessions/${sessionId}/options`);
+}
+
+// Quản trị: { coachUserId?, roomId?, note? }
+export function updateSession(sessionId, payload) {
+  return request(`/sessions/${sessionId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+// Lễ tân (và quản trị): { coachUserId, note? }
+export function changeSessionCoach(sessionId, payload) {
+  return request(`/sessions/${sessionId}/coach`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function cancelSession(sessionId, reason) {
+  return request(`/sessions/${sessionId}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+// ==========================================
+// API HOẠT ĐỘNG CỦA LỄ TÂN & QUẢN TRỊ (chuông ở trang quản trị và portal lễ tân)
+// ==========================================
+
+// [{ id, actorUserId, actorName, actorRole, actorRoleLabel, action, entityName, entityId, detail, createdAt }], mới nhất trước.
+// role: RECEPTIONIST | ADMIN, để trống lấy cả hai.
+export function getStaffActivity({ role, limit = 60 } = {}) {
+  return request(`/staff-activity${toQuery({ role, limit })}`);
+}
+
+// ==========================================
+// API THÔNG BÁO CỦA TÔI (chuông ở header học viên)
+// ==========================================
+
+// { unreadCount, items: [{ id, title, content, isRead, createdAt }] }, mới nhất trước
+export function getMyNotifications(limit = 30) {
+  return request(`/notifications/mine?limit=${limit}`);
+}
+
+export function markNotificationRead(notificationId) {
+  return request(`/notifications/${notificationId}/read`, { method: 'POST' });
+}
+
+export function markAllNotificationsRead() {
+  return request('/notifications/read-all', { method: 'POST' });
 }
 
 // ==========================================

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../assets/logo.png';
 
@@ -7,11 +7,13 @@ import logoImg from '../../assets/logo.png';
 import ReceptionistPage from '../../components/receptionist/ReceptionistPage';
 import ReceptionClassRegistration from '../../components/receptionist/ReceptionClassRegistration';
 import ReceptionRegistrationsList from '../../components/receptionist/ReceptionRegistrationsList';
+import ReceptionClassSchedule from '../../components/classes/ReceptionClassSchedule';
+import StaffActivityBell from '../../components/management/StaffActivityBell';
 
 export default function ReceptionistDashboardPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('support'); // 'support' | 'registrations' | 'checkin' | 'members'
+  const [activeTab, setActiveTab] = useState('support'); // 'support' | 'registrations' | 'schedule' | 'checkin' | 'members'
   const [subTab, setSubTab] = useState('register_form'); // 'register_form' | 'registrations_list'
 
   useEffect(() => {
@@ -72,6 +74,20 @@ export default function ReceptionistDashboardPage() {
             </button>
 
             <button
+              onClick={() => setActiveTab('schedule')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                activeTab === 'schedule'
+                  ? 'bg-[#e31b23] text-white shadow-lg shadow-red-900/30'
+                  : 'text-gray-400 hover:bg-[#1c2234] hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Lịch buổi học
+            </button>
+
+            <button
               onClick={() => setActiveTab('checkin')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                 activeTab === 'checkin'
@@ -127,20 +143,25 @@ export default function ReceptionistDashboardPage() {
       {/* NỘI DUNG CHÍNH (MAIN CONTENT) */}
       <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0f17]">
         {/* HEADER NỘI BỘ QUẢN LÝ */}
-        <header className="h-16 border-b border-gray-800 bg-[#141824] px-8 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4">
-            <h1 className="text-lg font-black uppercase text-white tracking-wide">
-              {activeTab === 'support' && 'Quản lý Đơn Hỗ trợ & Tư vấn khách hàng'}
-              {activeTab === 'registrations' && 'Đăng ký Lớp tại Quầy & Quản lý Danh sách Ghi danh'}
-              {activeTab === 'checkin' && 'Điểm danh & Check-in Học viên'}
-              {activeTab === 'members' && 'Danh sách & Tra cứu Hồ sơ Học viên'}
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-bold text-gray-400 bg-[#0d0f17] border border-gray-800 px-3 py-1.5 rounded-xl">
-              Cơ sở: <strong className="text-white">AnhDuy Sport Center 1</strong>
+        {/* Cùng kiểu header với trang quản trị: đường dẫn bên trái, Hoạt động và Về trang chủ bên phải. */}
+        <header className="h-16 shrink-0 flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-6 sm:px-8 text-gray-900">
+          <nav aria-label="Đường dẫn" className="truncate text-sm text-gray-500">
+            <span className="font-semibold text-gray-600">Lễ tân</span>
+            <span className="mx-2 text-gray-300">/</span>
+            <span className="font-bold text-gray-900">
+              {activeTab === 'support' && 'Hỗ trợ & Tư vấn'}
+              {activeTab === 'registrations' && 'Đăng ký & Lớp học'}
+              {activeTab === 'schedule' && 'Lịch buổi học'}
+              {activeTab === 'checkin' && 'Check-in học viên'}
+              {activeTab === 'members' && 'Tra cứu học viên'}
             </span>
+          </nav>
+
+          <div className="flex shrink-0 items-center gap-4">
+            <StaffActivityBell />
+            <Link to="/home" className="text-sm font-bold text-gray-600 hover:text-[#e31b23]">
+              Về trang chủ
+            </Link>
           </div>
         </header>
 
@@ -181,6 +202,12 @@ export default function ReceptionistDashboardPage() {
               )}
 
               {subTab === 'registrations_list' && <ReceptionRegistrationsList />}
+            </div>
+          )}
+
+          {activeTab === 'schedule' && (
+            <div className="p-6 sm:p-8">
+              <ReceptionClassSchedule />
             </div>
           )}
 

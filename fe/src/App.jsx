@@ -21,6 +21,8 @@ import RequireAuth from './components/RequireAuth';
 import { AccountManagementProvider } from './context/AccountManagementContext';
 import { AuthProvider } from './context/AuthContext';
 import ClassListPage from './pages/management/ClassListPage';
+import ClassSchedulePage from './pages/management/ClassSchedulePage';
+import CreateClassPage from './pages/management/CreateClassPage';
 import AiWorkoutPage from './pages/AiWorkoutPage';
 import AiQuotaPage from './pages/management/AiQuotaPage';
 import CoachTrainingHistoryPage from './pages/CoachTrainingHistoryPage';
@@ -112,6 +114,8 @@ export default function App() {
             <Route path="/quan-ly/goi/moi" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="create" /></Protected>} />
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
             <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />
+            <Route path="/quan-ly/lop-hoc/moi" element={<Protected allowedRoles={['ADMIN']}><CreateClassPage /></Protected>} />
+            <Route path="/quan-ly/lop-hoc/:classId/lich" element={<Protected allowedRoles={['ADMIN']}><ClassSchedulePage /></Protected>} />
             
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>

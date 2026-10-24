@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -13,6 +13,9 @@ import {
 } from '../api/managementApi';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import MemberSidebar from '../components/member/MemberSidebar';
+import MemberSchedule from '../components/member/MemberSchedule';
+import PaymentHistory from '../components/member/PaymentHistory';
 import goldDragonImg from '../assets/membership/gold-dragon.jpg';
 
 // Hạng của gói theo mã hoặc tên: gold / silver / bronze
@@ -78,28 +81,29 @@ const formatCountdown = (ms) => {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 };
 
-// Nhãn trạng thái trong lịch sử gói: đơn chờ thanh toán / đã hủy không hiện như đã hoàn tất.
-const historyStatus = (status) => {
-  switch (status) {
-    case 'pending':
-      return { label: 'Chờ thanh toán', className: 'bg-amber-50 text-amber-700 border-amber-200' };
-    case 'cancelled':
-      return { label: 'Đã hủy', className: 'bg-slate-100 text-slate-500 border-slate-200' };
-    case 'expired':
-      return { label: 'Hết hạn', className: 'bg-slate-100 text-slate-500 border-slate-200' };
-    case 'scheduled':
-      return { label: 'Chờ kích hoạt', className: 'bg-blue-50 text-blue-700 border-blue-200' };
-    case 'active':
-      return { label: 'Đang dùng', className: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
-    default:
-      return { label: status || 'Hoàn tất', className: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
-  }
-};
+// Gói nhận kèm lớp được lưu tên "... (tặng kèm lớp)"; thẻ chỉ hiện tên hạng.
+const planTitle = (name) => String(name || 'Gói Hội Viên').replace(/\s*\(tặng kèm lớp\)\s*$/i, '');
+
+// yyyy-MM-dd -> dd/MM/yyyy
+const formatDay = (iso) => (iso ? String(iso).split('-').reverse().join('/') : '—');
+
+const SIDEBAR_ITEMS = [
+  { key: 'overview', label: 'Tổng quan', icon: '🏠' },
+  { key: 'classes', label: 'Lớp của tôi', icon: '🏅' },
+  { key: 'schedule', label: 'Lịch học', icon: '📅' },
+  { key: 'support', label: 'Đơn hỗ trợ', icon: '🛟' },
+  { key: 'history', label: 'Lịch sử thanh toán', icon: '🧾' },
+];
+
+// Đỉnh vùng đang xem: dưới header cố định (cao khoảng 90px) một chút.
+const SPY_OFFSET = 140;
 
 export default function HocVienDashboardPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
 
+  const [activeTab, setActiveTab] = useState('overview');
+  const spyLockUntil = useRef(0);
   const [loading, setLoading] = useState(true);
   const [myClasses, setMyClasses] = useState([]);
   const [pendingCheckouts, setPendingCheckouts] = useState([]);
@@ -271,7 +275,6 @@ export default function HocVienDashboardPage() {
   const displayEmail = profileData?.email || user?.email || 'Chưa cập nhật';
   const displayPhone = profileData?.phone || user?.phone || 'Chưa cập nhật';
   const currentMembership = membershipData?.currentMembership;
-  const historyList = membershipData?.history || [];
   // Gói cao nhất đang có (backend tính cả gói chờ kích hoạt): gia hạn gói này, chỉ nâng cấp lên gói đắt hơn.
   const packageList = membershipData?.packages || [];
   const highestPackage =
@@ -291,27 +294,58 @@ export default function HocVienDashboardPage() {
     >
       <div>
         <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Ngày bắt đầu</span>
-        <span className="text-xs font-bold text-white">{currentMembership.startDate}</span>
+        <span className="text-xs font-bold text-white whitespace-nowrap">{formatDay(currentMembership.startDate)}</span>
       </div>
       <div className="h-8 w-px" style={{ background: cardTheme.border }}></div>
       <div>
         <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Hạn sử dụng đến</span>
-        <span className="text-xs font-black" style={{ color: cardTheme.accent }}>{currentMembership.endDate}</span>
+        <span className="text-xs font-black whitespace-nowrap" style={{ color: cardTheme.accent }}>{formatDay(currentMembership.endDate)}</span>
       </div>
-      {membershipData?.membershipEndDate && membershipData.membershipEndDate !== currentMembership.endDate && (
-        <>
-          <div className="h-8 w-px" style={{ background: cardTheme.border }}></div>
-          <div>
-            <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Gồm gói chờ kích hoạt</span>
-            <span className="text-xs font-black" style={{ color: cardTheme.accent }}>{membershipData.membershipEndDate}</span>
-          </div>
-        </>
-      )}
     </div>
   ) : null;
 
   // Chỉ hiện đơn còn trong thời gian giữ; hết giờ thì tự biến mất.
   const livePendingCheckouts = pendingCheckouts.filter((item) => item.deadline > now);
+
+  const selectTab = (key) => {
+    // Trong lúc trang đang cuộn tới mục vừa bấm thì giữ nguyên mục đó, kẻo mục cuối trang chiếm mất khi không cuộn thêm được.
+    spyLockUntil.current = Date.now() + 900;
+    setActiveTab(key);
+    window.history.replaceState(null, '', `#${key}`);
+    document.getElementById(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Sidebar chỉ dẫn nhanh: mục nào đang ở gần đỉnh màn hình thì được tô sáng; cuộn tới cuối trang thì tô mục cuối.
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      if (Date.now() < spyLockUntil.current) return;
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+      let current = SIDEBAR_ITEMS[0].key;
+      for (const item of SIDEBAR_ITEMS) {
+        const element = document.getElementById(item.key);
+        if (element && element.getBoundingClientRect().top <= SPY_OFFSET) current = item.key;
+      }
+      setActiveTab(atBottom ? SIDEBAR_ITEMS[SIDEBAR_ITEMS.length - 1].key : current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  // Vào bằng đường dẫn có #mục (ví dụ #schedule) thì cuộn tới mục đó.
+  useEffect(() => {
+    const key = window.location.hash.replace('#', '');
+    if (!SIDEBAR_ITEMS.some((item) => item.key === key)) return undefined;
+    const timer = setTimeout(() => document.getElementById(key)?.scrollIntoView({ block: 'start' }), 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col justify-between">
@@ -334,9 +368,13 @@ export default function HocVienDashboardPage() {
           </div>
         )}
 
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 flex flex-col lg:flex-row gap-6 lg:gap-8">
+          <MemberSidebar items={SIDEBAR_ITEMS} active={activeTab} onSelect={selectTab} />
+          <div className="flex-1 min-w-0 space-y-8">
+            <div id="overview" className="scroll-mt-24 space-y-8">
         {/* BANNER XIN CHÀO */}
-        <section className="bg-white border-b border-slate-200 py-8 shadow-xs">
-          <div className="max-w-6xl mx-auto px-4 sm:px-8">
+        <section className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8">
+          <div>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <span className="inline-block bg-[#e31b23]/10 text-[#e31b23] text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full mb-2">
@@ -380,7 +418,6 @@ export default function HocVienDashboardPage() {
           </div>
         </section>
 
-        <div className="max-w-6xl mx-auto px-4 sm:px-8 mt-8 space-y-8">
           <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -397,6 +434,7 @@ export default function HocVienDashboardPage() {
               </Link>
             </div>
           </section>
+
           {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG */}
           {currentMembership && (
             <section
@@ -454,13 +492,10 @@ export default function HocVienDashboardPage() {
                       className="text-3xl sm:text-4xl font-black uppercase tracking-wide"
                       style={{ backgroundImage: cardTheme.titleGradient, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
                     >
-                      {currentMembership.planName || 'Gói Hội Viên'}
+                      {planTitle(currentMembership.planName)}
                     </h2>
                     <p className="mt-2 font-mono text-sm tracking-[0.2em] uppercase" style={{ color: cardTheme.subText }}>
-                      {displayName} · {profileData?.code || `ND-${String(memberUserId || '').padStart(4, '0')}`}
-                    </p>
-                    <p className="text-[11px] mt-1" style={{ color: cardTheme.subText }}>
-                      Mã hóa đơn: <span className="font-mono font-bold" style={{ color: cardTheme.accent }}>#{currentMembership.invoiceCode || 'N/A'}</span>
+                      {displayName}
                     </p>
                   </div>
 
@@ -531,6 +566,9 @@ export default function HocVienDashboardPage() {
             </section>
           )}
 
+            </div>
+
+            <div id="classes" className="scroll-mt-24 space-y-8">
           {/* ======================================================== */}
           {/* BLOCK 1: KHÓA HỌC & LỚP ĐÃ GHI DANH */}
           {/* ======================================================== */}
@@ -620,6 +658,13 @@ export default function HocVienDashboardPage() {
             )}
           </section>
 
+            </div>
+
+            <div id="schedule" className="scroll-mt-24">
+              <MemberSchedule />
+            </div>
+
+            <div id="support" className="scroll-mt-24 space-y-8">
           {/* ======================================================== */}
           {/* BLOCK 3: TRẠNG THÁI ĐƠN HỖ TRỢ CỦA BẠN */}
           {/* ======================================================== */}
@@ -700,47 +745,12 @@ export default function HocVienDashboardPage() {
             )}
           </section>
 
-          {/* LỊCH SỬ DÙNG GÓI */}
-          {historyList.length > 0 && (
-            <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-              <h2 className="text-lg font-black text-slate-900 uppercase mb-4">
-                LỊCH SỬ DÙNG GÓI HỘI VIÊN
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
-                      <th className="p-3">Gói tập</th>
-                      <th className="p-3">Hóa đơn</th>
-                      <th className="p-3">Tạo lúc</th>
-                      <th className="p-3">Thời hạn</th>
-                      <th className="p-3">Đã thanh toán</th>
-                      <th className="p-3">Trạng thái</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
-                    {historyList.map((hItem) => (
-                      <tr key={hItem.id}>
-                        <td className="p-3 font-bold text-slate-900">{hItem.planName}</td>
-                        <td className="p-3 font-mono text-slate-500">#{hItem.invoiceCode}</td>
-                        <td className="p-3 text-slate-600 whitespace-nowrap">
-                          {hItem.createdAt ? new Date(hItem.createdAt).toLocaleString('vi-VN') : '—'}
-                        </td>
-                        <td className="p-3 text-slate-600">{hItem.startDate} ~ {hItem.endDate}</td>
-                        <td className="p-3 font-bold text-emerald-600">{hItem.amountPaid?.toLocaleString('vi-VN')}đ</td>
-                        <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${historyStatus(hItem.status).className}`}>
-                            {historyStatus(hItem.status).label}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
+            </div>
 
+            <div id="history" className="scroll-mt-24">
+              <PaymentHistory />
+            </div>
+          </div>
         </div>
       </main>
 
