@@ -44,14 +44,10 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             query = query.Where(item => item.Course!.SportId == sportKey);
         }
 
-        var rows = await ProjectRows(query
-                .OrderBy(item => item.StartDate == null)
-                .ThenBy(item => item.StartDate)
-                .ThenBy(item => item.ClassName))
-            .ToListAsync();
-
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        return rows.Select(row => ToDto(row, today)).ToList();
+        return await ToDtosAsync(query
+            .OrderBy(item => item.StartDate == null)
+            .ThenBy(item => item.StartDate)
+            .ThenBy(item => item.ClassName));
     }
 
     public async Task<IReadOnlyList<CourseOptionDto>> AccessCoursesAsync(string? sportId)
@@ -95,7 +91,8 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             .ToList();
     }
 
-    public async Task<IReadOnlyList<RoomOptionDto>> AccessRoomsAsync(string? centerId)
+    // sportId: chỉ phòng dùng được cho lớp nhóm của môn đó (sport_room).
+    public async Task<IReadOnlyList<RoomOptionDto>> AccessRoomsAsync(string? centerId, string? sportId)
     {
         var query = db.Rooms.AsNoTracking().AsQueryable();
 
@@ -107,6 +104,16 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             }
 
             query = query.Where(room => room.CenterId == centerKey);
+        }
+
+        if (!string.IsNullOrWhiteSpace(sportId))
+        {
+            if (!int.TryParse(sportId, out var sportKey))
+            {
+                throw new KeyNotFoundException("Không tìm thấy môn thể thao.");
+            }
+
+            query = query.Where(room => db.SportRooms.Any(link => link.RoomId == room.RoomId && link.SportId == sportKey && link.AllowGroup));
         }
 
         var rows = await query
@@ -148,7 +155,10 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             throw new RegistrationException("Khóa học không hợp lệ.");
         }
 
-        var fields = await ValidateFieldsAsync(request.ClassName, request.StartDate, request.EndDate, request.Capacity, request.CoachUserId, request.RoomId);
+        var fields = await ValidateFieldsAsync(
+            request.ClassName, request.StartDate, request.EndDate, request.Capacity, request.CoachUserId, request.RoomId, course.SportId);
+        var schedule = await ResolveScheduleAsync(request.Schedules ?? []);
+        EnsureDatesForSchedule(schedule, request.StartDate, request.EndDate);
 
         if (request.StartDate is { } start && start <= today)
         {
@@ -161,6 +171,8 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             .FirstOrDefaultAsync()
             ?? throw new RegistrationException("Môn này chưa có giáo án chuẩn.");
 
+        var now = DateTime.Now;
+        await using var transaction = await db.Database.BeginTransactionAsync();
         var item = new TrainingClass
         {
             CourseId = course.CourseId,
@@ -172,23 +184,25 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             EndDate = request.EndDate,
             Capacity = request.Capacity,
             Status = "open",
+            ClassType = "group",
         };
         db.Classes.Add(item);
         await db.SaveChangesAsync();
 
+        var sessionCount = AddScheduleAndSessions(item, schedule, now);
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = actor.UserId == 0 ? null : actor.UserId,
             Action = Shorten($"Thêm lớp {item.ClassName}", 100),
             EntityName = "class",
             EntityId = item.ClassId,
-            Detail = $"Quản trị tạo lớp {item.ClassName} (khóa học {course.CourseName}).",
-            CreatedAt = DateTime.Now,
+            Detail = $"Quản trị tạo lớp {item.ClassName} (khóa học {course.CourseName}), {sessionCount} buổi học.",
+            CreatedAt = now,
         });
-        await db.SaveChangesAsync();
+        await SaveSessionsAsync();
+        await transaction.CommitAsync();
 
-        var row = await ProjectRows(db.Classes.AsNoTracking().Where(current => current.ClassId == item.ClassId)).FirstAsync();
-        return ToDto(row, today);
+        return await LoadDtoAsync(item.ClassId);
     }
 
     public async Task<AdminClassDto> UpdateClassAsync(string classId, UpdateClassRequest request)
@@ -198,8 +212,14 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             throw new KeyNotFoundException("Không tìm thấy lớp học.");
         }
 
-        var item = await db.Classes.FirstOrDefaultAsync(current => current.ClassId == id)
+        var item = await db.Classes
+            .Include(current => current.Course)
+            .FirstOrDefaultAsync(current => current.ClassId == id)
             ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        var currentSchedule = await db.ClassSchedules.AsNoTracking()
+            .Include(schedule => schedule.TimeSlot)
+            .Where(schedule => schedule.ClassId == id)
+            .ToListAsync();
 
         var today = DateOnly.FromDateTime(DateTime.Now);
         var enrolledCount = await db.ClassEnrollments.CountAsync(enrollment => enrollment.ClassId == id && enrollment.Status == "enrolled");
@@ -208,15 +228,13 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             throw new RegistrationException("Chỉ sửa được lớp đang open, chưa có học viên ghi danh và chưa tới ngày bắt đầu.");
         }
 
-        var fields = await ValidateFieldsAsync(request.ClassName, request.StartDate, request.EndDate, request.Capacity, request.CoachUserId, request.RoomId);
-
-        var outsideSlots = await db.ClassSlots.CountAsync(slot => slot.ClassId == id
-            && ((request.StartDate != null && slot.SlotDate < request.StartDate)
-                || (request.EndDate != null && slot.SlotDate > request.EndDate)));
-        if (outsideSlots > 0)
-        {
-            throw new RegistrationException($"Còn {outsideSlots} slot nằm ngoài thời gian mới của lớp. Hãy điều chỉnh slot trước.");
-        }
+        var fields = await ValidateFieldsAsync(
+            request.ClassName, request.StartDate, request.EndDate, request.Capacity, request.CoachUserId, request.RoomId, item.Course!.SportId);
+        var schedule = request.Schedules is null
+            ? currentSchedule.Select(current => (current.Weekday, current.TimeSlot!)).ToList()
+            : await ResolveScheduleAsync(request.Schedules);
+        EnsureDatesForSchedule(schedule, request.StartDate, request.EndDate);
+        await EnsureSessionsUnusedAsync(id, "Buổi học của lớp đã có bài tập hoặc điểm danh nên không thể sửa lớp.");
 
         var changed = new List<string>();
         if (item.ClassName != fields.ClassName) changed.Add("tên lớp");
@@ -225,22 +243,23 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         if (item.Capacity != request.Capacity) changed.Add("sĩ số");
         if (item.CoachUserId != fields.CoachId) changed.Add("huấn luyện viên");
         if (item.RoomId != fields.RoomId) changed.Add("phòng");
+        if (request.Schedules is not null && !SameSchedule(currentSchedule, schedule)) changed.Add("lịch học");
 
+        var now = DateTime.Now;
+        await using var transaction = await db.Database.BeginTransactionAsync();
         item.ClassName = fields.ClassName;
         item.StartDate = request.StartDate;
         item.EndDate = request.EndDate;
         item.Capacity = request.Capacity;
         item.CoachUserId = fields.CoachId;
+        item.RoomId = fields.RoomId;
 
-        if (item.RoomId != fields.RoomId)
-        {
-            item.RoomId = fields.RoomId;
-            var slots = await db.ClassSlots.Where(slot => slot.ClassId == id).ToListAsync();
-            foreach (var slot in slots)
-            {
-                slot.RoomId = fields.RoomId;
-            }
-        }
+        await db.ClassAssignments
+            .Where(assignment => db.ClassSessions.Any(session => session.SessionId == assignment.SessionId && session.ClassId == id))
+            .ExecuteDeleteAsync();
+        await db.ClassSessions.Where(session => session.ClassId == id).ExecuteDeleteAsync();
+        await db.ClassSchedules.Where(current => current.ClassId == id).ExecuteDeleteAsync();
+        var sessionCount = AddScheduleAndSessions(item, schedule, now);
 
         if (changed.Count > 0)
         {
@@ -250,14 +269,15 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
                 Action = Shorten($"Sửa lớp {fields.ClassName}", 100),
                 EntityName = "class",
                 EntityId = id,
-                Detail = $"Quản trị cập nhật: {string.Join(", ", changed)}.",
-                CreatedAt = DateTime.Now,
+                Detail = $"Quản trị cập nhật: {string.Join(", ", changed)}. Lớp có {sessionCount} buổi học.",
+                CreatedAt = now,
             });
-            await db.SaveChangesAsync();
         }
 
-        var row = await ProjectRows(db.Classes.AsNoTracking().Where(current => current.ClassId == id)).FirstAsync();
-        return ToDto(row, today);
+        await SaveSessionsAsync();
+        await transaction.CommitAsync();
+
+        return await LoadDtoAsync(id);
     }
 
     public async Task DeleteClassAsync(string classId)
@@ -287,17 +307,11 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             throw new RegistrationException("Lớp đã có thanh toán, ghi danh hoặc lịch sử liên quan nên không thể xóa.");
         }
 
-        var slotIds = await db.ClassSlots.Where(slot => slot.ClassId == id).Select(slot => slot.SlotId).ToListAsync();
-        var slotInUse = await db.SlotRegistrations.AnyAsync(registration => slotIds.Contains(registration.SlotId))
-            || await db.ClassAssignments.AnyAsync(assignment => slotIds.Contains(assignment.SlotId))
-            || await db.ClassAttendances.AnyAsync(attendance => slotIds.Contains(attendance.SlotId));
-        if (slotInUse)
-        {
-            throw new RegistrationException("Slot của lớp đã có đăng ký, bài tập hoặc điểm danh nên không thể xóa lớp.");
-        }
+        await EnsureSessionsUnusedAsync(id, "Buổi học của lớp đã có bài tập hoặc điểm danh nên không thể xóa lớp.");
 
         await using var transaction = await db.Database.BeginTransactionAsync();
-        await db.ClassSlots.Where(slot => slot.ClassId == id).ExecuteDeleteAsync();
+        await db.ClassSessions.Where(session => session.ClassId == id).ExecuteDeleteAsync();
+        await db.ClassSchedules.Where(schedule => schedule.ClassId == id).ExecuteDeleteAsync();
         db.Classes.Remove(item);
         db.ActivityLogs.Add(new ActivityLog
         {
@@ -313,8 +327,9 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
     }
 
     // Kiểm tra các trường dùng chung cho thêm và sửa lớp; trả tên đã trim và id HLV, phòng đã parse.
+    // HLV phải dạy môn của lớp (coach_sport), phòng phải dùng được cho lớp nhóm của môn (sport_room) và đủ sức chứa.
     private async Task<(string ClassName, int CoachId, int RoomId)> ValidateFieldsAsync(
-        string? classNameValue, DateOnly? startDate, DateOnly? endDate, int? capacity, string? coachUserId, string? roomIdValue)
+        string? classNameValue, DateOnly? startDate, DateOnly? endDate, int? capacity, string? coachUserId, string? roomIdValue, int sportId)
     {
         var className = classNameValue?.Trim() ?? "";
         if (className.Length is 0 or > 200)
@@ -338,12 +353,123 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             throw new RegistrationException("Huấn luyện viên không hợp lệ.");
         }
 
-        if (!int.TryParse(roomIdValue, out var roomId) || !await db.Rooms.AnyAsync(room => room.RoomId == roomId))
+        if (!await db.CoachSports.AnyAsync(link => link.CoachUserId == coachId && link.SportId == sportId))
+        {
+            throw new RegistrationException("Huấn luyện viên không dạy môn này.");
+        }
+
+        var room = int.TryParse(roomIdValue, out var roomId)
+            ? await db.Rooms.AsNoTracking().FirstOrDefaultAsync(item => item.RoomId == roomId)
+            : null;
+        if (room is null)
         {
             throw new RegistrationException("Phòng không hợp lệ.");
         }
 
+        if (!await db.SportRooms.AnyAsync(link => link.RoomId == roomId && link.SportId == sportId && link.AllowGroup))
+        {
+            throw new RegistrationException("Phòng không dùng được cho lớp nhóm của môn này.");
+        }
+
+        if (capacity > room.Capacity)
+        {
+            throw new RegistrationException($"Sĩ số lớp vượt sức chứa của phòng ({room.Capacity} người).");
+        }
+
         return (className, coachId, roomId);
+    }
+
+    // Lịch tuần của lớp nhóm: khung giờ group, không trùng nhau trong cùng một thứ.
+    private async Task<List<(byte Weekday, TimeSlot Slot)>> ResolveScheduleAsync(IReadOnlyCollection<ClassScheduleRequest> requests)
+    {
+        var ids = requests.Select(request => int.TryParse(request.TimeSlotId, out var id) ? id : 0).Distinct().ToList();
+        var slots = await db.TimeSlots.AsNoTracking()
+            .Where(slot => ids.Contains(slot.TimeSlotId) && slot.IsActive)
+            .ToDictionaryAsync(slot => slot.TimeSlotId);
+
+        var schedule = new List<(byte Weekday, TimeSlot Slot)>();
+        foreach (var request in requests)
+        {
+            if (request.Weekday is < 2 or > 7)
+            {
+                throw new RegistrationException("Thứ trong tuần chỉ nhận 2 đến 7 (thứ 2 đến thứ 7).");
+            }
+
+            if (!int.TryParse(request.TimeSlotId, out var slotId) || !slots.TryGetValue(slotId, out var slot))
+            {
+                throw new RegistrationException("Khung giờ không hợp lệ.");
+            }
+
+            if (slot.Kind != "group")
+            {
+                throw new RegistrationException("Lớp nhóm chỉ dùng khung giờ group.");
+            }
+
+            var weekday = (byte)request.Weekday;
+            if (schedule.Any(item => item.Weekday == weekday && item.Slot.StartTime < slot.EndTime && slot.StartTime < item.Slot.EndTime))
+            {
+                throw new RegistrationException($"Lịch học {ClassSessionPlanner.WeekdayName(weekday)} bị trùng khung giờ.");
+            }
+
+            schedule.Add((weekday, slot));
+        }
+
+        return schedule;
+    }
+
+    private static void EnsureDatesForSchedule(IReadOnlyCollection<(byte Weekday, TimeSlot Slot)> schedule, DateOnly? startDate, DateOnly? endDate)
+    {
+        if (schedule.Count > 0 && (startDate is null || endDate is null))
+        {
+            throw new RegistrationException("Cần ngày bắt đầu và ngày kết thúc để xếp lịch học.");
+        }
+    }
+
+    private static bool SameSchedule(IEnumerable<ClassSchedule> current, IEnumerable<(byte Weekday, TimeSlot Slot)> next) =>
+        current.Select(item => (item.Weekday, item.TimeSlotId)).OrderBy(item => item).SequenceEqual(
+            next.Select(item => (item.Weekday, item.Slot.TimeSlotId)).OrderBy(item => item));
+
+    private async Task EnsureSessionsUnusedAsync(int classId, string message)
+    {
+        var sessionIds = db.ClassSessions.Where(session => session.ClassId == classId).Select(session => session.SessionId);
+        var inUse = await db.ClassAttendances.AnyAsync(attendance => sessionIds.Contains(attendance.SessionId))
+            || await db.CoachEvaluations.AnyAsync(evaluation => evaluation.AssignmentId != null
+                && db.ClassAssignments.Any(assignment => assignment.AssignmentId == evaluation.AssignmentId && sessionIds.Contains(assignment.SessionId)));
+        if (inUse)
+        {
+            throw new RegistrationException(message);
+        }
+    }
+
+    // Thêm lịch tuần và toàn bộ buổi học trong [StartDate, EndDate]; trả số buổi đã sinh.
+    private int AddScheduleAndSessions(TrainingClass item, IReadOnlyCollection<(byte Weekday, TimeSlot Slot)> schedule, DateTime now)
+    {
+        foreach (var (weekday, slot) in schedule)
+        {
+            db.ClassSchedules.Add(new ClassSchedule { ClassId = item.ClassId, Weekday = weekday, TimeSlotId = slot.TimeSlotId });
+        }
+
+        if (schedule.Count == 0 || item.StartDate is not { } start || item.EndDate is not { } end || item.RoomId is not int roomId)
+        {
+            return 0;
+        }
+
+        var sessions = ClassSessionPlanner.Plan(item.ClassId, start, end, schedule, item.CoachUserId, roomId, now);
+        db.ClassSessions.AddRange(sessions);
+        return sessions.Count;
+    }
+
+    // Trigger TR_session_rules chặn trùng lịch HLV hoặc phòng: đổi thành lỗi nghiệp vụ.
+    private async Task SaveSessionsAsync()
+    {
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (ClassSessionPlanner.IsRuleViolation(exception, out var message))
+        {
+            throw new RegistrationException(message);
+        }
     }
 
     private static bool IsEditable(string status, int enrolledCount, DateOnly? startDate, DateOnly today) =>
@@ -351,66 +477,74 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
 
     private static string Shorten(string value, int max) => value.Length <= max ? value : value[..max];
 
-    private IQueryable<ClassRow> ProjectRows(IQueryable<TrainingClass> query) =>
-        query.Select(item => new ClassRow(
-            item.ClassId,
-            item.ClassName,
-            item.Status,
-            item.StartDate,
-            item.EndDate,
-            item.Capacity,
-            item.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
-            item.Course!.SportId,
-            item.Course.Sport!.SportName,
-            item.Course.CourseName,
-            item.Course.LevelName,
-            item.Course.Price,
-            item.CoachUserId,
-            item.Coach!.FullName,
-            item.RoomId,
-            item.Room != null ? item.Room.RoomName : "",
-            item.Room != null ? (int?)item.Room.CenterId : null,
-            item.Room != null ? item.Room.Center!.CenterName : ""));
+    private async Task<AdminClassDto> LoadDtoAsync(int classId) =>
+        (await ToDtosAsync(db.Classes.AsNoTracking().Where(current => current.ClassId == classId))).First();
 
-    private static AdminClassDto ToDto(ClassRow row, DateOnly today) =>
-        new(
-            row.ClassId.ToString(),
-            row.Name,
-            row.Status,
-            IsEditable(row.Status, row.EnrolledCount, row.StartDate, today),
-            row.StartDate,
-            row.EndDate,
-            row.Capacity,
-            row.EnrolledCount,
-            row.SportId.ToString(),
-            row.SportName,
-            row.CourseName,
-            row.Level ?? "",
-            row.Tuition,
-            row.CoachId.ToString(),
-            row.CoachName,
-            row.RoomId?.ToString() ?? "",
-            row.RoomName,
-            row.CenterId?.ToString() ?? "",
-            row.CenterName);
+    private async Task<List<AdminClassDto>> ToDtosAsync(IQueryable<TrainingClass> query)
+    {
+        var rows = await query
+            .Select(item => new
+            {
+                item.ClassId,
+                item.ClassName,
+                item.Status,
+                item.StartDate,
+                item.EndDate,
+                item.Capacity,
+                EnrolledCount = item.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
+                SessionCount = item.Sessions.Count(session => session.Status != "cancelled"),
+                item.Course!.SportId,
+                item.Course.Sport!.SportName,
+                item.Course.CourseName,
+                item.Course.LevelName,
+                item.Course.Price,
+                item.CoachUserId,
+                CoachName = item.Coach!.FullName,
+                item.RoomId,
+                RoomName = item.Room != null ? item.Room.RoomName : "",
+                CenterId = item.Room != null ? (int?)item.Room.CenterId : null,
+                CenterName = item.Room != null ? item.Room.Center!.CenterName : "",
+            })
+            .ToListAsync();
 
-    private sealed record ClassRow(
-        int ClassId,
-        string Name,
-        string Status,
-        DateOnly? StartDate,
-        DateOnly? EndDate,
-        int? Capacity,
-        int EnrolledCount,
-        int SportId,
-        string SportName,
-        string CourseName,
-        string? Level,
-        decimal Tuition,
-        int CoachId,
-        string CoachName,
-        int? RoomId,
-        string RoomName,
-        int? CenterId,
-        string CenterName);
+        var classIds = rows.Select(row => row.ClassId).ToList();
+        var schedules = (await db.ClassSchedules.AsNoTracking()
+                .Include(schedule => schedule.TimeSlot)
+                .Where(schedule => classIds.Contains(schedule.ClassId))
+                .ToListAsync())
+            .GroupBy(schedule => schedule.ClassId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(schedule => schedule.Weekday)
+                    .ThenBy(schedule => schedule.TimeSlot!.StartTime)
+                    .Select(ClassSessionPlanner.ToScheduleDto)
+                    .ToList());
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        return rows
+            .Select(row => new AdminClassDto(
+                row.ClassId.ToString(),
+                row.ClassName,
+                row.Status,
+                IsEditable(row.Status, row.EnrolledCount, row.StartDate, today),
+                row.StartDate,
+                row.EndDate,
+                row.Capacity,
+                row.EnrolledCount,
+                row.SportId.ToString(),
+                row.SportName,
+                row.CourseName,
+                row.LevelName ?? "",
+                row.Price,
+                row.CoachUserId.ToString(),
+                row.CoachName,
+                row.RoomId?.ToString() ?? "",
+                row.RoomName,
+                row.CenterId?.ToString() ?? "",
+                row.CenterName,
+                schedules.GetValueOrDefault(row.ClassId) ?? [],
+                row.SessionCount))
+            .ToList();
+    }
 }

@@ -10,8 +10,8 @@ public class ClassAssignment
     [Column("assignment_id")]
     public int AssignmentId { get; set; }
 
-    [Column("slot_id")]
-    public int SlotId { get; set; }
+    [Column("session_id")]
+    public int SessionId { get; set; }
 
     [Column("title")]
     public string Title { get; set; } = "";
@@ -30,8 +30,8 @@ public class ClassAttendance
     [Column("attendance_id")]
     public int AttendanceId { get; set; }
 
-    [Column("slot_id")]
-    public int SlotId { get; set; }
+    [Column("session_id")]
+    public int SessionId { get; set; }
 
     [Column("user_id")]
     public int UserId { get; set; }
