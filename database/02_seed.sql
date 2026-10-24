@@ -2,8 +2,8 @@
     AnhDuy Sport - Dữ liệu mẫu (schema V2)
 
     Gồm: vai trò, trung tâm, 12 môn, 36 phòng (mỗi môn 3 phòng), người dùng, HLV theo môn,
-    khóa học nhóm, giáo án chuẩn theo môn, khung giờ, 8 lớp mẫu kèm lịch tuần và toàn bộ buổi học,
-    ghi danh và thanh toán mẫu, gói hội viên.
+    khóa học nhóm, giáo án chuẩn theo môn, khung giờ, 12 lớp mẫu (8 đang học, 4 sắp mở) kèm lịch tuần và toàn bộ buổi học,
+    ghi danh và thanh toán mẫu, gói hội viên. Mỗi môn có ít nhất 2 HLV.
 
     Mốc thời gian: lớp khai giảng thứ 2 tuần trước, học viên đăng ký và thanh toán một ngày trước đó.
     Buổi đã qua là completed (có điểm danh), buổi từ hôm nay trở đi là scheduled.
@@ -121,24 +121,47 @@ FROM (VALUES
     (N'COACH',        N'Huỳnh Trí Thịnh',     N'thinh.huynh@anhduysport.vn',    N'0901000016', N'Nam',  N'assets/coachs/coach-badminton.webp'),
     (N'COACH',        N'Phan Thị Thúy Hằng',  N'hang.phan@anhduysport.vn',      N'0901000017', N'Nữ',   N'assets/coachs/coach-taekwondo-683x1024.webp'),
     (N'COACH',        N'Lê Đình Trọng',       N'trong.le@anhduysport.vn',       N'0901000018', N'Nam',  N'assets/coachs/coach-soccer-683x1024.webp'),
+    (N'COACH',        N'Trần Quốc Bảo',       N'bao.tran@anhduysport.vn',       N'0901000019', N'Nam',  NULL),
+    (N'COACH',        N'Đặng Minh Khôi',      N'khoi.dang@anhduysport.vn',      N'0901000020', N'Nam',  NULL),
+    (N'COACH',        N'Vũ Hoàng Long',       N'long.vu@anhduysport.vn',        N'0901000021', N'Nam',  NULL),
+    (N'COACH',        N'Lâm Ngọc Trâm',       N'tram.lam@anhduysport.vn',       N'0901000022', N'Nữ',   NULL),
     (N'MEMBER',       N'Nguyễn Minh Khang',   N'khang.nguyen@gmail.com',        N'0912000001', N'Nam',  NULL),
     (N'MEMBER',       N'Trần Gia Hân',        N'han.tran@gmail.com',            N'0912000002', N'Nữ',   NULL)
 ) AS v(role_code, full_name, email, phone, gender, avatar_url)
 INNER JOIN role AS r ON r.role_code = v.role_code
 CROSS JOIN center AS c;
 
--- HLV dạy môn nào.
+-- HLV dạy môn nào. Mỗi môn có ít nhất 2 HLV để đổi người khi HLV phụ trách bận.
 INSERT INTO coach_sport (coach_user_id, sport_id)
 SELECT u.user_id, s.sport_id
 FROM (VALUES
     (N'paul.villanova@anhduysport.vn', N'basketball'),
+    (N'paul.villanova@anhduysport.vn', N'volleyball'),
     (N'anhvien.nguyen@anhduysport.vn', N'swimming'),
     (N'baonghi.ngo@anhduysport.vn',    N'golf'),
+    (N'baonghi.ngo@anhduysport.vn',    N'tennis'),
     (N'nhuan.nguyen@anhduysport.vn',   N'tennis'),
+    (N'nhuan.nguyen@anhduysport.vn',   N'golf'),
+    (N'nhuan.nguyen@anhduysport.vn',   N'chess'),
     (N'dang.phan@anhduysport.vn',      N'tabletennis'),
+    (N'dang.phan@anhduysport.vn',      N'badminton'),
     (N'thinh.huynh@anhduysport.vn',    N'badminton'),
+    (N'thinh.huynh@anhduysport.vn',    N'tabletennis'),
     (N'hang.phan@anhduysport.vn',      N'taekwondo'),
-    (N'trong.le@anhduysport.vn',       N'soccer')
+    (N'hang.phan@anhduysport.vn',      N'fencing'),
+    (N'hang.phan@anhduysport.vn',      N'dance'),
+    (N'trong.le@anhduysport.vn',       N'soccer'),
+    (N'trong.le@anhduysport.vn',       N'basketball'),
+    (N'bao.tran@anhduysport.vn',       N'volleyball'),
+    (N'bao.tran@anhduysport.vn',       N'basketball'),
+    (N'bao.tran@anhduysport.vn',       N'soccer'),
+    (N'khoi.dang@anhduysport.vn',      N'chess'),
+    (N'khoi.dang@anhduysport.vn',      N'tabletennis'),
+    (N'long.vu@anhduysport.vn',        N'fencing'),
+    (N'long.vu@anhduysport.vn',        N'taekwondo'),
+    (N'long.vu@anhduysport.vn',        N'swimming'),
+    (N'tram.lam@anhduysport.vn',       N'dance'),
+    (N'tram.lam@anhduysport.vn',       N'badminton')
 ) AS v(email, sport_code)
 INNER JOIN [user] AS u ON u.email = v.email
 INNER JOIN sport AS s ON s.sport_code = v.sport_code;
@@ -179,6 +202,8 @@ INNER JOIN sport AS s ON s.sport_code = v.sport_code;
 
 INSERT INTO time_slot (kind, start_time, end_time, label) VALUES
     (N'group',   '07:00', '10:00', N'Sáng 07:00-10:00'),
+    (N'group',   '10:00', '13:00', N'Trưa 10:00-13:00'),
+    (N'group',   '12:00', '15:00', N'Đầu chiều 12:00-15:00'),
     (N'group',   '15:00', '18:00', N'Chiều 15:00-18:00'),
     (N'group',   '18:00', '21:00', N'Tối 18:00-21:00'),
     (N'private', '07:00', '08:30', N'1-1 07:00-08:30'),
@@ -192,51 +217,65 @@ INSERT INTO time_slot (kind, start_time, end_time, label) VALUES
 
 /* ===================== Lớp mẫu, lịch tuần, ghi danh ===================== */
 
+-- 8 lớp đang học (khai giảng thứ 2 tuần trước, phòng số 1) và 4 lớp sắp mở (khai giảng thứ 2 tuần sau, phòng số 2,
+-- HLV thứ hai của môn, dùng thêm khung giờ trưa và tối). Tên lớp là duy nhất, các bảng bên dưới nối theo tên lớp.
 INSERT INTO class (course_id, training_plan_id, coach_user_id, room_id, class_name, start_date, end_date, capacity, status, class_type)
 SELECT c.course_id, tp.training_plan_id, u.user_id, rm.room_id, v.class_name,
-       @class_start, DATEADD(DAY, tp.duration_weeks * 7 - 1, @class_start), v.capacity, N'ongoing', N'group'
+       DATEADD(WEEK, v.start_week, @class_start),
+       DATEADD(DAY, tp.duration_weeks * 7 - 1, DATEADD(WEEK, v.start_week, @class_start)),
+       v.capacity,
+       CASE WHEN v.start_week = 0 THEN N'ongoing' ELSE N'open' END,
+       N'group'
 FROM (VALUES
-    (N'SWIM-01', N'anhvien.nguyen@anhduysport.vn', N'Bơi lội - Sáng thứ 3',     16),
-    (N'TT-01',   N'dang.phan@anhduysport.vn',      N'Bóng bàn - Chiều thứ 4',   12),
-    (N'FB-01',   N'trong.le@anhduysport.vn',       N'Bóng đá - Chiều thứ 2',    20),
-    (N'BB-01',   N'paul.villanova@anhduysport.vn', N'Bóng rổ - Chiều thứ 3',    16),
-    (N'BD-01',   N'thinh.huynh@anhduysport.vn',    N'Cầu lông - Sáng thứ 7',    12),
-    (N'GOLF-01', N'baonghi.ngo@anhduysport.vn',    N'Golf 3D - Chiều thứ 7',    6),
-    (N'TN-01',   N'nhuan.nguyen@anhduysport.vn',   N'Quần vợt - Sáng thứ 5',    4),
-    (N'TKD-01',  N'hang.phan@anhduysport.vn',      N'Taekwondo - Chiều thứ 6',  20)
-) AS v(course_code, coach_email, class_name, capacity)
+    (N'SWIM-01', N'anhvien.nguyen@anhduysport.vn', N'Bơi lội - Sáng thứ 3',             16, 1, 0),
+    (N'TT-01',   N'dang.phan@anhduysport.vn',      N'Bóng bàn - Chiều thứ 4',           12, 1, 0),
+    (N'FB-01',   N'trong.le@anhduysport.vn',       N'Bóng đá - Chiều thứ 2',            20, 1, 0),
+    (N'BB-01',   N'paul.villanova@anhduysport.vn', N'Bóng rổ - Chiều thứ 3',            16, 1, 0),
+    (N'BD-01',   N'thinh.huynh@anhduysport.vn',    N'Cầu lông - Sáng thứ 7',            12, 1, 0),
+    (N'GOLF-01', N'baonghi.ngo@anhduysport.vn',    N'Golf 3D - Chiều thứ 7',            6,  1, 0),
+    (N'TN-01',   N'nhuan.nguyen@anhduysport.vn',   N'Quần vợt - Sáng thứ 5',            4,  1, 0),
+    (N'TKD-01',  N'hang.phan@anhduysport.vn',      N'Taekwondo - Chiều thứ 6',          20, 1, 0),
+    (N'SWIM-01', N'long.vu@anhduysport.vn',        N'Bơi lội - Tối thứ 2 và thứ 5',     16, 2, 2),
+    (N'BB-01',   N'trong.le@anhduysport.vn',       N'Bóng rổ - Trưa thứ 7',             16, 2, 2),
+    (N'BD-01',   N'tram.lam@anhduysport.vn',       N'Cầu lông - Đầu chiều thứ 3 và thứ 6', 12, 2, 2),
+    (N'TT-01',   N'khoi.dang@anhduysport.vn',      N'Bóng bàn - Tối thứ 2',             12, 2, 2)
+) AS v(course_code, coach_email, class_name, capacity, room_no, start_week)
 INNER JOIN course AS c ON c.course_code = v.course_code
 INNER JOIN sport AS s ON s.sport_id = c.sport_id
 INNER JOIN [user] AS u ON u.email = v.coach_email
-INNER JOIN room AS rm ON rm.room_code = UPPER(s.sport_code) + N'-1'
+INNER JOIN room AS rm ON rm.room_code = UPPER(s.sport_code) + N'-' + CAST(v.room_no AS NVARCHAR(1))
 INNER JOIN training_plan AS tp ON tp.sport_id = s.sport_id;
 
--- weekday: 2..7 = thứ 2..thứ 7. Khung giờ nhóm: 07:00 (sáng) hoặc 15:00 (chiều).
+-- weekday: 2..7 = thứ 2..thứ 7. start_time chọn khung giờ nhóm tương ứng.
 INSERT INTO class_schedule (class_id, weekday, time_slot_id)
 SELECT cl.class_id, v.weekday, ts.time_slot_id
 FROM (VALUES
-    (N'SWIM-01', 3, CAST('07:00' AS TIME)),
-    (N'TT-01',   4, CAST('15:00' AS TIME)),
-    (N'FB-01',   2, CAST('15:00' AS TIME)),
-    (N'BB-01',   3, CAST('15:00' AS TIME)),
-    (N'BD-01',   7, CAST('07:00' AS TIME)),
-    (N'GOLF-01', 7, CAST('15:00' AS TIME)),
-    (N'TN-01',   5, CAST('07:00' AS TIME)),
-    (N'TKD-01',  6, CAST('15:00' AS TIME))
-) AS v(course_code, weekday, start_time)
-INNER JOIN course AS c ON c.course_code = v.course_code
-INNER JOIN class AS cl ON cl.course_id = c.course_id
+    (N'Bơi lội - Sáng thứ 3',                3, CAST('07:00' AS TIME)),
+    (N'Bóng bàn - Chiều thứ 4',              4, CAST('15:00' AS TIME)),
+    (N'Bóng đá - Chiều thứ 2',               2, CAST('15:00' AS TIME)),
+    (N'Bóng rổ - Chiều thứ 3',               3, CAST('15:00' AS TIME)),
+    (N'Cầu lông - Sáng thứ 7',               7, CAST('07:00' AS TIME)),
+    (N'Golf 3D - Chiều thứ 7',               7, CAST('15:00' AS TIME)),
+    (N'Quần vợt - Sáng thứ 5',               5, CAST('07:00' AS TIME)),
+    (N'Taekwondo - Chiều thứ 6',             6, CAST('15:00' AS TIME)),
+    (N'Bơi lội - Tối thứ 2 và thứ 5',        2, CAST('18:00' AS TIME)),
+    (N'Bơi lội - Tối thứ 2 và thứ 5',        5, CAST('18:00' AS TIME)),
+    (N'Bóng rổ - Trưa thứ 7',                7, CAST('10:00' AS TIME)),
+    (N'Cầu lông - Đầu chiều thứ 3 và thứ 6', 3, CAST('12:00' AS TIME)),
+    (N'Cầu lông - Đầu chiều thứ 3 và thứ 6', 6, CAST('12:00' AS TIME)),
+    (N'Bóng bàn - Tối thứ 2',                2, CAST('18:00' AS TIME))
+) AS v(class_name, weekday, start_time)
+INNER JOIN class AS cl ON cl.class_name = v.class_name
 INNER JOIN time_slot AS ts ON ts.kind = N'group' AND ts.start_time = v.start_time;
 
 INSERT INTO class_enrollment (class_id, user_id, enrolled_at, status)
 SELECT cl.class_id, u.user_id, @registered_at, N'enrolled'
 FROM (VALUES
-    (N'SWIM-01', N'khang.nguyen@gmail.com'),
-    (N'BB-01',   N'khang.nguyen@gmail.com'),
-    (N'TKD-01',  N'han.tran@gmail.com')
-) AS v(course_code, email)
-INNER JOIN course AS c ON c.course_code = v.course_code
-INNER JOIN class AS cl ON cl.course_id = c.course_id
+    (N'Bơi lội - Sáng thứ 3',    N'khang.nguyen@gmail.com'),
+    (N'Bóng rổ - Chiều thứ 3',   N'khang.nguyen@gmail.com'),
+    (N'Taekwondo - Chiều thứ 6', N'han.tran@gmail.com')
+) AS v(class_name, email)
+INNER JOIN class AS cl ON cl.class_name = v.class_name
 INNER JOIN [user] AS u ON u.email = v.email;
 
 /* ===================== Sinh toàn bộ buổi học từ lịch tuần ===================== */
@@ -281,14 +320,13 @@ WHERE s.status = N'completed';
 
 INSERT INTO evaluation (class_id, assignment_id, evaluator_user_id, evaluated_user_id, reviewer_user_id, score, comment)
 SELECT cl.class_id, a.assignment_id, coach.user_id, student.user_id, reviewer.user_id, 8.5, N'Kiểm soát hơi thở ổn, cần thêm sức bền.'
-FROM course AS c
-INNER JOIN class AS cl ON cl.course_id = c.course_id
+FROM class AS cl
 INNER JOIN [session] AS s ON s.class_id = cl.class_id AND s.session_no = 1
 INNER JOIN assignment AS a ON a.session_id = s.session_id
 INNER JOIN [user] AS coach ON coach.user_id = cl.coach_user_id
 INNER JOIN [user] AS student ON student.email = N'khang.nguyen@gmail.com'
 INNER JOIN [user] AS reviewer ON reviewer.email = N'admin@anhduysport.vn'
-WHERE c.course_code = N'SWIM-01';
+WHERE cl.class_name = N'Bơi lội - Sáng thứ 3';
 
 /* ===================== Gói hội viên, hóa đơn, thanh toán ===================== */
 
@@ -297,7 +335,7 @@ INSERT INTO membership_package (package_code, package_name, fee, validity_months
     (N'PKG-002', N'Hạng Bạc',  350000, 1, N'Tự do sử dụng phòng tập đa năng. Sử dụng hồ bơi giờ thấp điểm. Giảm 50% khi lên cấp cùng lúc đăng ký lớp.', N'active', SYSUTCDATETIME(), 50),
     (N'PKG-003', N'Hạng Vàng', 500000, 1, N'Tự do sử dụng toàn bộ cơ sở vật chất. 1 buổi tập riêng với HLV mỗi tháng. Giảm 25% khi lên cấp cùng lúc đăng ký lớp.', N'active', SYSUTCDATETIME(), 25);
 
--- Hóa đơn chỉ gồm học phí của 2 lớp Khang đã ghi danh (SWIM-01 + BB-01); invoice_code_seq bắt đầu từ 2.
+-- Hóa đơn chỉ gồm học phí của 2 lớp Khang đã ghi danh (bơi sáng thứ 3 + bóng rổ chiều thứ 3); invoice_code_seq bắt đầu từ 2.
 INSERT INTO invoice (user_id, invoice_code, issued_at, total_amount, status)
 SELECT u.user_id, N'INV-2026-0001', @registered_at, CAST(2700000 AS DECIMAL(18,2)), N'paid'
 FROM [user] AS u
@@ -307,8 +345,8 @@ INSERT INTO payment (invoice_id, user_id, class_id, amount, payment_method, paid
 SELECT i.invoice_id, u.user_id, cl.class_id, c.price, N'chuyen_khoan', @registered_at, N'paid', u.user_id
 FROM invoice AS i
 INNER JOIN [user] AS u ON u.user_id = i.user_id
-INNER JOIN course AS c ON c.course_code IN (N'SWIM-01', N'BB-01')
-INNER JOIN class AS cl ON cl.course_id = c.course_id
+INNER JOIN class AS cl ON cl.class_name IN (N'Bơi lội - Sáng thứ 3', N'Bóng rổ - Chiều thứ 3')
+INNER JOIN course AS c ON c.course_id = cl.course_id
 WHERE i.invoice_code = N'INV-2026-0001';
 
 INSERT INTO payment_history (payment_id, status, note, created_at)
