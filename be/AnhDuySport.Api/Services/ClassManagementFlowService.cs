@@ -397,6 +397,170 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         return await LoadDtoAsync(id);
     }
 
+    // HLV dạy được môn của lớp, đánh dấu bận nếu trùng giờ với một buổi còn lại của lớp.
+    public async Task<ClassCoachOptionsDto> AccessClassCoachOptionsAsync(string classId)
+    {
+        var item = await LoadClassForCoachChangeAsync(classId);
+        var remaining = await RemainingSessionsQuery(item.ClassId).AsNoTracking().ToListAsync();
+        var coaches = await AccessCoachesAsync(item.Course!.SportId.ToString());
+        var conflicts = await CoachConflictsAsync(item.ClassId, remaining);
+
+        return new ClassCoachOptionsDto(
+            remaining.Count,
+            remaining.Count == 0 ? null : remaining.Min(session => session.SessionDate),
+            coaches
+                .Select(coach =>
+                {
+                    var id = int.Parse(coach.Id);
+                    var reason = conflicts.GetValueOrDefault(id);
+                    return new SessionOptionDto(coach.Id, coach.FullName, null, id == item.CoachUserId, reason is not null, reason);
+                })
+                .ToList());
+    }
+
+    // Đổi HLV cho lớp đang học hoặc sắp mở: HLV mặc định của lớp và mọi buổi chưa diễn ra; học viên của lớp nhận thông báo.
+    public async Task<AdminClassDto> ChangeClassCoachAsync(string classId, ChangeClassCoachRequest request)
+    {
+        var item = await LoadClassForCoachChangeAsync(classId, tracking: true);
+        if (!int.TryParse(request.CoachUserId, out var coachId)
+            || !await db.UserAccounts.AnyAsync(user => user.UserId == coachId && user.Status == "active" && user.Role!.RoleCode == "COACH"))
+        {
+            throw new RegistrationException("Huấn luyện viên không hợp lệ.");
+        }
+
+        if (!await db.CoachSports.AnyAsync(link => link.CoachUserId == coachId && link.SportId == item.Course!.SportId))
+        {
+            throw new RegistrationException("Huấn luyện viên không dạy môn này.");
+        }
+
+        if (coachId == item.CoachUserId)
+        {
+            throw new RegistrationException("Huấn luyện viên mới trùng huấn luyện viên hiện tại của lớp.");
+        }
+
+        var remaining = await RemainingSessionsQuery(item.ClassId).ToListAsync();
+        if (remaining.Count == 0)
+        {
+            throw new RegistrationException("Lớp không còn buổi học nào sắp tới để đổi huấn luyện viên.");
+        }
+
+        var conflict = (await CoachConflictsAsync(item.ClassId, remaining)).GetValueOrDefault(coachId);
+        if (conflict is not null)
+        {
+            throw new RegistrationException($"Huấn luyện viên đang bận: {conflict}.");
+        }
+
+        var oldCoach = item.Coach!.FullName;
+        var newCoach = await db.UserAccounts.Where(user => user.UserId == coachId).Select(user => user.FullName).FirstAsync();
+        var note = request.Note?.Trim();
+        var first = remaining.Min(session => session.SessionDate);
+        var now = DateTime.Now;
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        item.CoachUserId = coachId;
+        foreach (var session in remaining)
+        {
+            session.CoachUserId = coachId;
+            if (!string.IsNullOrEmpty(note))
+            {
+                session.Note = note.Length <= 500 ? note : note[..500];
+            }
+        }
+
+        var change = $"HLV {oldCoach} → {newCoach} từ ngày {first:dd/MM/yyyy} ({remaining.Count} buổi còn lại).";
+        var memberIds = await db.ClassEnrollments
+            .Where(enrollment => enrollment.ClassId == item.ClassId && enrollment.Status == "enrolled")
+            .Select(enrollment => enrollment.UserId)
+            .ToListAsync();
+        foreach (var memberId in memberIds)
+        {
+            db.Notifications.Add(new AccountNotification
+            {
+                UserId = memberId,
+                Title = Shorten($"Đổi huấn luyện viên lớp {item.ClassName}", 200),
+                Content = $"Lớp {item.ClassName} đổi {change}" + (string.IsNullOrEmpty(note) ? "" : $" Lý do: {TextFormat.Sentence(note)}"),
+                IsRead = false,
+                CreatedAt = now,
+            });
+        }
+
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = actor.UserId == 0 ? null : actor.UserId,
+            Action = Shorten($"Đổi HLV lớp {item.ClassName}", 100),
+            EntityName = "class",
+            EntityId = item.ClassId,
+            Detail = $"{change} Đã thông báo {memberIds.Count} học viên." + (string.IsNullOrEmpty(note) ? "" : $" Lý do: {TextFormat.Sentence(note)}"),
+            CreatedAt = now,
+        });
+
+        await SaveSessionsAsync();
+        await transaction.CommitAsync();
+        return await LoadDtoAsync(item.ClassId);
+    }
+
+    private async Task<TrainingClass> LoadClassForCoachChangeAsync(string classId, bool tracking = false)
+    {
+        if (!int.TryParse(classId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        }
+
+        var query = db.Classes.Include(current => current.Course).Include(current => current.Coach).AsQueryable();
+        var item = await (tracking ? query : query.AsNoTracking()).FirstOrDefaultAsync(current => current.ClassId == id)
+            ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        if (item.Status is not ("open" or "ongoing"))
+        {
+            throw new RegistrationException("Chỉ đổi huấn luyện viên cho lớp đang học hoặc sắp mở.");
+        }
+
+        return item;
+    }
+
+    // Buổi chưa diễn ra: chưa hủy, chưa học xong, sau hôm nay hoặc hôm nay nhưng chưa tới giờ bắt đầu.
+    private IQueryable<ClassSession> RemainingSessionsQuery(int classId)
+    {
+        var now = DateTime.Now;
+        var today = DateOnly.FromDateTime(now);
+        var time = TimeOnly.FromDateTime(now);
+        return db.ClassSessions.Where(session => session.ClassId == classId
+            && (session.Status == "scheduled" || session.Status == "held")
+            && (session.SessionDate > today || (session.SessionDate == today && session.StartTime > time)));
+    }
+
+    // Lý do bận đầu tiên của từng HLV: buổi của lớp khác trùng giờ với một buổi còn lại của lớp này.
+    private async Task<Dictionary<int, string>> CoachConflictsAsync(int classId, IReadOnlyCollection<ClassSession> remaining)
+    {
+        if (remaining.Count == 0)
+        {
+            return [];
+        }
+
+        var first = remaining.Min(session => session.SessionDate);
+        var last = remaining.Max(session => session.SessionDate);
+        var others = await db.ClassSessions.AsNoTracking()
+            .Where(session => session.ClassId != classId
+                && session.Status != "cancelled"
+                && session.SessionDate >= first
+                && session.SessionDate <= last)
+            .Select(session => new BookedSession(
+                session.SessionDate, session.StartTime, session.EndTime, session.CoachUserId, session.RoomId, session.Class!.ClassName))
+            .ToListAsync();
+
+        var conflicts = new Dictionary<int, string>();
+        foreach (var slot in remaining.OrderBy(session => session.SessionDate).ThenBy(session => session.StartTime))
+        {
+            foreach (var other in others.Where(other => other.Date == slot.SessionDate
+                && other.StartTime < slot.EndTime
+                && slot.StartTime < other.EndTime))
+            {
+                conflicts.TryAdd(other.CoachUserId, $"Trùng {other.ClassName} ngày {other.Date:dd/MM}");
+            }
+        }
+
+        return conflicts;
+    }
+
     public async Task DeleteClassAsync(string classId)
     {
         if (!int.TryParse(classId, out var id))
