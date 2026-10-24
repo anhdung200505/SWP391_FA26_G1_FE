@@ -169,6 +169,11 @@ export function createClass(payload) {
   });
 }
 
+// Chỉ lớp canDelete = true (chưa ai đăng ký). Xóa cùng lịch tuần và buổi học. Trả null (204).
+export function deleteClass(classId) {
+  return request(`/management/classes/${classId}`, { method: 'DELETE' });
+}
+
 // ==========================================
 // API LỊCH BUỔI HỌC (SESSIONS)
 // ==========================================

@@ -55,7 +55,7 @@ public class ClassManagementController(ClassManagementFlowService classes) : Con
 
     [HttpDelete("{classId}")]
     [EndpointSummary("Quản trị xóa lớp chưa bắt đầu, chưa có học viên")]
-    [EndpointDescription("Chỉ xóa được lớp canEdit = true và không còn thanh toán, ghi danh hay lịch sử liên quan. Lịch tuần và buổi học của lớp (chưa có điểm danh) bị xóa cùng. Giáo án giữ nguyên. Trả 204.")]
+    [EndpointDescription("Chỉ xóa được lớp canDelete = true: chưa ai đăng ký (không có thanh toán kể cả đơn giữ chỗ, ghi danh, lịch sử đăng ký hay đánh giá), kể cả lớp đã khai giảng. Lịch tuần, buổi học và bài tập của lớp bị xóa cùng. Giáo án giữ nguyên. Trả 204.")]
     public async Task<IActionResult> DeleteClass(string classId)
     {
         await classes.DeleteClassAsync(classId);
