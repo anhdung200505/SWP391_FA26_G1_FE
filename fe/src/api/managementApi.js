@@ -175,6 +175,17 @@ export function getDashboard() {
   return request('/management/dashboard');
 }
 
+export function getAiTokenUsage() {
+  return request('/management/ai-token-usage');
+}
+
+export function updatePackageAiQuota(packageId, payload) {
+  return request(`/management/packages/${encodeURIComponent(packageId)}/ai-quota`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getUserAccounts(params = {}) {
   const query = new URLSearchParams(params).toString();
   return request(`/user-accounts${query ? `?${query}` : ''}`);

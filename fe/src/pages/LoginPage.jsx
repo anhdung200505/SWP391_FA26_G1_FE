@@ -22,6 +22,7 @@ export default function LoginPage() {
     if (role === 'RECEPTIONIST') return '/le-tan';
     if (role === 'ADMIN') return '/quan-ly';
     if (role === 'STAFF') return '/le-tan';
+    if (role === 'COACH') return '/hlv/lich-su-tap';
     return location.state?.from || '/hoc-vien-dashboard';
   };
 

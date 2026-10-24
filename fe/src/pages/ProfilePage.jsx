@@ -105,11 +105,27 @@ export default function ProfilePage() {
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-24 sm:px-6">
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 sm:p-10">
           {((user?.roleId || user?.role) === 'MEMBER') && (
+            <div className="mb-6 flex flex-wrap gap-2">
+              <Link
+                to="/hoc-vien-dashboard"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg"
+              >
+                Về khóa học của tôi
+              </Link>
+              <Link
+                to="/hoc-vien/giao-an-ai"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg"
+              >
+                Giáo án AI
+              </Link>
+            </div>
+          )}
+          {((user?.roleId || user?.role) === 'COACH') && (
             <Link
-              to="/hoc-vien-dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg transition-all mb-6"
+              to="/hlv/lich-su-tap"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg mb-6"
             >
-              ← Về Khóa học của tôi
+              Lịch sử tập
             </Link>
           )}
           <h1 className="text-2xl font-black text-gray-900 mb-2">Hồ sơ cá nhân</h1>

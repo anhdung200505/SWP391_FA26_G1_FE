@@ -8,6 +8,7 @@ const links = [
   { to: '/quan-ly', label: 'Bảng điều khiển', end: true },
   { to: '/quan-ly/tai-khoan', label: 'Tài khoản người dùng', end: false },
   { to: '/quan-ly/goi', label: 'Gói hội viên', end: false },
+  { to: '/quan-ly/han-muc-ai', label: 'Hạn mức AI', end: false },
   { to: '/quan-ly/lop-hoc', label: 'Lớp học thể thao', end: false },
 ];
 

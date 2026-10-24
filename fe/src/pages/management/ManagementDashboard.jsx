@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
+import MemberTokenUsageTable from '../../components/management/MemberTokenUsageTable';
 import { DiagramCaption, StatusBadge } from '../../components/management/ManagementBits';
 import { useAccountManagement } from '../../context/AccountManagementContext';
 import { formatDateTime, formatFee, getRole } from '../../data/accountManagement';
@@ -184,6 +185,25 @@ export default function ManagementDashboard() {
             </p>
           </Link>
 
+          <Link
+            to="/quan-ly/han-muc-ai"
+            className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#e31b23]/40 hover:shadow-md flex flex-col justify-between"
+          >
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#e31b23]">
+                AI quota
+              </p>
+              <h3 className="mt-2 text-xl font-black text-slate-900">Hạn mức AI</h3>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                Xem token đã dùng và sửa số lượt tạo lại, hạn mức token của từng gói hội viên.
+              </p>
+            </div>
+            <p className="mt-4 text-sm font-bold text-[#e31b23]">
+              Xem và chỉnh hạn mức
+              <span className="ml-1 inline-block transition group-hover:translate-x-1">→</span>
+            </p>
+          </Link>
+
           {/* 3. LỚP HỌC THỂ THAO */}
           <Link
             to="/quan-ly/lop-hoc"
@@ -205,6 +225,8 @@ export default function ManagementDashboard() {
           </Link>
         </div>
       </section>
+
+      <MemberTokenUsageTable />
 
       {/* KHỐI: DANH SÁCH YÊU CẦU HỖ TRỢ DO LỄ TÂN CHUYỂN LÊN */}
       <section className="mt-8 rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
