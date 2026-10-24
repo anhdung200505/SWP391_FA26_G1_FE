@@ -227,6 +227,11 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         EnsureEditable(session);
 
         var reason = NormalizeNote(request.Reason) ?? throw new RegistrationException("Nhập lý do hủy buổi học.");
+        if (await db.ClassAttendances.AnyAsync(row => row.SessionId == session.SessionId))
+        {
+            throw new RegistrationException("Buổi học đã có điểm danh, không thể hủy.");
+        }
+
         session.Status = "cancelled";
         session.Note = reason;
         await NotifyMembersAsync(session, $"Hủy buổi học lớp {session.Class!.ClassName}", $"{When(session)} bị hủy. Lý do: {reason}.");
@@ -261,6 +266,12 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         if (session.SessionDate < DateOnly.FromDateTime(DateTime.Now))
         {
             throw new RegistrationException("Buổi học đã qua ngày, không thể thay đổi.");
+        }
+
+        var now = DateTime.Now;
+        if (session.SessionDate == DateOnly.FromDateTime(now) && session.EndTime <= TimeOnly.FromDateTime(now))
+        {
+            throw new RegistrationException("Buổi học đã kết thúc, không thể thay đổi.");
         }
     }
 
