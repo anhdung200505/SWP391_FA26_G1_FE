@@ -159,7 +159,7 @@ public class GeminiWorkoutClient(HttpClient http, IConfiguration configuration)
             Tạo giáo án tập tại nhà bằng tiếng Việt cho {request.MemberName}.
             Sức khỏe: {request.HealthSummary}
             Lịch sử tập do coach tự nhập, không phải điểm danh hay điểm số: {request.TrainingHistory}
-            Lịch môn học, gồm môn và số slot, không xếp bài cá nhân trùng ngày có slot: {request.ClassSchedule}
+            Lịch môn học, gồm môn và số buổi học, không xếp bài cá nhân trùng ngày có buổi học: {request.ClassSchedule}
             Mục tiêu: {request.Goal}
             Ràng buộc: {request.SessionsPerWeek} buổi/tuần, mỗi buổi {request.SessionMinutes} phút, kéo dài {request.DurationWeeks} tuần, cường độ gợi ý {request.Intensity}, giờ tập {request.StartTime}.
             Các buổi theo đúng thứ tự ngày: {days}.
