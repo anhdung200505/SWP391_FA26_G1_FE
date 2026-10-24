@@ -8,8 +8,15 @@ namespace AnhDuySport.Api.Controllers;
 
 [ApiController]
 [Route("api/payments")]
-public class PaymentsController(PayOsPaymentService payments, CurrentActor actor) : ControllerBase
+public class PaymentsController(PayOsPaymentService payments, PaymentHistoryFlowService history, CurrentActor actor) : ControllerBase
 {
+    [Authorize(Roles = "MEMBER")]
+    [HttpGet("mine")]
+    [EndpointSummary("Học viên xem lịch sử thanh toán của mình")]
+    [EndpointDescription("Lấy từ token đăng nhập. Mọi khoản thanh toán: đăng ký lớp (kind class, có thể kèm nâng hạng) và mua, gia hạn, nâng hạng gói (kind membership). Mới nhất trước, mỗi dòng kèm mã hóa đơn, nội dung, số tiền, phương thức, trạng thái (pending còn trong 3 phút, expired khi pending quá 3 phút, paid, failed, refunded, cancel). Gói tặng kèm lớp không có tiền nên không hiện.")]
+    public async Task<ActionResult<IReadOnlyList<PaymentHistoryDto>>> AccessMine() =>
+        Ok(await history.AccessMineAsync(actor.UserId));
+
     [Authorize(Roles = "MEMBER")]
     [HttpPost("payos")]
     [EndpointSummary("Tạo link thanh toán payOS cho một lớp")]

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import logoImg from '../../assets/logo.png';
 import { useAuth } from '../../context/AuthContext';
+import StaffActivityBell from './StaffActivityBell';
 
 // DANH SÁCH MENU SIDEBAR - ĐÃ THÊM LỚP HỌC THỂ THAO
 const links = [
@@ -9,7 +10,7 @@ const links = [
   { to: '/quan-ly/tai-khoan', label: 'Tài khoản người dùng', end: false },
   { to: '/quan-ly/goi', label: 'Gói hội viên', end: false },
   { to: '/quan-ly/han-muc-ai', label: 'Hạn mức AI', end: false },
-  { to: '/quan-ly/lop-hoc', label: 'Lớp học thể thao', end: false },
+  { to: '/quan-ly/lop-hoc', label: 'Lớp học', end: false },
 ];
 
 function navClass(isActive) {
@@ -90,9 +91,12 @@ export default function ManagementShell({ breadcrumb = [], children }) {
               ))}
             </nav>
           </div>
-          <Link to="/home" className="shrink-0 text-sm font-bold text-gray-600 hover:text-[#e31b23]">
-            Về trang chủ
-          </Link>
+          <div className="flex shrink-0 items-center gap-4">
+            <StaffActivityBell />
+            <Link to="/home" className="text-sm font-bold text-gray-600 hover:text-[#e31b23]">
+              Về trang chủ
+            </Link>
+          </div>
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
       </div>
