@@ -33,7 +33,7 @@ public class ComboPayOsPaymentService(
 
     private PayOSClient RequirePayOs() =>
         PayOsClient ?? throw new RegistrationException(
-            "Máy này chưa cấu hình payOS nên chưa tạo được mã QR. Đặt PayOS:ClientId, PayOS:ApiKey và PayOS:ChecksumKey bằng lệnh dotnet user-secrets.");
+            "Máy này chưa cấu hình payOS nên chưa tạo được mã QR. Kiểm tra file be/config/payos.json.");
 
     // Danh sách gói có ưu đãi lên cấp kèm lớp (Bạc, Vàng). Đồng có ưu đãi 0% nên không nằm trong danh sách.
     public async Task<IReadOnlyList<ComboUpgradeOptionDto>> AccessUpgradeOptionsAsync()

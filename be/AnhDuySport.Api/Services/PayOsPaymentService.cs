@@ -19,7 +19,7 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
 
     private PayOSClient RequirePayOs() =>
         PayOsClient ?? throw new InvalidOperationException(
-            "Máy này chưa cấu hình payOS nên chưa tạo được mã QR. API vẫn chạy. Đặt PayOS:ClientId, PayOS:ApiKey và PayOS:ChecksumKey bằng lệnh dotnet user-secrets.");
+            "Máy này chưa cấu hình payOS nên chưa tạo được mã QR. Kiểm tra file be/config/payos.json.");
     public async Task<PayOsPaymentDto> CreateAsync(CreatePayOsPaymentRequest request, int memberUserId)
     {
         RequirePayOs();
