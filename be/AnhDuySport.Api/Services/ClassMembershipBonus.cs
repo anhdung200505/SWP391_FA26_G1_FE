@@ -45,6 +45,29 @@ public static class ClassMembershipBonus
         return (package, price);
     }
 
+    // Gói cao nhất (theo giá) học viên đang có: đang dùng hoặc chờ kích hoạt, còn hạn.
+    public static Task<MembershipPackage?> HighestOwnedPackageAsync(AppDbContext db, int userId, DateOnly today) =>
+        db.Memberships
+            .AsNoTracking()
+            .Where(item => item.UserId == userId
+                && (item.Status == "active" || item.Status == "scheduled")
+                && item.EndDate >= today
+                && item.Package != null)
+            .Select(item => item.Package!)
+            .OrderByDescending(package => package.Fee)
+            .FirstOrDefaultAsync();
+
+    // Đang có gói cao hơn thì không cho mua gói thấp hơn (có Vàng chỉ mua Vàng; có Bạc mua Bạc hoặc Vàng).
+    public static async Task EnsureNotDowngradeAsync(AppDbContext db, int userId, MembershipPackage package, DateOnly today)
+    {
+        var highest = await HighestOwnedPackageAsync(db, userId, today);
+        if (highest is not null && package.Fee < highest.Fee)
+        {
+            throw new RegistrationException(
+                $"Bạn đang có {highest.PackageName} nên chỉ được gia hạn {highest.PackageName} hoặc nâng cấp lên hạng cao hơn.");
+        }
+    }
+
     // Gói đơn lớp này nhận khi thanh toán: gói mua kèm, hoặc Hạng Đồng tặng kèm.
     public static async Task<MembershipPackageQuoteDto?> QuoteOfPaymentAsync(AppDbContext db, Payment payment)
     {

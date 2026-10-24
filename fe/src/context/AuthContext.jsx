@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
   confirmRegisterOtp as confirmRegisterOtpRequest,
   loginMember as loginMemberRequest,
@@ -80,6 +80,16 @@ export function AuthProvider({ children }) {
     setSession(next);
   };
 
+  // Cập nhật một phần thông tin người dùng đang đăng nhập (vd. ảnh đại diện, họ tên) để Header đổi ngay
+  const updateUser = useCallback((patch) => {
+    setSession((current) => {
+      if (!current?.user) return current;
+      const next = { ...current, user: { ...current.user, ...patch } };
+      writeSession(next);
+      return next;
+    });
+  }, []);
+
   const logout = () => {
     clearSession();
     setSession(null);
@@ -97,6 +107,7 @@ export function AuthProvider({ children }) {
         sendOtp,
         confirmOtp,
         applySession,
+        updateUser,
         logout,
       }}
     >

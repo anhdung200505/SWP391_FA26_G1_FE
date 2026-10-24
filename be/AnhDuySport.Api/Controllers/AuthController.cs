@@ -132,7 +132,7 @@ public class AuthController(AuthService auth, CurrentActor actor) : ControllerBa
     [Authorize]
     [HttpDelete("account")]
     [EndpointSummary("Người dùng tự xóa tài khoản")]
-    [EndpointDescription("Cần JWT và mật khẩu hiện tại. Xóa tài khoản đang đăng nhập cùng đăng ký lớp, slot, thông báo, hội viên và hóa đơn của chính họ. Tài khoản quản trị, hoặc huấn luyện viên đang giữ lớp hay giáo án, không xóa được.")]
+    [EndpointDescription("Cần JWT và mật khẩu hiện tại. Xóa tài khoản đang đăng nhập cùng đăng ký lớp, điểm danh, thông báo, hội viên và hóa đơn của chính họ. Tài khoản quản trị, hoặc huấn luyện viên đang giữ lớp hay giáo án, không xóa được.")]
     public async Task<IActionResult> DeleteAccount(DeleteAccountRequest request)
     {
         try

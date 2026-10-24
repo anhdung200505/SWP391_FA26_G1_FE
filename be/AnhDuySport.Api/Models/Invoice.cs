@@ -69,9 +69,6 @@ public class Payment
     [Column("registered_by_user_id")]
     public int? RegisteredByUserId { get; set; }
 
-    [Column("requested_slot_id")]
-    public int? RequestedSlotId { get; set; }
-
     // Gói lên cấp chọn cùng lúc đăng ký lớp (NULL = không lên cấp, được tặng Hạng Đồng)
     [Column("upgrade_package_id")]
     public int? UpgradePackageId { get; set; }
