@@ -143,6 +143,122 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             .ToList();
     }
 
+    public async Task<IReadOnlyList<ManagementCoachDto>> AccessCoachesAsync(string? sportId)
+    {
+        var query = db.UserAccounts.AsNoTracking().Where(user => user.Status == "active" && user.Role!.RoleCode == "COACH");
+        if (!string.IsNullOrWhiteSpace(sportId))
+        {
+            if (!int.TryParse(sportId, out var sportKey))
+            {
+                throw new KeyNotFoundException("Không tìm thấy môn thể thao.");
+            }
+
+            query = query.Where(user => db.CoachSports.Any(link => link.CoachUserId == user.UserId && link.SportId == sportKey));
+        }
+
+        var coaches = await query
+            .OrderBy(user => user.FullName)
+            .Select(user => new
+            {
+                user.UserId,
+                user.FullName,
+                user.Phone,
+                Sports = db.CoachSports
+                    .Where(link => link.CoachUserId == user.UserId)
+                    .Join(db.Sports, link => link.SportId, sport => sport.SportId, (link, sport) => sport.SportName)
+                    .ToList(),
+            })
+            .ToListAsync();
+
+        return coaches
+            .Select(coach => new ManagementCoachDto(
+                coach.UserId.ToString(),
+                coach.FullName,
+                coach.Phone ?? "",
+                coach.Sports.OrderBy(name => name).ToList()))
+            .ToList();
+    }
+
+    // Sinh thử các buổi theo lịch tuần rồi đối chiếu với buổi đã có để biết HLV, phòng nào bị trùng.
+    public async Task<ClassAvailabilityDto> CheckAvailabilityAsync(ClassAvailabilityRequest request)
+    {
+        var course = int.TryParse(request.CourseId, out var courseId)
+            ? await db.Courses.AsNoTracking().FirstOrDefaultAsync(item => item.CourseId == courseId)
+            : null;
+        if (course is null)
+        {
+            throw new RegistrationException("Khóa học không hợp lệ.");
+        }
+
+        if (request.StartDate is not { } start || request.EndDate is not { } end || end < start)
+        {
+            throw new RegistrationException("Chọn ngày bắt đầu và ngày kết thúc hợp lệ.");
+        }
+
+        var schedule = await ResolveScheduleAsync(request.Schedules);
+        var planned = ClassSessionPlanner.Plan(0, start, end, schedule, 0, 0, DateTime.Now);
+        var excludeId = int.TryParse(request.ExcludeClassId, out var parsed) ? parsed : 0;
+
+        var existing = planned.Count == 0
+            ? []
+            : await db.ClassSessions.AsNoTracking()
+                .Where(session => session.Status != "cancelled"
+                    && session.ClassId != excludeId
+                    && session.SessionDate >= start
+                    && session.SessionDate <= end)
+                .Select(session => new BookedSession(
+                    session.SessionDate,
+                    session.StartTime,
+                    session.EndTime,
+                    session.CoachUserId,
+                    session.RoomId,
+                    session.Class!.ClassName))
+                .ToListAsync();
+
+        string? Conflict(Func<BookedSession, bool> owner)
+        {
+            foreach (var slot in planned)
+            {
+                var hit = existing.FirstOrDefault(other => owner(other)
+                    && other.Date == slot.SessionDate
+                    && other.StartTime < slot.EndTime
+                    && slot.StartTime < other.EndTime);
+                if (hit is not null)
+                {
+                    return $"Trùng {hit.ClassName} ngày {hit.Date:dd/MM}";
+                }
+            }
+
+            return null;
+        }
+
+        var coaches = await AccessCoachesAsync(course.SportId.ToString());
+        var rooms = await AccessRoomsAsync(null, course.SportId.ToString());
+
+        return new ClassAvailabilityDto(
+            planned.Count,
+            planned.Count == 0 ? null : planned.Min(slot => slot.SessionDate),
+            planned.Count == 0 ? null : planned.Max(slot => slot.SessionDate),
+            coaches
+                .Select(coach =>
+                {
+                    var id = int.Parse(coach.Id);
+                    var reason = Conflict(other => other.CoachUserId == id);
+                    return new SessionOptionDto(coach.Id, coach.FullName, null, false, reason is not null, reason);
+                })
+                .ToList(),
+            rooms
+                .Select(room =>
+                {
+                    var id = int.Parse(room.Id);
+                    var reason = request.Capacity is int needed && room.Capacity < needed
+                        ? $"Chỉ chứa {room.Capacity} người"
+                        : Conflict(other => other.RoomId == id);
+                    return new SessionOptionDto(room.Id, room.Name, room.Capacity, false, reason is not null, reason);
+                })
+                .ToList());
+    }
+
     public async Task<AdminClassDto> CreateClassAsync(CreateClassRequest request)
     {
         var today = DateOnly.FromDateTime(DateTime.Now);
@@ -471,6 +587,8 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             throw new RegistrationException(message);
         }
     }
+
+    private sealed record BookedSession(DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int CoachUserId, int RoomId, string ClassName);
 
     private static bool IsEditable(string status, int enrolledCount, DateOnly? startDate, DateOnly today) =>
         status == "open" && enrolledCount == 0 && (startDate is null || startDate > today);
