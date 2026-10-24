@@ -1,4 +1,5 @@
 import { clearSession, readSession } from '../auth/session';
+import { notifyDataChanged } from './dataChanged';
 
 let onUnauthorized = () => {};
 
@@ -41,6 +42,7 @@ async function request(path, options = {}) {
     throw new Error(message);
   }
 
+  notifyDataChanged(rest.method);
   if (response.status === 204) return null;
   return response.json();
 }
@@ -169,6 +171,19 @@ export function createClass(payload) {
   });
 }
 
+// { remainingSessions, firstSession, coaches: [{ id, name, isCurrent, isBusy, busyReason }] }
+export function getClassCoachOptions(classId) {
+  return request(`/management/classes/${classId}/coach-options`);
+}
+
+// Đổi HLV cho mọi buổi chưa diễn ra của lớp; học viên của lớp nhận thông báo. { coachUserId, note }
+export function changeClassCoach(classId, payload) {
+  return request(`/management/classes/${classId}/coach`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 // Chỉ lớp canDelete = true (chưa ai đăng ký). Xóa cùng lịch tuần và buổi học. Trả null (204).
 export function deleteClass(classId) {
   return request(`/management/classes/${classId}`, { method: 'DELETE' });
@@ -209,6 +224,16 @@ export function cancelSession(sessionId, reason) {
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
+}
+
+// ==========================================
+// API HOẠT ĐỘNG CỦA LỄ TÂN & QUẢN TRỊ (chuông ở trang quản trị và portal lễ tân)
+// ==========================================
+
+// [{ id, actorUserId, actorName, actorRole, actorRoleLabel, action, entityName, entityId, detail, createdAt }], mới nhất trước.
+// role: RECEPTIONIST | ADMIN, để trống lấy cả hai.
+export function getStaffActivity({ role, limit = 60 } = {}) {
+  return request(`/staff-activity${toQuery({ role, limit })}`);
 }
 
 // ==========================================
