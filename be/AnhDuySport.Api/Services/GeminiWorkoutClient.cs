@@ -176,6 +176,12 @@ public class GeminiWorkoutClient(HttpClient http, IConfiguration configuration)
     private static GeneratedWorkout Parse(string raw, int expectedSessions)
     {
         using var document = JsonDocument.Parse(raw);
+        var tokens = ReadTotalTokens(document.RootElement);
+        if (tokens <= 0)
+        {
+            tokens = Math.Max(1, raw.Length / 4);
+        }
+
         if (!document.RootElement.TryGetProperty("candidates", out var candidates)
             || candidates.GetArrayLength() == 0)
         {
@@ -244,7 +250,41 @@ public class GeminiWorkoutClient(HttpClient http, IConfiguration configuration)
         return new GeneratedWorkout(
             planName.Length <= 200 ? planName : planName[..200],
             payload.Analysis.Trim(),
-            sessions);
+            sessions,
+            tokens);
+    }
+
+    private static int ReadTotalTokens(JsonElement root)
+    {
+        if (!root.TryGetProperty("usageMetadata", out var usage))
+        {
+            return 0;
+        }
+
+        if (usage.TryGetProperty("totalTokenCount", out var total) && total.TryGetInt64(out var count) && count > 0)
+        {
+            return count >= int.MaxValue ? int.MaxValue : (int)count;
+        }
+
+        long prompt = 0;
+        long output = 0;
+        if (usage.TryGetProperty("promptTokenCount", out var promptElement))
+        {
+            promptElement.TryGetInt64(out prompt);
+        }
+
+        if (usage.TryGetProperty("candidatesTokenCount", out var outputElement))
+        {
+            outputElement.TryGetInt64(out output);
+        }
+
+        var sum = prompt + output;
+        if (sum <= 0)
+        {
+            return 0;
+        }
+
+        return sum >= int.MaxValue ? int.MaxValue : (int)sum;
     }
 
     private static string ReadExercises(JsonElement element)
@@ -357,6 +397,7 @@ public sealed record WorkoutGenerationRequest(
 public sealed record GeneratedWorkout(
     string PlanName,
     string Analysis,
-    IReadOnlyList<GeneratedSession> Sessions);
+    IReadOnlyList<GeneratedSession> Sessions,
+    int TotalTokens);
 
 public sealed record GeneratedSession(string Title, string Intensity, string Exercises);

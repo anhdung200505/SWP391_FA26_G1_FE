@@ -37,4 +37,11 @@ public class MembershipPackage
 
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
+
+    // Hạn mức AI của cả gói. Học viên đang dùng gói này dùng chung hai số này.
+    [Column("ai_regeneration_limit")]
+    public int AiRegenerationLimit { get; set; }
+
+    [Column("ai_token_limit")]
+    public int AiTokenLimit { get; set; }
 }
