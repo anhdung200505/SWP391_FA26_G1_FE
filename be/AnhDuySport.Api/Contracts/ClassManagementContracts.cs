@@ -98,6 +98,17 @@ public sealed class CreateClassRequest
     public List<ClassScheduleRequest>? Schedules { get; set; }
 }
 
+// Đổi HLV cho cả lớp: áp dụng cho mọi buổi chưa diễn ra. Note là lý do, gửi kèm thông báo cho học viên.
+public sealed record ChangeClassCoachRequest(
+    [Required] string CoachUserId,
+    [StringLength(500)] string? Note = null);
+
+// RemainingSessions: số buổi chưa diễn ra sẽ đổi HLV, bắt đầu từ FirstSession. Coaches: isBusy khi trùng lịch một buổi còn lại.
+public sealed record ClassCoachOptionsDto(
+    int RemainingSessions,
+    DateOnly? FirstSession,
+    IReadOnlyList<SessionOptionDto> Coaches);
+
 // HLV dạy được môn (coach_sport). SportNames: các môn HLV dạy được.
 public sealed record ManagementCoachDto(
     string Id,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../assets/logo.png';
 
@@ -8,6 +8,7 @@ import ReceptionistPage from '../../components/receptionist/ReceptionistPage';
 import ReceptionClassRegistration from '../../components/receptionist/ReceptionClassRegistration';
 import ReceptionRegistrationsList from '../../components/receptionist/ReceptionRegistrationsList';
 import ReceptionClassSchedule from '../../components/classes/ReceptionClassSchedule';
+import StaffActivityBell from '../../components/management/StaffActivityBell';
 
 export default function ReceptionistDashboardPage() {
   const { user, logout } = useAuth();
@@ -142,21 +143,25 @@ export default function ReceptionistDashboardPage() {
       {/* NỘI DUNG CHÍNH (MAIN CONTENT) */}
       <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0f17]">
         {/* HEADER NỘI BỘ QUẢN LÝ */}
-        <header className="h-16 border-b border-gray-800 bg-[#141824] px-8 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4">
-            <h1 className="text-lg font-black uppercase text-white tracking-wide">
-              {activeTab === 'support' && 'Quản lý Đơn Hỗ trợ & Tư vấn khách hàng'}
-              {activeTab === 'registrations' && 'Đăng ký Lớp tại Quầy & Quản lý Danh sách Ghi danh'}
-              {activeTab === 'schedule' && 'Lịch buổi học & Đổi huấn luyện viên'}
-              {activeTab === 'checkin' && 'Điểm danh & Check-in Học viên'}
-              {activeTab === 'members' && 'Danh sách & Tra cứu Hồ sơ Học viên'}
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-bold text-gray-400 bg-[#0d0f17] border border-gray-800 px-3 py-1.5 rounded-xl">
-              Cơ sở: <strong className="text-white">AnhDuy Sport Center 1</strong>
+        {/* Cùng kiểu header với trang quản trị: đường dẫn bên trái, Hoạt động và Về trang chủ bên phải. */}
+        <header className="h-16 shrink-0 flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-6 sm:px-8 text-gray-900">
+          <nav aria-label="Đường dẫn" className="truncate text-sm text-gray-500">
+            <span className="font-semibold text-gray-600">Lễ tân</span>
+            <span className="mx-2 text-gray-300">/</span>
+            <span className="font-bold text-gray-900">
+              {activeTab === 'support' && 'Hỗ trợ & Tư vấn'}
+              {activeTab === 'registrations' && 'Đăng ký & Lớp học'}
+              {activeTab === 'schedule' && 'Lịch buổi học'}
+              {activeTab === 'checkin' && 'Check-in học viên'}
+              {activeTab === 'members' && 'Tra cứu học viên'}
             </span>
+          </nav>
+
+          <div className="flex shrink-0 items-center gap-4">
+            <StaffActivityBell />
+            <Link to="/home" className="text-sm font-bold text-gray-600 hover:text-[#e31b23]">
+              Về trang chủ
+            </Link>
           </div>
         </header>
 
