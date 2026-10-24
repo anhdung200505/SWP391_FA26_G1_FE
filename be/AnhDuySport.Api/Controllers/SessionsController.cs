@@ -24,7 +24,7 @@ public class SessionsController(SessionFlowService sessions, CurrentActor actor)
     [Authorize(Roles = "MEMBER")]
     [HttpGet("mine")]
     [EndpointSummary("Học viên xem lịch học của mình")]
-    [EndpointDescription("Học viên lấy từ token đăng nhập. Các buổi chưa hủy của những lớp đang ghi danh, mặc định từ hôm nay trở đi. Lọc tùy chọn from, to (yyyy-MM-dd).")]
+    [EndpointDescription("Học viên lấy từ token đăng nhập. Mọi buổi của những lớp đang ghi danh, kể cả buổi đã hủy (status cancelled, lý do ở note), mặc định từ hôm nay trở đi. Mỗi buổi kèm attendanceStatus của học viên: present, late, absent hoặc null (chưa điểm danh). Lọc tùy chọn from, to (yyyy-MM-dd).")]
     public async Task<ActionResult<IReadOnlyList<SessionDto>>> AccessMine([FromQuery] DateOnly? from, [FromQuery] DateOnly? to) =>
         Ok(await sessions.AccessMemberSessionsAsync(actor.UserId, from, to));
 

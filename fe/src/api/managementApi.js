@@ -198,6 +198,18 @@ export function getSessions(params = {}) {
   return request(`/sessions${toQuery(params)}`);
 }
 
+// Học viên: lịch học của mình (kể cả buổi đã hủy), mỗi buổi kèm attendanceStatus: present | late | absent | null.
+// params: from, to (yyyy-MM-dd). Mặc định từ hôm nay trở đi.
+export function getMySessions(params = {}) {
+  return request(`/sessions/mine${toQuery(params)}`);
+}
+
+// Học viên: lịch sử thanh toán (mua khóa học, mua/gia hạn/nâng hạng gói), mới nhất trước.
+// { id, invoiceCode, kind: class | membership, title, amount, paymentMethod, status, createdAt, paidAt }
+export function getMyPayments() {
+  return request('/payments/mine');
+}
+
 // HLV và phòng có thể đổi cho buổi, kèm isBusy / busyReason
 export function getSessionOptions(sessionId) {
   return request(`/sessions/${sessionId}/options`);
