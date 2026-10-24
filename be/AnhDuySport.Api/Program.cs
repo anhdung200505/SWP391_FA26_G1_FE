@@ -41,6 +41,7 @@ builder.Services.AddScoped<SessionFlowService>();
 builder.Services.AddScoped<SessionManagementFlowService>();
 builder.Services.AddScoped<NotificationFlowService>();
 builder.Services.AddScoped<StaffActivityFlowService>();
+builder.Services.AddScoped<PaymentHistoryFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
 builder.Services.AddScoped<PayOsPaymentService>();
