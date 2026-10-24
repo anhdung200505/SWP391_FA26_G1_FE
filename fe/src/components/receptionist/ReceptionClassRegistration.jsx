@@ -39,7 +39,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
   const [sportsList, setSportsList] = useState([]);
   const [classList, setClassList] = useState([]);
 
-  const [includeClass, setIncludeClass] = useState(true);
+  const includeClass = true;
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedClass, setSelectedClass] = useState(null);
   const [pickedPackage, setSelectedPackage] = useState(null);
@@ -221,7 +221,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
   const handleCreatePendingRegistration = async (e) => {
     e.preventDefault();
     if (!selectedPackage?.id) return showErr('Vui lòng chọn một gói hội viên.');
-    if (includeClass && !selectedClass?.id) return showErr('Vui lòng chọn lớp học hoặc bỏ tích chọn kèm lớp.');
+    if (!selectedClass?.id) return showErr('Vui lòng chọn lớp học. Gói hội viên chỉ mua kèm khi đăng ký lớp.');
 
     const isBronze = selectedPackage.name?.toLowerCase().includes('đồng') || selectedPackage.code === 'PKG-001';
 
@@ -278,7 +278,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
   return (
-    <div className="max-w-5xl mx-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+    <div className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
       {/* HEADER BƯỚC THAO TÁC */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
         <div>
@@ -552,17 +552,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                 {/* 2. ĐĂNG KÝ KÈM LỚP HUẤN LUYỆN */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="text-sm font-black text-slate-900 uppercase">2. ĐĂNG KÝ KÈM LỚP HUẤN LUYỆN</h3>
-
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-black text-[#e31b23] bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={includeClass}
-                        onChange={(e) => setIncludeClass(e.target.checked)}
-                        className="accent-[#e31b23] w-4 h-4 rounded cursor-pointer"
-                      />
-                      Đăng ký kèm lớp (Nhận Ưu Đãi Gói)
-                    </label>
+                    <h3 className="text-sm font-black text-slate-900 uppercase">2. CHỌN LỚP HỌC</h3>
                   </div>
 
                   {includeClass ? (

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CancelSessionModal, EditSessionModal } from '../sessions/SessionSchedulePanel';
 import { CLASS_STATUS, formatDate } from './classUtils';
 import { getSessions } from '../../api/managementApi';
+import WeekSlotTable, { formatClock, mondayOf, weekContaining } from '../schedule/WeekSlotTable';
 
 const SESSION_STATUS = {
   upcoming: { label: 'Sắp học', className: 'bg-sky-50 text-sky-700 border-sky-200' },
@@ -37,6 +38,8 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState(null);
   const [cancelling, setCancelling] = useState(null);
+  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const weekClass = useRef('');
 
   useEffect(() => {
     let ignore = false;
@@ -49,6 +52,10 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
         if (ignore) return;
         setKlass(found);
         setSessions(Array.isArray(list) ? list : []);
+        if (weekClass.current !== classId) {
+          weekClass.current = classId;
+          setWeekStart(weekContaining((Array.isArray(list) ? list : []).map((session) => String(session.date || '').slice(0, 10))));
+        }
         setError('');
       } catch (err) {
         if (!ignore) setError(err.message || 'Không tải được lịch lớp học.');
@@ -70,7 +77,6 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
   };
 
   const canChange = (session) => !['cancelled', 'completed'].includes(session.status) && session.date >= today;
-  const nextSession = sessions.find(canChange);
   const countable = sessions.filter((item) => item.status !== 'cancelled');
   const done = countable.filter((item) => item.status === 'completed').length;
   const percent = countable.length ? Math.round((done / countable.length) * 100) : 0;
@@ -166,74 +172,46 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
               </div>
             )}
 
-            <div className="mt-5 bg-white rounded-3xl border border-gray-200 shadow-xs overflow-hidden">
-              {sessions.length === 0 ? (
-                <div className="py-16 text-center text-xs font-bold text-gray-400">Lớp chưa có buổi học nào.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-gray-100 text-gray-400 font-extrabold uppercase text-[10px] tracking-wider">
-                        <th className="p-4">Buổi</th>
-                        <th className="p-4" />
-                        <th className="p-4">Ngày</th>
-                        <th className="p-4">Khung giờ</th>
-                        <th className="p-4">Phòng</th>
-                        <th className="p-4">Coach</th>
-                        <th className="p-4">Trạng thái</th>
-                        <th className="p-4">Ghi chú</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 font-medium text-slate-700">
-                      {sessions.map((session) => {
-                        const key = sessionStatusKey(session, today);
-                        const badge = SESSION_STATUS[key] || SESSION_STATUS.upcoming;
-                        const editable = canChange(session);
-                        const isNext = nextSession?.id === session.id;
-                        const rowClass =
-                          session.status === 'cancelled'
-                            ? 'bg-red-50/30 text-slate-400'
-                            : isNext
-                              ? 'bg-emerald-50/60 font-bold text-slate-900'
-                              : 'hover:bg-slate-50/80';
-                        return (
-                          <tr key={session.id} className={`transition-colors ${rowClass}`}>
-                            <td className="p-4">{session.sessionNo}</td>
-                            <td className="p-4 whitespace-nowrap">
-                              {editable && (
-                                <div className="flex gap-3 text-[11px] font-bold">
-                                  <button type="button" onClick={() => setEditing(session)} className="text-emerald-600 hover:underline cursor-pointer">
-                                    Đổi
-                                  </button>
-                                  {isAdmin && (
-                                    <button type="button" onClick={() => setCancelling(session)} className="text-[#e31b23] hover:underline cursor-pointer">
-                                      Hủy
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                            <td className="p-4 whitespace-nowrap">
-                              {session.weekdayName}, {formatDate(session.date)}
-                            </td>
-                            <td className="p-4 whitespace-nowrap">
-                              {formatTime(session.startTime)} – {formatTime(session.endTime)}
-                            </td>
-                            <td className="p-4 whitespace-nowrap">{session.roomName}</td>
-                            <td className="p-4 whitespace-nowrap">{session.coachName}</td>
-                            <td className="p-4">
-                              <span className={`inline-block whitespace-nowrap border text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${badge.className}`}>
-                                {badge.label}
-                              </span>
-                            </td>
-                            <td className="p-4 min-w-[160px] max-w-[240px] break-words">{session.note || ''}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+            <div className="mt-5">
+              <WeekSlotTable
+                weekStart={weekStart}
+                onWeekStart={setWeekStart}
+                sessions={sessions}
+                renderCell={(session) => {
+                  const key = sessionStatusKey(session, today);
+                  const badge = SESSION_STATUS[key] || SESSION_STATUS.upcoming;
+                  const editable = canChange(session);
+                  const cancelled = session.status === 'cancelled';
+                  return (
+                    <div className={cancelled ? 'text-gray-400' : 'text-gray-900'}>
+                      <p className={`font-semibold leading-snug ${cancelled ? 'line-through' : ''}`}>
+                        Buổi {session.sessionNo}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500 tabular-nums">
+                        {formatClock(session.startTime)}–{formatClock(session.endTime)}
+                      </p>
+                      <p className="text-xs text-gray-500">{session.roomName}</p>
+                      <p className="text-xs text-gray-500">{session.coachName}</p>
+                      <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
+                        {badge.label}
+                      </span>
+                      {session.note && <p className="mt-1 text-xs text-pretty text-gray-600">{session.note}</p>}
+                      {editable && (
+                        <div className="mt-2 flex gap-2">
+                          <button type="button" onClick={() => setEditing(session)} className="text-xs font-semibold text-gray-700 underline">
+                            Đổi
+                          </button>
+                          {isAdmin && (
+                            <button type="button" onClick={() => setCancelling(session)} className="text-xs font-semibold text-[#e31b23] underline">
+                              Hủy buổi
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              />
             </div>
           </>
         )

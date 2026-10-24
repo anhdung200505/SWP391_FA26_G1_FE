@@ -4,12 +4,15 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { getMemberProfile, updateMemberProfile, getMySupportRequests, uploadMemberAvatar } from '../api/managementApi';
+import { confirmProfileNotice } from '../auth/profileNotice';
+import { useHasClassRegistration } from '../components/workspace/studentNav';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
+  const hasClass = useHasClassRegistration((user?.roleId || user?.role) === 'MEMBER');
   const [profile, setProfile] = useState({
     fullName: '',
     email: '',
@@ -91,6 +94,8 @@ export default function ProfilePage() {
       if (res?.profile) {
         updateUser({ fullName: res.profile.fullName, email: res.profile.email, phone: res.profile.phone });
       }
+      const role = user?.roleId || user?.role;
+      if (role === 'RECEPTIONIST' || role === 'COACH') confirmProfileNotice(user.id);
     } catch (err) {
       setMessage({ type: 'error', text: err.message || 'Cập nhật thất bại.' });
     } finally {
@@ -112,20 +117,30 @@ export default function ProfilePage() {
               >
                 Về khóa học của tôi
               </Link>
+              {hasClass && (
               <Link
                 to="/hoc-vien/giao-an-ai"
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg"
               >
                 Giáo án AI
               </Link>
+              )}
             </div>
           )}
           {((user?.roleId || user?.role) === 'COACH') && (
             <Link
-              to="/hlv/lich-su-tap"
+              to="/hlv/lop-hoc"
               className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg mb-6"
             >
-              Lịch sử tập
+              Về lớp của tôi
+            </Link>
+          )}
+          {((user?.roleId || user?.role) === 'RECEPTIONIST') && (
+            <Link
+              to="/le-tan"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg mb-6"
+            >
+              Về trang lễ tân
             </Link>
           )}
           <h1 className="text-2xl font-black text-gray-900 mb-2">Hồ sơ cá nhân</h1>

@@ -19,11 +19,16 @@ public class StaffActivityFlowService(AppDbContext db)
         ["ADMIN"] = "Quản trị",
     };
 
-    // role để trống: cả lễ tân và quản trị. Mới nhất trước.
-    public async Task<IReadOnlyList<StaffActivityDto>> AccessRecentAsync(string? role, int? limit)
+    // Lễ tân chỉ thấy hoạt động lễ tân. Quản trị thấy cả hai. role để trống với quản trị: cả hai. Mới nhất trước.
+    public async Task<IReadOnlyList<StaffActivityDto>> AccessRecentAsync(string? actorRole, string? role, int? limit)
     {
+        var receptionistOnly = string.Equals(actorRole, "RECEPTIONIST", StringComparison.OrdinalIgnoreCase);
         var roles = StaffRoles.Keys.ToList();
-        if (!string.IsNullOrWhiteSpace(role))
+        if (receptionistOnly)
+        {
+            roles = ["RECEPTIONIST"];
+        }
+        else if (!string.IsNullOrWhiteSpace(role))
         {
             var roleKey = role.Trim().ToUpperInvariant();
             if (!StaffRoles.ContainsKey(roleKey))

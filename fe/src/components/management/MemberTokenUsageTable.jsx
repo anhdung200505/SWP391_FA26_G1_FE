@@ -12,11 +12,156 @@ function usedShare(used, limit) {
   return Math.min(100, Math.round((Number(used) || 0) * 100 / total));
 }
 
+function monthLabel(year, month) {
+  const label = new Date(year, month - 1, 1).toLocaleDateString('vi-VN', { month: 'short' });
+  return label.replace('.', '');
+}
+
+function foldName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/đ/gi, 'd')
+    .toLocaleLowerCase('vi');
+}
+
+function TokenMonthChart({ months, caption }) {
+  const rows = Array.isArray(months) ? months : [];
+  const max = Math.max(1, ...rows.map((item) => Number(item.tokensUsed) || 0));
+  return (
+    <figure className="border-b border-gray-100 px-5 py-5 sm:px-6">
+      <figcaption className="text-sm font-bold text-balance text-slate-900">{caption}</figcaption>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-pretty text-gray-500">Chưa có số token theo tháng.</p>
+      ) : (
+        <>
+          <div className="mt-4 flex h-44 items-end gap-2" aria-hidden="true">
+            {rows.map((item) => {
+              const used = Number(item.tokensUsed) || 0;
+              const height = Math.round((used / max) * 100);
+              return (
+                <div key={`${item.year}-${item.month}`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                  <span className="text-xs tabular-nums text-gray-500">{used > 0 ? formatCount(used) : ''}</span>
+                  <div className="flex h-28 w-full items-end rounded-t bg-gray-100">
+                    <div className="w-full rounded-t bg-[#e31b23]" style={{ height: `${Math.max(height, used > 0 ? 4 : 0)}%` }} />
+                  </div>
+                  <span className="truncate text-xs text-gray-500">{monthLabel(item.year, item.month)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <table className="sr-only">
+            <caption>{caption}</caption>
+            <thead>
+              <tr>
+                <th>Tháng</th>
+                <th>Token</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item) => (
+                <tr key={`${item.year}-${item.month}-text`}>
+                  <td>{monthLabel(item.year, item.month)} {item.year}</td>
+                  <td>{formatCount(item.tokensUsed)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </figure>
+  );
+}
+
+function MemberRows({ members }) {
+  if (members.length === 0) {
+    return <p className="mt-4 text-sm text-pretty text-gray-500">Không có học viên khớp với tên này.</p>;
+  }
+  return (
+    <div className="mt-4 max-h-96 overflow-auto">
+      <table className="w-full min-w-[40rem] text-left text-sm">
+        <thead className="sticky top-0 bg-white">
+          <tr className="border-b border-gray-100 text-gray-500">
+            <th className="py-2 pr-3 font-medium">Học viên</th>
+            <th className="py-2 pr-3 font-medium">Gói</th>
+            <th className="py-2 pr-3 font-medium">Lượt tạo lại</th>
+            <th className="py-2 pr-3 font-medium">Token kỳ này</th>
+            <th className="py-2 font-medium">Tổng token</th>
+          </tr>
+        </thead>
+        <tbody>
+          {members.map((member) => (
+            <tr key={member.memberUserId} className="border-b border-gray-100 last:border-b-0">
+              <td className="py-2.5 pr-3 font-semibold text-slate-900">{member.memberName}</td>
+              <td className="py-2.5 pr-3 text-slate-700">
+                {member.packageName || 'Chưa có gói'}
+                {member.packageCode && <div className="text-xs text-gray-400">{member.packageCode}</div>}
+              </td>
+              <td className="py-2.5 pr-3 tabular-nums text-slate-900">
+                {formatCount(member.regenerationsUsed)}
+                <span className="text-gray-400"> / {formatCount(member.regenerationLimit)}</span>
+              </td>
+              <td className="py-2.5 pr-3 tabular-nums text-slate-900">
+                {formatCount(member.periodTokensUsed)}
+                <span className="text-gray-400"> / {formatCount(member.tokenLimit)}</span>
+              </td>
+              <td className="py-2.5 font-semibold tabular-nums text-slate-900">{formatCount(member.tokensUsed)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SelectedMember({ member }) {
+  const share = usedShare(member.periodTokensUsed, member.tokenLimit);
+  return (
+    <dl className="mt-4 grid gap-4 sm:grid-cols-4">
+      <div>
+        <dt className="text-sm text-gray-500">Gói</dt>
+        <dd className="mt-1 font-semibold text-slate-900">{member.packageName || 'Chưa có gói'}</dd>
+        {member.packageCode && <dd className="text-xs text-gray-400">{member.packageCode}</dd>}
+      </div>
+      <div>
+        <dt className="text-sm text-gray-500">Lượt tạo lại</dt>
+        <dd className="mt-1 font-semibold tabular-nums text-slate-900">
+          {formatCount(member.regenerationsUsed)}
+          <span className="font-medium text-gray-400"> / {formatCount(member.regenerationLimit)}</span>
+        </dd>
+      </div>
+      <div>
+        <dt className="text-sm text-gray-500">Token kỳ này</dt>
+        <dd className="mt-1 font-semibold tabular-nums text-slate-900">
+          {formatCount(member.periodTokensUsed)}
+          <span className="font-medium text-gray-400"> / {formatCount(member.tokenLimit)}</span>
+        </dd>
+        <div
+          role="meter"
+          aria-label={`Token kỳ này của ${member.memberName}`}
+          aria-valuemin={0}
+          aria-valuemax={member.tokenLimit || 0}
+          aria-valuenow={member.periodTokensUsed || 0}
+          className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-gray-100"
+        >
+          <div className="h-full bg-[#e31b23]" style={{ width: `${share}%` }} />
+        </div>
+      </div>
+      <div>
+        <dt className="text-sm text-gray-500">Tổng token</dt>
+        <dd className="mt-1 text-lg font-black tabular-nums text-slate-900">{formatCount(member.tokensUsed)}</dd>
+      </div>
+    </dl>
+  );
+}
+
 export default function MemberTokenUsageTable() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [selectedId, setSelectedId] = useState('');
+  const [nameQuery, setNameQuery] = useState('');
 
   useEffect(() => {
     let ignore = false;
@@ -38,12 +183,19 @@ export default function MemberTokenUsageTable() {
   }, [reloadKey]);
 
   const members = [...(report?.members || [])].sort(
-    (left, right) =>
-      (right.tokensUsed || 0) - (left.tokensUsed || 0)
-      || String(left.memberName || '').localeCompare(String(right.memberName || ''), 'vi'),
+    (left, right) => String(left.memberName || '').localeCompare(String(right.memberName || ''), 'vi'),
   );
+  const selected = members.find((member) => String(member.memberUserId) === String(selectedId)) || null;
+  const foldedQuery = foldName(nameQuery.trim());
+  const matchedMembers = foldedQuery
+    ? members.filter((member) => foldName(member.memberName).includes(foldedQuery))
+    : members;
   const periodTokens = members.reduce((sum, member) => sum + (member.periodTokensUsed || 0), 0);
   const regenerations = members.reduce((sum, member) => sum + (member.regenerationsUsed || 0), 0);
+  const chartMonths = selected?.months || report?.months || [];
+  const chartCaption = selected
+    ? `Token của ${selected.memberName} theo tháng`
+    : 'Tổng token theo tháng';
 
   return (
     <section className="mt-8 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
@@ -107,76 +259,53 @@ export default function MemberTokenUsageTable() {
             <div className="px-5 py-10 text-center sm:px-6">
               <p className="font-bold text-slate-900">Chưa có học viên đang dùng gói</p>
               <p className="mt-1 text-sm text-pretty text-gray-500">
-                Khi học viên có hội viên hiệu lực, mức dùng token hiện ở bảng này.
+                Khi học viên có hội viên hiệu lực, chọn tên trong danh sách để xem token.
               </p>
               <Link to="/quan-ly/han-muc-ai" className="mt-4 inline-flex rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white">
                 Mở hạn mức AI
               </Link>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-bold text-gray-500">
-                  <tr>
-                    <th className="px-5 py-3 sm:px-6">Học viên</th>
-                    <th className="px-4 py-3">Gói</th>
-                    <th className="px-4 py-3">Lượt tạo lại</th>
-                    <th className="px-4 py-3">Token kỳ này</th>
-                    <th className="px-5 py-3 text-right sm:px-6">Tổng token</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {members.map((member) => {
-                    const share = usedShare(member.periodTokensUsed, member.tokenLimit);
-                    return (
-                      <tr key={member.memberUserId}>
-                        <td className="px-5 py-3.5 sm:px-6">
-                          <p className="truncate font-bold text-slate-900">{member.memberName}</p>
-                        </td>
-                        <td className="px-4 py-3.5 text-gray-700">
-                          <p className="truncate">{member.packageName}</p>
-                          <p className="text-xs text-gray-400">{member.packageCode}</p>
-                        </td>
-                        <td className="px-4 py-3.5 font-bold tabular-nums text-slate-900">
-                          {formatCount(member.regenerationsUsed)}
-                          <span className="font-medium text-gray-400"> / {formatCount(member.regenerationLimit)}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <p className="font-bold tabular-nums text-slate-900">
-                            {formatCount(member.periodTokensUsed)}
-                            <span className="font-medium text-gray-400"> / {formatCount(member.tokenLimit)}</span>
-                          </p>
-                          <div
-                            role="meter"
-                            aria-label={`Token kỳ này của ${member.memberName}`}
-                            aria-valuemin={0}
-                            aria-valuemax={member.tokenLimit || 0}
-                            aria-valuenow={member.periodTokensUsed || 0}
-                            className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-gray-100"
-                          >
-                            <div className="h-full bg-[#e31b23]" style={{ width: `${share}%` }} />
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 text-right font-black tabular-nums text-slate-900 sm:px-6">
-                          {formatCount(member.tokensUsed)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="border-t border-gray-200 bg-slate-50 text-sm font-bold text-slate-900">
-                  <tr>
-                    <td className="px-5 py-3 sm:px-6" colSpan={2}>
-                      Tổng {members.length} học viên
-                    </td>
-                    <td className="px-4 py-3 tabular-nums">{formatCount(regenerations)}</td>
-                    <td className="px-4 py-3 tabular-nums">{formatCount(periodTokens)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums sm:px-6">{formatCount(report.totalTokensUsed)}</td>
-                  </tr>
-                </tfoot>
-              </table>
+            <div className="border-b border-gray-100 px-5 py-4 sm:px-6">
+              <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+                <label className="block text-sm font-semibold text-gray-700" htmlFor="token-member">
+                  Học viên
+                  <select
+                    id="token-member"
+                    value={selected ? selectedId : ''}
+                    onChange={(event) => setSelectedId(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-900"
+                  >
+                    <option value="">Tất cả học viên</option>
+                    {matchedMembers.map((member) => (
+                      <option key={member.memberUserId} value={member.memberUserId}>
+                        {member.memberName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold text-gray-700" htmlFor="token-member-search">
+                  Tìm tên
+                  <input
+                    id="token-member-search"
+                    type="search"
+                    value={nameQuery}
+                    placeholder="Nhập tên học viên"
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setNameQuery(next);
+                      if (selected && !foldName(selected.memberName).includes(foldName(next.trim()))) {
+                        setSelectedId('');
+                      }
+                    }}
+                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-900"
+                  />
+                </label>
+              </div>
+              {selected ? <SelectedMember member={selected} /> : <MemberRows members={matchedMembers} />}
             </div>
           )}
+          <TokenMonthChart months={chartMonths} caption={chartCaption} />
         </>
       )}
     </section>

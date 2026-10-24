@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption } from '../../components/management/ManagementBits';
-import { createStaffAccount } from '../../api/managementApi';
+import { useAccountManagement } from '../../context/AccountManagementContext';
+import { getSports } from '../../api/managementApi';
 
 export default function CreateStaffAccountPage() {
   const navigate = useNavigate();
+  const { createStaffAccount } = useAccountManagement();
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -13,7 +15,9 @@ export default function CreateStaffAccountPage() {
     phone: '',
     password: '',
     roleId: 'RECEPTIONIST', // Mặc định Lễ tân
+    sportIds: [],
   });
+  const [sports, setSports] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState({ type: '', msg: '' });
@@ -21,11 +25,25 @@ export default function CreateStaffAccountPage() {
 
   useEffect(() => {
     document.title = 'Tạo tài khoản Nhân viên / HLV · AnhDuy Sport';
+    getSports('1').then((data) => setSports(Array.isArray(data) ? data : [])).catch(() => setSports([]));
   }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+      sportIds: name === 'roleId' && value !== 'COACH' ? [] : prev.sportIds,
+    }));
+  };
+
+  const toggleSport = (sportId) => {
+    setFormData((prev) => ({
+      ...prev,
+      sportIds: prev.sportIds.includes(sportId)
+        ? prev.sportIds.filter((id) => id !== sportId)
+        : [...prev.sportIds, sportId],
+    }));
   };
 
   // Validation mật khẩu: Tối thiểu 6 ký tự và phải chứa @, # hoặc !
@@ -51,14 +69,20 @@ export default function CreateStaffAccountPage() {
       return;
     }
 
+    if (formData.roleId === 'COACH' && formData.sportIds.length === 0) {
+      setNotice({ type: 'error', msg: 'Chọn ít nhất một môn cho huấn luyện viên. Một HLV có thể dạy nhiều môn.' });
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await createStaffAccount({
+      const created = await createStaffAccount({
         fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
         password: formData.password,
         roleId: formData.roleId,
+        sportIds: formData.roleId === 'COACH' ? formData.sportIds : [],
       });
 
       setNotice({
@@ -66,8 +90,8 @@ export default function CreateStaffAccountPage() {
         msg: `Tạo tài khoản ${formData.roleId === 'RECEPTIONIST' ? 'Lễ tân' : 'Huấn luyện viên'} thành công!`,
       });
 
-      if (res?.user) {
-        setCreatedUser(res.user);
+      if (created) {
+        setCreatedUser(created);
       }
 
       // Reset form
@@ -77,6 +101,7 @@ export default function CreateStaffAccountPage() {
         phone: '',
         password: '',
         roleId: 'RECEPTIONIST',
+        sportIds: [],
       });
     } catch (err) {
       setNotice({
@@ -91,12 +116,12 @@ export default function CreateStaffAccountPage() {
   return (
     <ManagementShell
       breadcrumb={[
-        { label: 'Bảng điều khiển', href: '/quan-ly' },
-        { label: 'Quản lý tài khoản', href: '/quan-ly/tai-khoan' },
+        { label: 'Bảng điều khiển', to: '/quan-ly' },
+        { label: 'Quản lý tài khoản', to: '/quan-ly/tai-khoan' },
         { label: 'Tạo nhân viên / HLV' },
       ]}
     >
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
         
         {/* HEADER */}
         <div className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -152,6 +177,9 @@ export default function CreateStaffAccountPage() {
               <p>Email: <strong>{createdUser.email}</strong></p>
               <p>Số điện thoại: <strong>{createdUser.phone}</strong></p>
               <p>Vai trò: <strong>{createdUser.roleId === 'RECEPTIONIST' ? 'Lễ tân' : 'Huấn luyện viên'}</strong></p>
+              {createdUser.roleId === 'COACH' && (
+                <p className="col-span-2">Môn dạy: <strong>{(createdUser.sports || []).map((sport) => sport.name).join(', ') || 'Chưa gán'}</strong></p>
+              )}
               <p>Trạng thái: <span className="bg-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded text-[10px] uppercase">{createdUser.status || 'Active'}</span></p>
             </div>
           </div>
@@ -211,6 +239,39 @@ export default function CreateStaffAccountPage() {
               </label>
             </div>
           </div>
+
+          {formData.roleId === 'COACH' && (
+            <div>
+              <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-2">
+                Môn huấn luyện *
+              </label>
+              <p className="text-[11px] text-slate-500 font-medium mb-3">
+                Một huấn luyện viên có thể dạy nhiều môn. Chỉ những môn được chọn mới hiện khi đổi HLV của lớp.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {sports.map((sport) => {
+                  const sportId = String(sport.id);
+                  const selected = formData.sportIds.includes(sportId);
+                  return (
+                    <label
+                      key={sportId}
+                      className={`flex items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3 cursor-pointer ${
+                        selected ? 'border-[#e31b23] bg-red-50/50 text-[#e31b23]' : 'border-slate-200 bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="text-xs font-black uppercase">{sport.name}</span>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleSport(sportId)}
+                        className="h-4 w-4 accent-[#e31b23]"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* HỌ VÀ TÊN */}
           <div>

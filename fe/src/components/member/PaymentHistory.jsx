@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getMyPayments } from '../../api/managementApi';
+import { onDataChanged } from '../../api/dataChanged';
+
+const POLL_MS = 5000;
 
 const STATUS = {
   paid: { label: 'Đã thanh toán', className: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
@@ -37,14 +40,28 @@ export default function PaymentHistory() {
 
   useEffect(() => {
     load();
+    const stop = onDataChanged(load);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [load]);
 
-  // Có đơn đang chờ thanh toán thì hẹn tải lại đúng lúc đơn gần nhất hết 3 phút, để trạng thái tự đổi sang Hết hạn mà không cần F5.
+  // Đơn đang chờ thì hỏi lại vài giây một lần, và đúng lúc hết hạn 3 phút, để trạng thái đổi mà không cần F5.
   useEffect(() => {
-    const waits = payments.filter((item) => item.status === 'pending' && item.secondsLeft > 0).map((item) => item.secondsLeft);
-    if (waits.length === 0) return undefined;
-    const timer = setTimeout(load, (Math.min(...waits) + 1) * 1000);
-    return () => clearTimeout(timer);
+    const pending = payments.filter((item) => item.status === 'pending');
+    if (pending.length === 0) return undefined;
+    const waits = pending.filter((item) => item.secondsLeft > 0).map((item) => item.secondsLeft);
+    const expireTimer = waits.length > 0 ? setTimeout(load, (Math.min(...waits) + 1) * 1000) : undefined;
+    const pollTimer = setInterval(load, POLL_MS);
+    return () => {
+      clearInterval(pollTimer);
+      if (expireTimer) clearTimeout(expireTimer);
+    };
   }, [payments, load]);
 
   return (

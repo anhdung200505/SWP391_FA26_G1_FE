@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace AnhDuySport.Api.Services;
 
 // Giáo án không được soạn sẵn trong code. Bước Generate gọi Google Gemini.
-public class GeminiWorkoutClient(HttpClient http, IConfiguration configuration)
+public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configuration)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

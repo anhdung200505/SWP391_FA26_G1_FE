@@ -79,27 +79,13 @@ export default function ManagementDashboard() {
   return (
     <ManagementShell breadcrumb={[{ label: 'Bảng điều khiển' }]}>
       {/* BANNER HEADER */}
-      <section className="relative overflow-hidden rounded-3xl bg-[#12141d] px-6 py-8 text-white sm:px-8">
-        <div
-          className="pointer-events-none absolute inset-y-0 right-0 hidden w-[46%] bg-[#e31b23] sm:block"
-          style={{ clipPath: 'polygon(22% 0, 100% 0, 100% 100%, 0 100%)' }}
-        />
-        <div className="relative max-w-xl">
-          <span className="inline-block bg-[#e31b23] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white -skew-x-12">
-            <span className="inline-block skew-x-12">Center Manager</span>
-          </span>
-          <h1 className="mt-4 text-3xl font-black uppercase italic leading-none tracking-tight sm:text-5xl">
-            Quản lý tài khoản
-            <br />
-            và trung tâm
-          </h1>
-          <p className="mt-4 max-w-md text-sm leading-6 text-white/75 sm:text-base">
-            Quản lý tài khoản, các gói hội viên, danh mục lớp học thể thao và duyệt các yêu cầu hỗ trợ chuyển lên.
-          </p>
-          <DiagramCaption>
-            <span className="text-white/40">Access Management Dashboard</span>
-          </DiagramCaption>
-        </div>
+      <section className="rounded-3xl border border-gray-200 bg-white px-6 py-8 sm:px-8">
+        <h1 className="text-2xl font-black text-balance text-slate-900 sm:text-3xl">
+          Quản lý tài khoản và trung tâm
+        </h1>
+        <p className="mt-2 max-w-prose text-sm text-pretty text-slate-500">
+          Tài khoản, gói hội viên, lớp học và các yêu cầu hỗ trợ được chuyển lên.
+        </p>
       </section>
 
       {/* THÔNG BÁO KHI CÓ HÀNH ĐỘNG XỬ LÝ */}

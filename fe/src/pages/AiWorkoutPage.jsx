@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   decideWorkout,
   getWorkoutAccess,
@@ -9,9 +8,9 @@ import {
   submitWorkoutGoals,
 } from '../api/workoutRecommendationApi';
 import WorkoutPlanView from '../components/ai/WorkoutPlanView';
-import Footer from '../components/Footer';
-import Header from '../components/Header';
 import { FlowTrail } from '../components/management/ManagementBits';
+import WorkspaceShell from '../components/workspace/WorkspaceShell';
+import { studentWorkspaceItems, useHasClassRegistration } from '../components/workspace/studentNav';
 import { useAuth } from '../context/AuthContext';
 
 const AI_STEPS = ['Chỉ số BMI', 'Mục tiêu', 'Giáo án AI', 'Lịch tập'];
@@ -79,6 +78,7 @@ function ExerciseList({ title, items }) {
 }
 
 export default function AiWorkoutPage() {
+  const hasClass = useHasClassRegistration();
   const { user } = useAuth();
   const memberUserId = user?.id;
 
@@ -272,16 +272,13 @@ export default function AiWorkoutPage() {
   const body = access?.latestBody;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[#f4f5f7] text-gray-900">
-      <Header forceWhite />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-16 pt-24 sm:px-6">
-        <Link
-          to="/hoc-vien-dashboard"
-          className="inline-flex items-center rounded-lg bg-white px-4 py-2 text-xs font-bold text-gray-600 ring-1 ring-gray-200 hover:text-[#e31b23]"
-        >
-          Về khóa học của tôi
-        </Link>
-        <h1 className="mt-4 text-2xl font-black text-balance">Giáo án tập với AI</h1>
+    <WorkspaceShell
+      role="Học viên"
+      homeTo="/hoc-vien-dashboard"
+      items={studentWorkspaceItems(hasClass)}
+      breadcrumb={[{ label: 'Học viên', to: '/hoc-vien-dashboard' }, { label: 'Giáo án AI' }]}
+    >
+        <h1 className="text-2xl font-black text-balance">Giáo án tập với AI</h1>
         <p className="mt-2 text-sm text-pretty text-gray-500">
           Nhập chỉ số cơ thể và mục tiêu. Hệ thống dùng lịch sử tập huấn luyện viên đã ghi để lập giáo án, rồi đồng bộ vào lịch cá nhân khi bạn lưu.
         </p>
@@ -521,9 +518,7 @@ export default function AiWorkoutPage() {
             )}
           </div>
         )}
-      </main>
-      <Footer />
-    </div>
+    </WorkspaceShell>
   );
 }
 
