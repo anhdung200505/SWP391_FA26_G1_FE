@@ -371,6 +371,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         item.CoachUserId = fields.CoachId;
         item.RoomId = fields.RoomId;
 
+        await db.CoachCoursePlans.Where(plan => plan.ClassId == id).ExecuteDeleteAsync();
         await db.ClassAssignments
             .Where(assignment => db.ClassSessions.Any(session => session.SessionId == assignment.SessionId && session.ClassId == id))
             .ExecuteDeleteAsync();
@@ -579,6 +580,8 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         await EnsureSessionsUnusedAsync(id, "Buổi học của lớp đã có điểm danh hoặc đánh giá nên không thể xóa lớp.");
 
         await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.CoachCoursePlans.Where(plan => plan.ClassId == id).ExecuteDeleteAsync();
+        await db.CoachCourseBriefs.Where(brief => brief.ClassId == id).ExecuteDeleteAsync();
         await db.ClassAssignments
             .Where(assignment => db.ClassSessions.Any(session => session.SessionId == assignment.SessionId && session.ClassId == id))
             .ExecuteDeleteAsync();

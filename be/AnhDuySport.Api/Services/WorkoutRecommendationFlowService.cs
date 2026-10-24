@@ -542,30 +542,44 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new SaveCoachTrainingHistoryResponse(history, "Đã lưu lịch sử tập. Học viên có thể tạo hoặc tạo lại giáo án AI.", ToLogDto(log, coach.FullName));
     }
 
+    // Lớp coach phụ trách, kể cả lớp chưa có học viên. Học viên chỉ gồm người đang ghi danh.
     private async Task<IReadOnlyList<CoachClassOptionDto>> CoachClassesAsync(int coachUserId)
     {
-        var rows = await (
+        var classes = await (
             from trainingClass in db.Classes.AsNoTracking()
             join course in db.Courses.AsNoTracking() on trainingClass.CourseId equals course.CourseId
-            join enrollment in db.ClassEnrollments.AsNoTracking() on trainingClass.ClassId equals enrollment.ClassId
-            join member in db.UserAccounts.AsNoTracking() on enrollment.UserId equals member.UserId
-            where trainingClass.CoachUserId == coachUserId && enrollment.Status == "enrolled"
-            orderby course.CourseName, member.FullName
+            where trainingClass.CoachUserId == coachUserId
+            orderby course.CourseName, trainingClass.ClassName
             select new
             {
                 trainingClass.ClassId,
                 course.CourseName,
                 trainingClass.ClassName,
-                member.UserId,
-                member.FullName,
             }).ToListAsync();
-        return rows
-            .GroupBy(item => new { item.ClassId, item.CourseName, item.ClassName })
-            .Select(group => new CoachClassOptionDto(
-                group.Key.ClassId,
-                group.Key.CourseName,
-                group.Key.ClassName,
-                group.Select(item => new CoachMemberOptionDto(item.UserId.ToString(), item.FullName)).ToList()))
+
+        var classIds = classes.Select(item => item.ClassId).ToList();
+        var members = classIds.Count == 0
+            ? []
+            : await (
+                from enrollment in db.ClassEnrollments.AsNoTracking()
+                join member in db.UserAccounts.AsNoTracking() on enrollment.UserId equals member.UserId
+                where classIds.Contains(enrollment.ClassId) && enrollment.Status == "enrolled"
+                orderby member.FullName
+                select new { enrollment.ClassId, member.UserId, member.FullName }).ToListAsync();
+        var membersByClass = members
+            .GroupBy(item => item.ClassId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<CoachMemberOptionDto>)group
+                    .Select(item => new CoachMemberOptionDto(item.UserId.ToString(), item.FullName))
+                    .ToList());
+
+        return classes
+            .Select(item => new CoachClassOptionDto(
+                item.ClassId,
+                item.CourseName,
+                item.ClassName,
+                membersByClass.GetValueOrDefault(item.ClassId) ?? []))
             .ToList();
     }
 

@@ -38,14 +38,14 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     // ===== Access System =====
     public async Task<MemberProfileDto> AccessSystemAsync(string memberUserId)
     {
-        var member = await FindActiveMemberAsync(memberUserId);
+        var member = await FindActiveProfileUserAsync(memberUserId);
         return ToProfileDto(member);
     }
 
     // ===== Edit personal information → Input changes → Validate & Update database =====
     public async Task<MemberProfileMutationResponse> InputChangesAsync(string memberUserId, UpdateMemberProfileRequest request)
     {
-        var member = await FindActiveMemberAsync(memberUserId);
+        var member = await FindActiveProfileUserAsync(memberUserId);
 
         // ---- Validate ----
         var fullName = RequireText(request.FullName, "Nhập họ tên.", 200);
@@ -104,7 +104,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     // ===== Edit personal information → đổi ảnh đại diện =====
     public async Task<MemberProfileMutationResponse> UpdateAvatarAsync(string memberUserId, IFormFile? file)
     {
-        var member = await FindActiveMemberAsync(memberUserId);
+        var member = await FindActiveProfileUserAsync(memberUserId);
         var contentRoot = services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
         var oldAvatar = member.AvatarUrl;
         member.AvatarUrl = await AvatarStorage.SaveAsync(contentRoot, member.UserId, file);
@@ -187,121 +187,12 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             $"Gọi {center.Phone} để được tư vấn chọn gói phù hợp, sau đó chọn gói và thanh toán.");
     }
 
-    // ===== Select Membership Package → Process Payment (tạo link payOS) =====
-    // Chỉ tạo đơn chờ thanh toán. Hạn gói chỉ được cập nhật ở ConfirmMembershipPaymentAsync khi payment đã paid.
-    public async Task<MembershipCheckoutDto> SelectMembershipPackageAsync(string memberUserId, RenewMembershipRequest request)
+    // Gói hội viên không bán lẻ. Chỉ mua kèm khi đăng ký lớp (ClassRegistrationFlowService).
+    public Task<MembershipCheckoutDto> SelectMembershipPackageAsync(string memberUserId, RenewMembershipRequest request)
     {
-        var member = await FindActiveMemberAsync(memberUserId);
-        var package = await FindActivePackageAsync(request.PackageId);
-        var amount = RequirePayableAmount(package.Fee);
-        RequirePayOs();
-
-        var now = DateTime.Now;
-        var today = DateOnly.FromDateTime(now);
-        await ClassMembershipBonus.PromoteAsync(db, member.UserId, today);
-
-        // ---- Đơn gói đang chờ: mỗi học viên chỉ giữ 1 đơn ----
-        // Hỏi lại payOS trước: đơn cũ đã trả tiền thì kích hoạt, không hủy nhầm.
-        // Cùng gói, còn mã QR → trả lại đơn cũ. Khác gói → hủy đơn cũ rồi tạo đơn mới.
-        var waiting = await db.Memberships
-            .Include(item => item.Payment!)
-            .ThenInclude(payment => payment.Invoice)
-            .Where(item => item.UserId == member.UserId && item.Status == "pending")
-            .ToListAsync();
-        foreach (var item in waiting)
-        {
-            var oldPayment = item.Payment ?? throw new InvalidOperationException("Đơn gói thiếu thanh toán.");
-            await SyncFromPayOsAsync(oldPayment);
-            if (oldPayment.Status == "paid")
-            {
-                await ActivateAsync(member, item, oldPayment, now);
-                await db.SaveChangesAsync();
-                throw new InvalidOperationException(
-                    $"Đơn {item.PlanName} trước đó đã thanh toán và vừa được kích hoạt. Tải lại trang để xem hạn mới.");
-            }
-
-            if (oldPayment.Status == "pending"
-                && item.MembershipPackageId == package.MembershipPackageId
-                && oldPayment.Amount == amount
-                && oldPayment.Invoice is not null
-                && PaymentTimeout.SecondsLeft(oldPayment.Invoice.IssuedAt) > 0
-                && !string.IsNullOrWhiteSpace(oldPayment.CheckoutUrl)
-                && !string.IsNullOrWhiteSpace(oldPayment.QrCode))
-            {
-                var reusePlan = await PlanRenewalAsync(member.UserId, package, today, blockDowngrade: true);
-                return ToCheckoutDto(item, oldPayment, reusePlan.Type,
-                    "Bạn đang có đơn chờ thanh toán cho gói này. Quét mã QR để thanh toán.");
-            }
-
-            await CancelPaymentAsync(oldPayment, "Chọn gói khác, đóng đơn gói cũ");
-            item.Status = "cancelled";
-        }
-
-        await db.SaveChangesAsync();
-
-        // ---- Validate: tính loại gia hạn trước, không hợp lệ thì dừng trước khi thu tiền ----
-        var plan = await PlanRenewalAsync(member.UserId, package, today, blockDowngrade: true);
-
-        // ---- Tạo hóa đơn + payment pending + membership pending ----
-        Payment payment;
-        Membership membership;
-        await using (var transaction = await db.Database.BeginTransactionAsync())
-        {
-            var invoice = new Invoice
-            {
-                UserId = member.UserId,
-                InvoiceCode = await NextInvoiceCodeAsync(now),
-                IssuedAt = now,
-                TotalAmount = amount,
-                Status = "issued",
-            };
-            payment = new Payment
-            {
-                Invoice = invoice,
-                UserId = member.UserId,
-                ClassId = null, // payment gói hội viên không gắn lớp (03_payment_class_id.sql)
-                Amount = amount,
-                PaymentMethod = PayOsMethod,
-                Status = "pending",
-            };
-            // Ngày ở đây chỉ là tạm tính. Khi thanh toán xong sẽ tính lại theo ngày thanh toán.
-            membership = new Membership
-            {
-                UserId = member.UserId,
-                Payment = payment,
-                MembershipPackageId = package.MembershipPackageId,
-                PlanName = package.PackageName,
-                StartDate = plan.StartDate,
-                EndDate = plan.EndDate,
-                Status = "pending",
-            };
-            db.Invoices.Add(invoice);
-            db.Payments.Add(payment);
-            db.Memberships.Add(membership);
-            await db.SaveChangesAsync();
-
-            // Mã đơn payOS không dùng thẳng payment_id: chạy lại setup.ps1 thì payment_id đếm lại từ đầu
-            // và payOS báo "Đơn thanh toán đã tồn tại". Ghép thời điểm tạo + 3 số cuối payment_id cho khác nhau.
-            payment.PayosOrderCode = long.Parse(now.ToString("yyMMddHHmmss")) * 1000 + payment.PaymentId % 1000;
-            AddHistory(payment, "pending", "Tạo đơn thanh toán gói");
-            db.ActivityLogs.Add(new ActivityLog
-            {
-                ActorUserId = member.UserId,
-                Action = Trim($"Tạo thanh toán gói cho {member.FullName}", 100),
-                EntityName = "payment",
-                EntityId = payment.PaymentId,
-                Detail = $"{plan.Type} {package.PackageName} · {Money(amount)} · hóa đơn {invoice.InvoiceCode}",
-                CreatedAt = now,
-            });
-            await db.SaveChangesAsync();
-            await transaction.CommitAsync();
-        }
-
-        // ---- Process Payment: tạo link / mã QR payOS ----
-        await CreateLinkAsync(payment, membership);
-
-        return ToCheckoutDto(membership, payment, plan.Type,
-            $"Quét mã QR để thanh toán {Money(amount)} cho {package.PackageName}. Gói có hiệu lực sau khi thanh toán.");
+        _ = memberUserId;
+        _ = request;
+        throw new InvalidOperationException("Gói hội viên chỉ mua kèm khi đăng ký lớp học.");
     }
 
     // ===== Process Payment → Update Membership Expiry → Validate & Update database =====
@@ -698,6 +589,31 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         }
 
         return package;
+    }
+
+    private static readonly string[] ProfileRoles = ["MEMBER", "RECEPTIONIST", "COACH", "ADMIN"];
+
+    private async Task<UserAccount> FindActiveProfileUserAsync(string userId)
+    {
+        if (!int.TryParse(userId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy tài khoản.");
+        }
+
+        var user = await db.UserAccounts
+            .Include(account => account.Role)
+            .FirstOrDefaultAsync(account => account.UserId == id);
+        if (user is null || user.Role is null || !ProfileRoles.Contains(user.Role.RoleCode))
+        {
+            throw new KeyNotFoundException("Không tìm thấy tài khoản.");
+        }
+
+        if (user.Status != "active")
+        {
+            throw new InvalidOperationException("Tài khoản không hoạt động.");
+        }
+
+        return user;
     }
 
     private async Task<UserAccount> FindActiveMemberAsync(string memberUserId)

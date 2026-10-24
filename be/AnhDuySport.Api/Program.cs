@@ -51,6 +51,9 @@ builder.Services.AddHttpClient<GeminiWorkoutClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(100);
 });
 builder.Services.AddScoped<WorkoutRecommendationFlowService>();
+builder.Services.AddScoped<CoachClassAccess>();
+builder.Services.AddScoped<CoachCourseFlowService>();
+builder.Services.AddScoped<CoachCourseAiFlowService>();
 
 var payOsClientId = builder.Configuration["PayOS:ClientId"];
 var payOsApiKey = builder.Configuration["PayOS:ApiKey"];
@@ -142,7 +145,9 @@ app.MapControllers();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
-    await scope.ServiceProvider.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
+    var startup = scope.ServiceProvider;
+    await CoachCourseSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await startup.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 
 app.Run();
