@@ -27,7 +27,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
 
     [HttpPut("profile")]
     [EndpointSummary("Edit personal information: học viên sửa thông tin cá nhân")]
-    [EndpointDescription("gender: Nam, Nữ hoặc Khác. Hệ thống kiểm tra rồi cập nhật database và ghi nhật ký.")]
+    [EndpointDescription("gender: Nam, Nữ hoặc Khác. dateOfBirth không bắt buộc (yyyy-MM-dd; gửi null hoặc \"\" thì giữ nguyên ngày sinh đang có). email không bắt buộc; gửi email khác email hiện tại thì báo lỗi, đổi email dùng POST profile/email/otp rồi profile/email/confirm. Hệ thống kiểm tra rồi cập nhật database và ghi nhật ký.")]
     public async Task<ActionResult<MemberProfileMutationResponse>> InputChanges(string memberUserId, UpdateMemberProfileRequest request)
     {
         if (EnsureOwner(memberUserId) is { } denied) return denied;
@@ -52,6 +52,38 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         try
         {
             return Ok(await flow.UpdateAvatarAsync(memberUserId, file));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
+    [HttpPost("profile/email/otp")]
+    [EndpointSummary("Edit personal information: đổi email bước 1 – gửi mã OTP tới email mới")]
+    [EndpointDescription("Body: { \"newEmail\": \"...\", \"currentPassword\": \"...\" }. Cần đúng mật khẩu hiện tại. Mã OTP 6 số có hiệu lực 3 phút, đợi 1 phút mới gửi lại được.")]
+    public async Task<ActionResult<EmailChangeOtpDto>> RequestEmailChange(string memberUserId, RequestEmailChangeRequest request)
+    {
+        if (EnsureOwner(memberUserId) is { } denied) return denied;
+        try
+        {
+            return Ok(await flow.RequestEmailChangeAsync(memberUserId, request));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
+    [HttpPost("profile/email/confirm")]
+    [EndpointSummary("Edit personal information: đổi email bước 2 – nhập mã OTP")]
+    [EndpointDescription("Body: { \"code\": \"123456\" }. Sai 5 lần thì mã bị hủy, phải gửi lại. Đổi xong hệ thống báo cho email cũ.")]
+    public async Task<ActionResult<MemberProfileMutationResponse>> ConfirmEmailChange(string memberUserId, ConfirmEmailChangeRequest request)
+    {
+        if (EnsureOwner(memberUserId) is { } denied) return denied;
+        try
+        {
+            return Ok(await flow.ConfirmEmailChangeAsync(memberUserId, request));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -91,7 +123,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
 
     [HttpPost("membership/renewals")]
     [EndpointSummary("Select Membership Package: chọn gói và tạo link thanh toán payOS")]
-    [EndpointDescription("Tạo hóa đơn, payment pending và membership pending, trả checkoutUrl / qrCode payOS. Membership chỉ có hiệu lực sau khi thanh toán.")]
+    [EndpointDescription("Tạo hóa đơn, payment pending và membership pending, trả checkoutUrl / qrCode payOS. Membership chỉ có hiệu lực sau khi thanh toán. renewalType: Đăng ký mới, Gia hạn, Nâng cấp (gói cao hơn chạy ngay, ngày còn lại của gói cũ dùng tiếp sau đó) hoặc Đăng ký nối tiếp (gói thấp hơn bắt đầu sau khi gói hiện tại hết).")]
     public async Task<ActionResult<MembershipCheckoutDto>> SelectMembershipPackage(string memberUserId, RenewMembershipRequest request)
     {
         if (EnsureOwner(memberUserId) is { } denied) return denied;
