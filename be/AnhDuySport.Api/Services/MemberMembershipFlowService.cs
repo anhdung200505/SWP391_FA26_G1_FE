@@ -1,7 +1,10 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Data;
 using AnhDuySport.Api.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using PayOS;
 using PayOS.Exceptions;
@@ -13,21 +16,38 @@ namespace AnhDuySport.Api.Services;
 //
 // Access System → Select Management Action
 //   ├─ Edit personal information → Input changes → Validate & Update database → Display Success Message
+//   │    (đổi email tách riêng: gửi OTP tới email mới → xác nhận OTP → cập nhật)
 //   └─ Renew/Upgrade Package → View membership management → Need Consultation?
 //        ├─ Yes → hiển thị số chăm sóc khách hàng của trung tâm → học viên tự chọn gói
 //        └─ No  → Select Membership Package
 //      → Process Payment (payOS) → Update Membership Expiry → Validate & Update database
 //      → Display Success Message → Receive Updated Membership Info
 //
-// Thanh toán gói dùng chung bảng payment và PayOSClient đã đăng ký trong Program.cs.
-// Payment gói có class_id NULL. Webhook payOS (PaymentsController) tìm payment theo
-// payos_order_code nên tự chuyển payment gói sang paid. Membership do service này kích hoạt
-// ở bước ConfirmMembershipPaymentAsync (11_membership_pending.sql thêm trạng thái 'pending').
+// Thanh toán gói dùng chung bảng payment và PayOSClient đã đăng ký trong Program.cs. Payment gói có class_id NULL.
+// Membership chỉ được kích hoạt qua ConfirmPaidAsync (khóa theo học viên, gọi nhiều lần không cộng hạn hai lần).
+// Có 4 đường dẫn tới đó: webhook payOS (HandlePayOsPaidAsync), job nền MembershipPaymentSyncService,
+// học viên bấm kiểm tra (ConfirmMembershipPaymentAsync), và khi học viên mở trang hồ sơ / gói hội viên.
+//
+// Luật gia hạn / nâng cấp (1 tháng = 30 ngày, hạng gói = phí trung bình mỗi tháng):
+//   Chưa có gói đang dùng  → Đăng ký mới:      bắt đầu hôm nay.
+//   Cùng gói đang dùng     → Gia hạn:          hạn mới = hạn cũ + thời hạn gói, gói cũ chuyển "renewed".
+//   Gói cao cấp hơn        → Nâng cấp:         gói mới chạy ngay hôm nay; số ngày còn lại của gói cũ
+//                                               được tách thành dòng "scheduled" chạy tiếp sau khi gói mới hết.
+//   Gói thấp hơn           → Đăng ký nối tiếp: gói cũ dùng tiếp đến hết, gói mới "scheduled" bắt đầu sau đó.
 public class MemberMembershipFlowService(AppDbContext db, IConfiguration configuration, IServiceProvider services)
 {
     // Giá trị theo dữ liệu có sẵn trong 02_seed.sql
     private static readonly string[] Genders = ["Nam", "Nữ", "Khác"];
     private const string PayOsMethod = "payos";
+
+    private const string TypeNew = "Đăng ký mới";
+    private const string TypeRenew = "Gia hạn";
+    private const string TypeUpgrade = "Nâng cấp";
+    private const string TypeQueued = "Đăng ký nối tiếp";
+
+    // Cùng thông số với OTP quên mật khẩu (AuthService).
+    private const int OtpMinutes = 3;
+    private const int OtpMaxAttempts = 5;
 
     private PayOSClient? PayOsClient => services.GetService<PayOSClient>();
 
@@ -39,25 +59,33 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     public async Task<MemberProfileDto> AccessSystemAsync(string memberUserId)
     {
         var member = await FindActiveMemberAsync(memberUserId);
+        // Học viên trả tiền xong rồi tắt app: lần mở hồ sơ tiếp theo vẫn kích hoạt được gói.
+        await SyncPendingPaymentsAsync(member.UserId, CancellationToken.None);
         return ToProfileDto(member);
     }
 
     // ===== Edit personal information → Input changes → Validate & Update database =====
+    // Email không đổi ở đây: gửi email khác email hiện tại thì báo dùng luồng đổi email bằng OTP.
     public async Task<MemberProfileMutationResponse> InputChangesAsync(string memberUserId, UpdateMemberProfileRequest request)
     {
         var member = await FindActiveMemberAsync(memberUserId);
 
         // ---- Validate ----
         var fullName = RequireText(request.FullName, "Nhập họ tên.", 200);
-        var email = NormalizeEmail(request.Email);
         var phone = AccountPhone.Require(request.Phone);
         var gender = NormalizeGender(request.Gender);
-        ValidateDateOfBirth(request.DateOfBirth);
-
-        var emailTaken = await db.UserAccounts.AnyAsync(user => user.UserId != member.UserId && user.Email == email);
-        if (emailTaken)
+        // Ngày sinh không bắt buộc: để trống (null / "") thì giữ nguyên ngày sinh đang có, chỉ kiểm tra khi có nhập.
+        var dateOfBirth = request.DateOfBirth ?? member.DateOfBirth;
+        if (request.DateOfBirth is not null)
         {
-            throw new InvalidOperationException("Email đã được tài khoản khác sử dụng.");
+            ValidateDateOfBirth(request.DateOfBirth);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Email)
+            && !string.Equals(NormalizeEmail(request.Email), member.Email?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Đổi email cần xác thực OTP gửi tới email mới. Hãy dùng chức năng đổi email.");
         }
 
         if (AccountPhone.Digits(member.Phone) != phone)
@@ -67,9 +95,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
 
         var changes = new List<string>();
         if (member.FullName != fullName) changes.Add("Họ tên");
-        if (!string.Equals(member.Email, email, StringComparison.OrdinalIgnoreCase)) changes.Add("Email");
         if (member.Phone != phone) changes.Add("Điện thoại");
-        if (member.DateOfBirth != request.DateOfBirth) changes.Add("Ngày sinh");
+        if (member.DateOfBirth != dateOfBirth) changes.Add("Ngày sinh");
         if (member.Gender != gender) changes.Add("Giới tính");
         if (changes.Count == 0)
         {
@@ -78,9 +105,8 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
 
         // ---- Update database ----
         member.FullName = fullName;
-        member.Email = email;
         member.Phone = phone;
-        member.DateOfBirth = request.DateOfBirth;
+        member.DateOfBirth = dateOfBirth;
         member.Gender = gender;
         var log = new ActivityLog
         {
@@ -98,6 +124,174 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         return new MemberProfileMutationResponse(
             ToProfileDto(member),
             "Cập nhật thông tin cá nhân thành công.",
+            ToLogDto(log, member.FullName));
+    }
+
+    // ===== Edit personal information → đổi email (bước 1: gửi OTP tới email mới) =====
+    // Cùng cách làm với quên mật khẩu: OTP 6 số, lưu hash, hết hạn 3 phút, đợi 1 phút mới gửi lại, sai 5 lần thì hủy mã.
+    // Thêm: phải nhập đúng mật khẩu hiện tại, email mới chưa ai dùng (kể cả đăng ký đang chờ OTP).
+    public async Task<EmailChangeOtpDto> RequestEmailChangeAsync(string memberUserId, RequestEmailChangeRequest request)
+    {
+        var member = await FindActiveMemberAsync(memberUserId);
+        var email = NormalizeEmail(request.NewEmail);
+        if (string.Equals(email, member.Email?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Email mới phải khác email hiện tại.");
+        }
+
+        var passwords = services.GetRequiredService<PasswordHasher>();
+        if (!passwords.Verify(request.CurrentPassword ?? "", member.PasswordHash))
+        {
+            throw new InvalidOperationException("Mật khẩu hiện tại không đúng.");
+        }
+
+        var now = DateTime.UtcNow;
+        await db.EmailChanges.Where(row => row.ExpiresAt <= now).ExecuteDeleteAsync();
+        await EnsureEmailAvailableAsync(email, member.UserId, now);
+
+        var change = await db.EmailChanges.FirstOrDefaultAsync(row => row.UserId == member.UserId);
+        if (change is not null && change.CreatedAt > now.AddMinutes(-1))
+        {
+            throw new InvalidOperationException("Hãy đợi một phút trước khi gửi lại mã.");
+        }
+
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        var body = $"Xin chào {member.FullName},{Environment.NewLine}{Environment.NewLine}" +
+            $"Mã OTP xác nhận đổi email đăng nhập AnhDuy Sport sang địa chỉ này là {code}. " +
+            $"Mã có hiệu lực trong {OtpMinutes} phút. Nếu bạn không yêu cầu đổi email, hãy bỏ qua thư này.";
+        try
+        {
+            await services.GetRequiredService<SmtpEmailSender>().SendAsync(email, "[AnhDuy Sport] Mã OTP đổi email", body);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException("Không gửi được email. Hãy thử lại.", exception);
+        }
+
+        if (change is null)
+        {
+            change = new EmailChange { UserId = member.UserId };
+            db.EmailChanges.Add(change);
+        }
+
+        change.NewEmail = email;
+        change.OtpHash = HashOtp(code);
+        change.Attempts = 0;
+        change.CreatedAt = now;
+        change.ExpiresAt = now.AddMinutes(OtpMinutes);
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = member.UserId,
+            Action = "Yêu cầu đổi email",
+            EntityName = "user",
+            EntityId = member.UserId,
+            Detail = $"Gửi mã OTP tới {email}.",
+            CreatedAt = DateTime.Now,
+        });
+        await db.SaveChangesAsync();
+
+        return new EmailChangeOtpDto(
+            email,
+            OtpMinutes * 60,
+            $"Đã gửi mã OTP tới {email}. Mã có hiệu lực trong {OtpMinutes} phút.");
+    }
+
+    // ===== Edit personal information → đổi email (bước 2: nhập OTP) → Validate & Update database =====
+    public async Task<MemberProfileMutationResponse> ConfirmEmailChangeAsync(string memberUserId, ConfirmEmailChangeRequest request)
+    {
+        var member = await FindActiveMemberAsync(memberUserId);
+        var code = request.Code?.Trim() ?? "";
+        const string invalidCode = "Mã OTP không đúng hoặc đã hết hạn.";
+        if (code.Length != 6 || !code.All(char.IsDigit))
+        {
+            throw new InvalidOperationException(invalidCode);
+        }
+
+        var now = DateTime.UtcNow;
+        var change = await db.EmailChanges.FirstOrDefaultAsync(row => row.UserId == member.UserId);
+        if (change is null || change.ExpiresAt <= now)
+        {
+            if (change is not null)
+            {
+                db.EmailChanges.Remove(change);
+                await db.SaveChangesAsync();
+            }
+
+            throw new InvalidOperationException(invalidCode);
+        }
+
+        if (change.Attempts >= OtpMaxAttempts)
+        {
+            db.EmailChanges.Remove(change);
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException("Bạn đã nhập sai quá số lần. Hãy gửi lại mã.");
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(change.OtpHash),
+                Encoding.UTF8.GetBytes(HashOtp(code))))
+        {
+            change.Attempts += 1;
+            if (change.Attempts >= OtpMaxAttempts)
+            {
+                db.EmailChanges.Remove(change);
+            }
+
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException(change.Attempts >= OtpMaxAttempts
+                ? "Bạn đã nhập sai quá số lần. Hãy gửi lại mã."
+                : invalidCode);
+        }
+
+        // Trong 3 phút chờ OTP có thể đã có người khác dùng email này: kiểm tra lại.
+        await EnsureEmailAvailableAsync(change.NewEmail, member.UserId, now);
+
+        var oldEmail = member.Email ?? "";
+        member.Email = change.NewEmail;
+        db.EmailChanges.Remove(change);
+        var log = new ActivityLog
+        {
+            ActorUserId = member.UserId,
+            Action = "Đổi email",
+            EntityName = "user",
+            EntityId = member.UserId,
+            Detail = $"{oldEmail} → {member.Email}. Đã xác thực OTP.",
+            CreatedAt = DateTime.Now,
+        };
+        db.ActivityLogs.Add(log);
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        {
+            throw new InvalidOperationException("Email đã được tài khoản khác sử dụng.");
+        }
+
+        // Báo cho email cũ để chủ tài khoản biết nếu không phải họ đổi. Gửi lỗi thì bỏ qua.
+        if (!string.IsNullOrWhiteSpace(oldEmail))
+        {
+            try
+            {
+                await services.GetRequiredService<SmtpEmailSender>().SendAsync(
+                    oldEmail,
+                    "[AnhDuy Sport] Email đăng nhập đã được thay đổi",
+                    $"Xin chào {member.FullName},{Environment.NewLine}{Environment.NewLine}" +
+                    $"Email đăng nhập AnhDuy Sport của bạn vừa được đổi sang {member.Email}. " +
+                    "Nếu không phải bạn thực hiện, hãy liên hệ ngay lễ tân trung tâm.");
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        return new MemberProfileMutationResponse(
+            ToProfileDto(member),
+            "Đổi email thành công. Lần đăng nhập sau hãy dùng email mới.",
             ToLogDto(log, member.FullName));
     }
 
@@ -132,6 +326,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     public async Task<MembershipManagementDto> ViewMembershipManagementAsync(string memberUserId)
     {
         var member = await FindActiveMemberAsync(memberUserId);
+        await SyncPendingPaymentsAsync(member.UserId, CancellationToken.None);
         var today = DateOnly.FromDateTime(DateTime.Now);
         await ClassMembershipBonus.PromoteAsync(db, member.UserId, today);
 
@@ -146,7 +341,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
 
         var current = history.FirstOrDefault(item =>
             item.Status == "active" && item.StartDate <= today && item.EndDate >= today);
-        // Tính cả gói nhận kèm lớp đang chờ (scheduled) vì nó nối tiếp gói hiện tại.
+        // Tính cả các gói đang chờ (scheduled) vì chúng nối tiếp gói hiện tại.
         var endDate = history
             .Where(item => item.Status is "active" or "scheduled" && item.EndDate >= today)
             .Select(item => (DateOnly?)item.EndDate)
@@ -188,7 +383,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     }
 
     // ===== Select Membership Package → Process Payment (tạo link payOS) =====
-    // Chỉ tạo đơn chờ thanh toán. Hạn gói chỉ được cập nhật ở ConfirmMembershipPaymentAsync khi payment đã paid.
+    // Chỉ tạo đơn chờ thanh toán. Hạn gói chỉ được cập nhật ở ConfirmPaidAsync khi payment đã paid.
     public async Task<MembershipCheckoutDto> SelectMembershipPackageAsync(string memberUserId, RenewMembershipRequest request)
     {
         var member = await FindActiveMemberAsync(memberUserId);
@@ -196,12 +391,18 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         var amount = RequirePayableAmount(package.Fee);
         RequirePayOs();
 
+        // Hỏi lại payOS trước: đơn cũ đã trả tiền thì kích hoạt, không hủy nhầm và không thu tiền lần nữa.
+        if (await SyncPendingPaymentsAsync(member.UserId, CancellationToken.None) > 0)
+        {
+            throw new InvalidOperationException(
+                "Đơn gói trước đó đã thanh toán và vừa được kích hoạt. Tải lại trang để xem hạn mới.");
+        }
+
         var now = DateTime.Now;
         var today = DateOnly.FromDateTime(now);
         await ClassMembershipBonus.PromoteAsync(db, member.UserId, today);
 
-        // ---- Đơn gói đang chờ: mỗi học viên chỉ giữ 1 đơn ----
-        // Hỏi lại payOS trước: đơn cũ đã trả tiền thì kích hoạt, không hủy nhầm.
+        // ---- Đơn gói đang chờ: mỗi học viên chỉ giữ 1 đơn (UX_membership_one_pending) ----
         // Cùng gói, còn mã QR → trả lại đơn cũ. Khác gói → hủy đơn cũ rồi tạo đơn mới.
         var waiting = await db.Memberships
             .Include(item => item.Payment!)
@@ -211,24 +412,9 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         foreach (var item in waiting)
         {
             var oldPayment = item.Payment ?? throw new InvalidOperationException("Đơn gói thiếu thanh toán.");
-            await SyncFromPayOsAsync(oldPayment);
-            if (oldPayment.Status == "paid")
+            if (CanReuse(item, oldPayment, package, amount))
             {
-                await ActivateAsync(member, item, oldPayment, now);
-                await db.SaveChangesAsync();
-                throw new InvalidOperationException(
-                    $"Đơn {item.PlanName} trước đó đã thanh toán và vừa được kích hoạt. Tải lại trang để xem hạn mới.");
-            }
-
-            if (oldPayment.Status == "pending"
-                && item.MembershipPackageId == package.MembershipPackageId
-                && oldPayment.Amount == amount
-                && oldPayment.Invoice is not null
-                && PaymentTimeout.SecondsLeft(oldPayment.Invoice.IssuedAt) > 0
-                && !string.IsNullOrWhiteSpace(oldPayment.CheckoutUrl)
-                && !string.IsNullOrWhiteSpace(oldPayment.QrCode))
-            {
-                var reusePlan = await PlanRenewalAsync(member.UserId, package, today, blockDowngrade: true);
+                var reusePlan = await PlanRenewalAsync(member.UserId, package, today);
                 return ToCheckoutDto(item, oldPayment, reusePlan.Type,
                     "Bạn đang có đơn chờ thanh toán cho gói này. Quét mã QR để thanh toán.");
             }
@@ -239,14 +425,15 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
 
         await db.SaveChangesAsync();
 
-        // ---- Validate: tính loại gia hạn trước, không hợp lệ thì dừng trước khi thu tiền ----
-        var plan = await PlanRenewalAsync(member.UserId, package, today, blockDowngrade: true);
+        // ---- Tính loại gia hạn để báo trước cho học viên (tính lại theo ngày thanh toán khi kích hoạt) ----
+        var plan = await PlanRenewalAsync(member.UserId, package, today);
 
         // ---- Tạo hóa đơn + payment pending + membership pending ----
         Payment payment;
         Membership membership;
-        await using (var transaction = await db.Database.BeginTransactionAsync())
+        try
         {
+            await using var transaction = await db.Database.BeginTransactionAsync();
             var invoice = new Invoice
             {
                 UserId = member.UserId,
@@ -259,7 +446,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             {
                 Invoice = invoice,
                 UserId = member.UserId,
-                ClassId = null, // payment gói hội viên không gắn lớp (03_payment_class_id.sql)
+                ClassId = null, // payment gói hội viên không gắn lớp
                 Amount = amount,
                 PaymentMethod = PayOsMethod,
                 Status = "pending",
@@ -296,43 +483,51 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
         }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception, "UX_membership_one_pending"))
+        {
+            // Hai yêu cầu chọn gói cùng lúc: request kia đã tạo đơn chờ trước (UX_membership_one_pending).
+            db.ChangeTracker.Clear();
+            var existing = await db.Memberships
+                .Include(item => item.Payment!)
+                .ThenInclude(item => item.Invoice)
+                .FirstOrDefaultAsync(item => item.UserId == member.UserId && item.Status == "pending");
+            if (existing?.Payment is Payment existingPayment && CanReuse(existing, existingPayment, package, amount))
+            {
+                return ToCheckoutDto(existing, existingPayment, plan.Type,
+                    "Bạn đang có đơn chờ thanh toán cho gói này. Quét mã QR để thanh toán.");
+            }
+
+            throw new InvalidOperationException("Bạn đang có một đơn gói khác chờ thanh toán. Hãy thử lại sau giây lát.");
+        }
 
         // ---- Process Payment: tạo link / mã QR payOS ----
         await CreateLinkAsync(payment, membership);
 
         return ToCheckoutDto(membership, payment, plan.Type,
-            $"Quét mã QR để thanh toán {Money(amount)} cho {package.PackageName}. Gói có hiệu lực sau khi thanh toán.");
+            $"Quét mã QR để thanh toán {Money(amount)} cho {package.PackageName}. Gói có hiệu lực sau khi thanh toán.{PlanNote(plan, package)}");
     }
 
     // ===== Process Payment → Update Membership Expiry → Validate & Update database =====
     // → Display Success Message → Receive Updated Membership Info
     // Gọi khi payOS chuyển về ReturnUrl (payOS gắn ?orderCode=...), hoặc khi học viên bấm kiểm tra.
     // paymentId nhận payment_id hoặc orderCode payOS.
-    // Payment có thể đã được webhook chuyển paid trước. Gọi lại nhiều lần không cộng hạn hai lần.
+    // Payment có thể đã được webhook / job nền xử lý trước. Gọi lại nhiều lần không cộng hạn hai lần.
     public async Task<MembershipPaymentResultDto> ConfirmMembershipPaymentAsync(string memberUserId, string paymentId)
     {
         var member = await FindActiveMemberAsync(memberUserId);
-        var membership = await FindOwnMembershipPaymentAsync(member.UserId, paymentId);
+        var found = await FindOwnMembershipPaymentAsync(member.UserId, paymentId);
+        var paymentKey = found.PaymentId ?? throw new KeyNotFoundException("Không tìm thấy thanh toán gói.");
+
+        var log = await SyncWithPayOsAsync(paymentKey, "Học viên kiểm tra thanh toán gói");
+
+        db.ChangeTracker.Clear();
+        var membership = await db.Memberships
+            .AsNoTracking()
+            .Include(item => item.Payment!)
+            .ThenInclude(payment => payment.Invoice)
+            .FirstAsync(item => item.MembershipId == found.MembershipId);
         var payment = membership.Payment ?? throw new KeyNotFoundException("Không tìm thấy thanh toán gói.");
-        var now = DateTime.Now;
-        var today = DateOnly.FromDateTime(now);
-
-        await SyncFromPayOsAsync(payment);
-
-        ActivityLog? log = null;
-        if (membership.Status == "pending")
-        {
-            if (payment.Status == "paid")
-            {
-                log = await ActivateAsync(member, membership, payment, now);
-            }
-            else if (payment.Status is "cancel" or "failed" or "refunded")
-            {
-                membership.Status = "cancelled";
-            }
-        }
-
-        await db.SaveChangesAsync();
+        var today = DateOnly.FromDateTime(DateTime.Now);
 
         var endDate = await db.Memberships
             .AsNoTracking()
@@ -342,13 +537,14 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             .MaxAsync();
 
         var endText = endDate?.ToString("dd/MM/yyyy") ?? "";
+        var startText = membership.Status == "scheduled" ? $" Gói bắt đầu từ {membership.StartDate:dd/MM/yyyy}." : "";
         var message = membership.Status switch
         {
             "pending" => "Chưa nhận được thanh toán. Hoàn tất thanh toán trên payOS rồi kiểm tra lại.",
             "cancelled" => "Đơn thanh toán đã hủy hoặc hết hạn. Hãy chọn gói lại.",
             _ when log is not null =>
-                $"{GetRenewalType(log)} {membership.PlanName} thành công. Hội viên có hiệu lực đến hết {endText}.",
-            _ => $"Đơn này đã thanh toán và gói đã được cập nhật trước đó. Hội viên có hiệu lực đến hết {endText}.",
+                $"{GetRenewalType(log)} {membership.PlanName} thành công.{startText} Hội viên có hiệu lực đến hết {endText}.",
+            _ => $"Đơn này đã thanh toán và gói đã được cập nhật trước đó.{startText} Hội viên có hiệu lực đến hết {endText}.",
         };
 
         return new MembershipPaymentResultDto(
@@ -360,22 +556,214 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             log is null ? null : ToLogDto(log, member.FullName));
     }
 
-    // ---- Update Membership Expiry: kích hoạt membership pending sau khi payment paid ----
-    // Tính lại ngày theo thời điểm thanh toán. Tiền đã thu nên không chặn hạ gói nữa.
+    // ===== Webhook payOS cho đơn gói (payment.class_id NULL) =====
+    // PayOsPaymentService và ComboPayOsPaymentService kiểm tra chữ ký rồi chuyển đơn gói sang đây.
+    // Đơn đã hủy mà payOS vẫn báo nhận tiền: lấy tiền làm chuẩn, mở lại đơn và kích hoạt gói.
+    public async Task HandlePayOsPaidAsync(int paymentId, long amount)
+    {
+        var payment = await db.Payments
+            .AsNoTracking()
+            .Where(item => item.PaymentId == paymentId)
+            .Select(item => new { item.Amount, item.ClassId })
+            .FirstOrDefaultAsync();
+        if (payment is null || payment.ClassId is not null)
+        {
+            return;
+        }
+
+        if (amount != decimal.ToInt64(payment.Amount))
+        {
+            throw new InvalidOperationException("Số tiền webhook không khớp hóa đơn.");
+        }
+
+        await ConfirmPaidAsync(paymentId, "Webhook payOS: thanh toán gói thành công");
+    }
+
+    // ===== Đối chiếu đơn gói với payOS (job nền gọi với userId = null, trang hồ sơ gọi cho 1 học viên) =====
+    // Trả số gói vừa được kích hoạt.
+    public async Task<int> SyncPendingPaymentsAsync(int? userId, CancellationToken cancellationToken)
+    {
+        var since = DateTime.Now.AddHours(-24);
+        var paymentIds = await db.Memberships
+            .AsNoTracking()
+            .Where(item => item.PaymentId != null && (userId == null || item.UserId == userId))
+            .Where(item =>
+                // Đơn đang chờ: hỏi payOS.
+                (item.Status == "pending" && item.Payment!.Status == "pending"
+                    && item.Payment.PayosOrderCode != null && item.Payment.Invoice!.IssuedAt > since)
+                // Tiền đã vào (webhook cũ, hoặc trả cho đơn đã hủy) nhưng gói chưa kích hoạt.
+                || ((item.Status == "pending" || item.Status == "cancelled") && item.Payment!.Status == "paid")
+                // Payment đã hủy ở nơi khác nhưng membership còn pending.
+                || (item.Status == "pending" && (item.Payment!.Status == "cancel" || item.Payment.Status == "failed")))
+            .Select(item => item.PaymentId!.Value)
+            .ToListAsync(cancellationToken);
+
+        var activated = 0;
+        foreach (var paymentId in paymentIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await SyncWithPayOsAsync(paymentId, "Đối chiếu thanh toán gói") is not null)
+            {
+                activated++;
+            }
+        }
+
+        return activated;
+    }
+
+    // Hỏi payOS (ngoài khóa, không giữ khóa trong lúc chờ mạng) rồi cập nhật trong khóa.
+    // Trả log nếu lần gọi này kích hoạt gói.
+    private async Task<ActivityLog?> SyncWithPayOsAsync(int paymentId, string note)
+    {
+        var snapshot = await db.Payments
+            .AsNoTracking()
+            .Where(item => item.PaymentId == paymentId)
+            .Select(item => new { item.Status, item.PayosOrderCode, item.UserId })
+            .FirstOrDefaultAsync();
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        if (snapshot.Status == "paid")
+        {
+            return await ConfirmPaidAsync(paymentId, note);
+        }
+
+        if (snapshot.Status is "cancel" or "failed")
+        {
+            // Payment bị hủy ở nơi khác (vd. POST /api/payments/{id}/cancel) nhưng membership còn pending:
+            // đóng membership để học viên chọn gói lại được (UX_membership_one_pending).
+            await InMemberLockAsync(snapshot.UserId, async () =>
+            {
+                var membership = await db.Memberships.FirstOrDefaultAsync(item => item.PaymentId == paymentId);
+                if (membership?.Status == "pending")
+                {
+                    membership.Status = "cancelled";
+                }
+
+                return 0;
+            });
+            return null;
+        }
+
+        if (snapshot.Status != "pending")
+        {
+            return null;
+        }
+
+        var status = await PayOsStatusAsync(snapshot.PayosOrderCode);
+        if (status == "PAID")
+        {
+            return await ConfirmPaidAsync(paymentId, "payOS báo đã thanh toán gói");
+        }
+
+        if (status is "CANCELLED" or "CANCELED" or "EXPIRED")
+        {
+            await InMemberLockAsync(snapshot.UserId, async () =>
+            {
+                var membership = await db.Memberships
+                    .Include(item => item.Payment!)
+                    .ThenInclude(item => item.Invoice)
+                    .FirstOrDefaultAsync(item => item.PaymentId == paymentId);
+                if (membership?.Payment is Payment payment && payment.Status == "pending")
+                {
+                    // Link đã hủy / hết hạn trên payOS nên không cần gọi payOS hủy lần nữa.
+                    await CancelPaymentAsync(payment, "payOS trả trạng thái " + status, callPayOs: false);
+                    if (membership.Status == "pending")
+                    {
+                        membership.Status = "cancelled";
+                    }
+                }
+
+                return 0;
+            });
+        }
+
+        return null;
+    }
+
+    // ---- Update Membership Expiry: nơi duy nhất ghi payment gói 'paid' từ payOS và kích hoạt membership ----
+    // Khóa dòng user của học viên: webhook, job nền và học viên bấm kiểm tra có thể tới cùng lúc;
+    // kích hoạt sửa nhiều dòng membership của cùng người (tách gói cũ, dời hàng chờ) nên phải chạy lần lượt.
+    // Chỉ gọi khi chắc chắn payOS đã nhận tiền (hoặc payment đã paid). Gọi lặp lại không ghi thêm gì.
+    private async Task<ActivityLog?> ConfirmPaidAsync(int paymentId, string note)
+    {
+        var userId = await db.Payments
+            .AsNoTracking()
+            .Where(item => item.PaymentId == paymentId)
+            .Select(item => (int?)item.UserId)
+            .FirstOrDefaultAsync()
+            ?? throw new KeyNotFoundException("Không tìm thấy thanh toán gói.");
+
+        return await InMemberLockAsync(userId, async () =>
+        {
+            // Đọc lại sau khi đã khóa: luồng khác có thể vừa xử lý xong.
+            var membership = await db.Memberships
+                .Include(item => item.Payment!)
+                .ThenInclude(item => item.Invoice)
+                .FirstOrDefaultAsync(item => item.PaymentId == paymentId);
+            if (membership?.Payment is not Payment payment || payment.Status == "refunded")
+            {
+                return null;
+            }
+
+            var revived = membership.Status == "cancelled";
+            if (payment.Status != "paid")
+            {
+                revived |= payment.Status != "pending";
+                MarkPaid(payment, revived ? "payOS báo đã nhận tiền cho đơn đã hủy" : note);
+            }
+
+            if (membership.Status is not ("pending" or "cancelled"))
+            {
+                return null;
+            }
+
+            var member = await db.UserAccounts.FirstAsync(user => user.UserId == membership.UserId);
+            var now = DateTime.Now;
+            var log = await ActivateAsync(member, membership, payment, now);
+            if (revived)
+            {
+                db.Notifications.Add(new AccountNotification
+                {
+                    UserId = member.UserId,
+                    Title = $"Đã kích hoạt {membership.PlanName}",
+                    Content = $"AnhDuy Sport đã nhận {Money(payment.Amount)} cho đơn {payment.Invoice?.InvoiceCode} " +
+                        $"(đơn này đã bị hủy trước đó). Gói được kích hoạt theo đúng số tiền đã trả.",
+                    IsRead = false,
+                    CreatedAt = now,
+                });
+            }
+
+            return log;
+        });
+    }
+
+    private async Task<T> InMemberLockAsync<T>(int userId, Func<Task<T>> work)
+    {
+        db.ChangeTracker.Clear();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.Database
+            .SqlQuery<int>($"SELECT user_id AS [Value] FROM [user] WITH (UPDLOCK, HOLDLOCK) WHERE user_id = {userId}")
+            .ToListAsync();
+        var result = await work();
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return result;
+    }
+
+    // Kích hoạt membership pending sau khi payment paid. Tính lại ngày theo thời điểm thanh toán.
+    // Phải chạy trong InMemberLockAsync.
     private async Task<ActivityLog> ActivateAsync(UserAccount member, Membership membership, Payment payment, DateTime now)
     {
         var today = DateOnly.FromDateTime(now);
         await ClassMembershipBonus.PromoteAsync(db, member.UserId, today);
         var package = await db.MembershipPackages.FirstOrDefaultAsync(item => item.MembershipPackageId == membership.MembershipPackageId)
             ?? throw new KeyNotFoundException("Không tìm thấy gói hội viên của đơn này.");
-        var plan = await PlanRenewalAsync(member.UserId, package, today, blockDowngrade: false);
+        var plan = await PlanRenewalAsync(member.UserId, package, today);
 
-        // Mỗi học viên chỉ 1 gói active: đóng gói đang chạy và gói 'active' đã quá hạn trước khi kích hoạt gói mới.
-        foreach (var item in plan.Running)
-        {
-            item.Status = plan.Type == "Gia hạn" ? "renewed" : "upgraded";
-        }
-
+        // Gói 'active' đã quá hạn: đóng lại để unique index UX_membership_one_active không báo trùng.
         var stale = await db.Memberships
             .Where(item => item.UserId == member.UserId && item.Status == "active"
                 && item.EndDate < today && item.MembershipId != membership.MembershipId)
@@ -385,25 +773,81 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             item.Status = "expired";
         }
 
+        // Nâng cấp: phần còn lại của gói cũ chạy tiếp ngay sau gói mới.
+        Membership? remainder = null;
+        if (plan.Current is Membership current)
+        {
+            if (plan.Kind == RenewalKind.Renew)
+            {
+                current.Status = "renewed";
+            }
+            else if (plan.Kind == RenewalKind.Upgrade)
+            {
+                var remainingDays = MembershipDuration.Length(today, current.EndDate);
+                if (current.StartDate < today)
+                {
+                    // Giữ phần đã dùng làm lịch sử (upgraded), tách phần còn lại thành dòng chờ.
+                    remainder = new Membership
+                    {
+                        UserId = current.UserId,
+                        PaymentId = null,
+                        PlanName = Trim($"{current.PlanName} (phần còn lại sau nâng cấp)", 200),
+                        MembershipPackageId = current.MembershipPackageId,
+                        IsFree = current.IsFree,
+                        StartDate = today,
+                        EndDate = today.AddDays(remainingDays - 1),
+                        Status = "scheduled",
+                    };
+                    db.Memberships.Add(remainder);
+                    current.EndDate = today.AddDays(-1);
+                    current.Status = "upgraded";
+                }
+                else
+                {
+                    // Gói cũ mới bắt đầu hôm nay: cả gói lùi ra sau, ngày được dời ở dưới.
+                    current.Status = "scheduled";
+                    remainder = current;
+                }
+            }
+        }
+
         // Lưu trước để unique index UX_membership_one_active không báo trùng khi dòng mới chuyển 'active'.
         await db.SaveChangesAsync();
 
         membership.StartDate = plan.StartDate;
         membership.EndDate = plan.EndDate;
-        membership.Status = "active";
+        membership.Status = plan.Kind == RenewalKind.Queued ? "scheduled" : "active";
 
-        // Gói nhận kèm lớp đang chờ (scheduled) lùi ra sau ngày hết hạn mới, giữ nguyên số ngày.
-        var queued = await db.Memberships
-            .Where(item => item.UserId == member.UserId && item.Status == "scheduled")
-            .OrderBy(item => item.StartDate)
-            .ToListAsync();
-        var cursor = plan.EndDate;
-        foreach (var item in queued)
+        // Gói mới chạy ngay: các gói đang chờ lùi ra sau ngày hết hạn mới, giữ nguyên số ngày.
+        // Thứ tự: phần còn lại của gói cũ (nếu nâng cấp) rồi tới các gói chờ khác theo ngày bắt đầu.
+        if (plan.Kind != RenewalKind.Queued)
         {
-            var days = item.EndDate.DayNumber - item.StartDate.DayNumber;
-            item.StartDate = cursor.AddDays(1);
-            item.EndDate = item.StartDate.AddDays(days);
-            cursor = item.EndDate;
+            var queued = await db.Memberships
+                .Where(item => item.UserId == member.UserId && item.Status == "scheduled"
+                    && item.MembershipId != membership.MembershipId)
+                .OrderBy(item => item.StartDate)
+                .ToListAsync();
+            if (remainder is not null)
+            {
+                queued.Remove(remainder);
+                queued.Insert(0, remainder);
+            }
+
+            var cursor = plan.EndDate;
+            foreach (var item in queued)
+            {
+                var days = MembershipDuration.Length(item.StartDate, item.EndDate);
+                item.StartDate = cursor.AddDays(1);
+                item.EndDate = item.StartDate.AddDays(days - 1);
+                cursor = item.EndDate;
+            }
+        }
+
+        var detail = $"{membership.PlanName} · {Money(payment.Amount)} · {PaymentMethodLabel(payment.PaymentMethod)} · " +
+            $"hiệu lực {plan.StartDate:dd/MM/yyyy} → {plan.EndDate:dd/MM/yyyy} · hóa đơn {payment.Invoice?.InvoiceCode}";
+        if (remainder is not null)
+        {
+            detail += $" · {remainder.PlanName}: {remainder.StartDate:dd/MM/yyyy} → {remainder.EndDate:dd/MM/yyyy}";
         }
 
         var log = new ActivityLog
@@ -412,55 +856,83 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             Action = Trim($"{plan.Type} gói cho {member.FullName}", 100),
             EntityName = "membership",
             EntityId = membership.MembershipId,
-            Detail = $"{membership.PlanName} · {Money(payment.Amount)} · {PaymentMethodLabel(payment.PaymentMethod)} · " +
-                $"hiệu lực {plan.StartDate:dd/MM/yyyy} → {plan.EndDate:dd/MM/yyyy} · hóa đơn {payment.Invoice?.InvoiceCode}",
+            Detail = detail,
             CreatedAt = now,
         };
         db.ActivityLogs.Add(log);
         return log;
     }
 
-    // Chưa có gói còn hạn            → đăng ký mới: bắt đầu hôm nay
-    // Còn hạn, chọn cùng gói         → gia hạn:     bắt đầu hôm nay, hết hạn = hạn cũ + thời hạn gói, gói cũ chuyển "renewed"
-    // Còn hạn, chọn gói khác         → nâng cấp:    bắt đầu hôm nay, gói cũ chuyển "upgraded"
-    // Dòng cũ chưa gắn gói (membership_package_id NULL) được coi là gói khác.
-    private async Task<RenewalPlan> PlanRenewalAsync(int userId, MembershipPackage package, DateOnly today, bool blockDowngrade)
+    // So gói mới với gói đang dùng (active). Hạng gói = phí trung bình mỗi tháng (MembershipDuration.MonthlyRate).
+    //   Chưa có gói đang dùng         → Đăng ký mới:      bắt đầu hôm nay.
+    //   Cùng gói                      → Gia hạn:          bắt đầu hôm nay, hạn = hạn cũ + thời hạn gói.
+    //   Gói mới cao hơn (hoặc ngang)  → Nâng cấp:         bắt đầu hôm nay, gói cũ chạy tiếp sau gói mới.
+    //   Gói mới thấp hơn              → Đăng ký nối tiếp: bắt đầu sau ngày hết hạn cuối cùng của các gói đang có.
+    // Dòng cũ chưa gắn gói (membership_package_id NULL) được coi là thấp hơn mọi gói.
+    private async Task<RenewalPlan> PlanRenewalAsync(int userId, MembershipPackage package, DateOnly today)
     {
-        // Xét cả gói đang chờ kích hoạt (vd. Vàng nhận kèm lớp), không chỉ gói đang dùng.
-        if (blockDowngrade)
+        var months = package.ValidityMonths;
+        var current = (await db.Memberships
+                .Include(item => item.Package)
+                .Where(item => item.UserId == userId && item.Status == "active" && item.EndDate >= today)
+                .OrderBy(item => item.EndDate)
+                .ToListAsync())
+            .LastOrDefault();
+
+        if (current is null)
         {
-            await ClassMembershipBonus.EnsureNotDowngradeAsync(db, userId, package, today);
+            return new RenewalPlan(RenewalKind.New, TypeNew, today, MembershipDuration.EndFrom(today, months), null);
         }
 
-        var running = await db.Memberships
-            .Include(item => item.Package)
-            .Where(item => item.UserId == userId && item.Status == "active" && item.EndDate >= today)
-            .OrderBy(item => item.EndDate)
-            .ToListAsync();
-        var latest = running.LastOrDefault();
-
-        string renewalType;
-        var startDate = today;
-        DateOnly endDate;
-        if (latest is null)
-        {
-            renewalType = "Đăng ký mới";
-            endDate = today.AddMonths(package.ValidityMonths).AddDays(-1);
-        }
-        else if (latest.MembershipPackageId == package.MembershipPackageId)
+        if (current.MembershipPackageId == package.MembershipPackageId)
         {
             // Gia hạn: dòng mới thay dòng cũ, giữ số ngày còn lại + thêm thời hạn gói.
-            renewalType = "Gia hạn";
-            endDate = latest.EndDate.AddMonths(package.ValidityMonths);
-        }
-        else
-        {
-            renewalType = "Nâng cấp";
-            endDate = today.AddMonths(package.ValidityMonths).AddDays(-1);
+            return new RenewalPlan(RenewalKind.Renew, TypeRenew, today,
+                current.EndDate.AddDays(MembershipDuration.Days(months)), current);
         }
 
-        return new RenewalPlan(renewalType, startDate, endDate, running);
+        var isLower = current.Package is not null
+            && MembershipDuration.MonthlyRate(package) < MembershipDuration.MonthlyRate(current.Package);
+        if (!isLower)
+        {
+            return new RenewalPlan(RenewalKind.Upgrade, TypeUpgrade, today, MembershipDuration.EndFrom(today, months), current);
+        }
+
+        var lastEnd = await db.Memberships
+            .Where(item => item.UserId == userId
+                && (item.Status == "active" || item.Status == "scheduled")
+                && item.EndDate >= today)
+            .MaxAsync(item => (DateOnly?)item.EndDate) ?? current.EndDate;
+        var start = lastEnd.AddDays(1);
+        return new RenewalPlan(RenewalKind.Queued, TypeQueued, start, MembershipDuration.EndFrom(start, months), current);
     }
+
+    // Câu giải thích thêm cho học viên trước khi thanh toán.
+    private static string PlanNote(RenewalPlan plan, MembershipPackage package)
+    {
+        if (plan.Current is not Membership current)
+        {
+            return "";
+        }
+
+        return plan.Kind switch
+        {
+            RenewalKind.Upgrade =>
+                $" {current.PlanName} còn {MembershipDuration.Length(plan.StartDate, current.EndDate)} ngày sẽ được dùng tiếp sau khi {package.PackageName} kết thúc.",
+            RenewalKind.Queued =>
+                $" Gói đang dùng cao cấp hơn nên {package.PackageName} sẽ bắt đầu sau khi các gói hiện có hết hạn (dự kiến {plan.StartDate:dd/MM/yyyy}).",
+            _ => "",
+        };
+    }
+
+    private static bool CanReuse(Membership membership, Payment payment, MembershipPackage package, int amount) =>
+        payment.Status == "pending"
+        && membership.MembershipPackageId == package.MembershipPackageId
+        && payment.Amount == amount
+        && payment.Invoice is not null
+        && PaymentTimeout.SecondsLeft(payment.Invoice.IssuedAt) > 0
+        && !string.IsNullOrWhiteSpace(payment.CheckoutUrl)
+        && !string.IsNullOrWhiteSpace(payment.QrCode);
 
     // ---- payOS ----
     private async Task CreateLinkAsync(Payment payment, Membership membership)
@@ -508,65 +980,56 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         }
     }
 
-    // Hỏi trạng thái đơn trên payOS, phòng khi webhook chưa tới. Chỉ đổi trong bộ nhớ, nơi gọi tự lưu.
-    private async Task SyncFromPayOsAsync(Payment payment)
+    // Trạng thái link payOS viết hoa (PAID, PENDING, CANCELLED, EXPIRED...), null nếu không hỏi được.
+    private async Task<string?> PayOsStatusAsync(long? orderCode)
     {
-        if (payment.Status != "pending" || payment.PayosOrderCode is not long orderCode || PayOsClient is not PayOSClient payOs)
+        if (orderCode is not long code || PayOsClient is not PayOSClient payOs)
         {
-            return;
+            return null;
         }
 
-        PaymentLink link;
         try
         {
-            link = await payOs.PaymentRequests.GetAsync(orderCode);
+            return (await payOs.PaymentRequests.GetAsync(code)).Status.ToString().ToUpperInvariant();
         }
         catch (ApiException)
         {
-            return;
+            return null;
         }
+    }
 
-        var status = link.Status.ToString();
-        if (status.Equals("Paid", StringComparison.OrdinalIgnoreCase))
+    // Ghi nhận payOS đã nhận tiền. Chỉ đổi trong bộ nhớ, nơi gọi tự lưu.
+    private void MarkPaid(Payment payment, string note)
+    {
+        payment.Status = "paid";
+        payment.PaidAt = DateTime.Now;
+        if (payment.Invoice is not null)
         {
-            payment.Status = "paid";
-            payment.PaidAt = DateTime.Now;
-            if (payment.Invoice is not null)
-            {
-                payment.Invoice.Status = "paid";
-            }
-
-            AddHistory(payment, "paid", "Thanh toán gói thành công");
-            db.ActivityLogs.Add(new ActivityLog
-            {
-                ActorUserId = payment.UserId,
-                Action = "Thanh toán payOS thành công",
-                EntityName = "payment",
-                EntityId = payment.PaymentId,
-                Detail = payment.Invoice?.InvoiceCode,
-                CreatedAt = DateTime.Now,
-            });
-            return;
+            payment.Invoice.Status = "paid";
         }
 
-        if (status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
-            || status.Equals("Canceled", StringComparison.OrdinalIgnoreCase)
-            || status.Equals("Expired", StringComparison.OrdinalIgnoreCase))
+        AddHistory(payment, "paid", note);
+        db.ActivityLogs.Add(new ActivityLog
         {
-            await CancelPaymentAsync(payment, "payOS trả trạng thái " + status);
-        }
+            ActorUserId = payment.UserId,
+            Action = "Thanh toán payOS thành công",
+            EntityName = "payment",
+            EntityId = payment.PaymentId,
+            Detail = $"{payment.Invoice?.InvoiceCode} · {note}",
+            CreatedAt = DateTime.Now,
+        });
     }
 
     // Đóng đơn pending: báo payOS hủy link (lỗi thì bỏ qua), payment → cancel, hóa đơn → cancelled.
     // Chỉ đổi trong bộ nhớ, nơi gọi tự lưu.
-    private async Task CancelPaymentAsync(Payment payment, string reason)
+    private async Task CancelPaymentAsync(Payment payment, string reason, bool callPayOs = true)
     {
         if (payment.Status != "pending")
         {
             return;
         }
 
-        if (payment.PayosOrderCode is long orderCode && PayOsClient is PayOSClient payOs)
+        if (callPayOs && payment.PayosOrderCode is long orderCode && PayOsClient is PayOSClient payOs)
         {
             try
             {
@@ -633,12 +1096,41 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         // Nhận payment_id, hoặc orderCode payOS gắn vào ReturnUrl.
         int? id = code is > 0 and <= int.MaxValue ? (int)code : null;
         return await db.Memberships
+            .AsNoTracking()
             .Include(item => item.Payment!)
             .ThenInclude(payment => payment.Invoice)
             .FirstOrDefaultAsync(item => item.UserId == memberUserId
                 && ((id != null && item.PaymentId == id) || item.Payment!.PayosOrderCode == code))
             ?? throw new KeyNotFoundException("Không tìm thấy thanh toán gói.");
     }
+
+    // ---- Đổi email ----
+    private async Task EnsureEmailAvailableAsync(string email, int userId, DateTime utcNow)
+    {
+        var taken = await db.UserAccounts.AnyAsync(user =>
+            user.UserId != userId && user.Email != null && user.Email.ToLower() == email);
+        if (taken)
+        {
+            throw new InvalidOperationException("Email đã được tài khoản khác sử dụng.");
+        }
+
+        var registering = await db.PendingRegistrations.AnyAsync(row => row.Email == email && row.ExpiresAt > utcNow);
+        if (registering)
+        {
+            throw new InvalidOperationException("Email này đang được dùng để đăng ký tài khoản mới. Hãy thử lại sau.");
+        }
+    }
+
+    // Cùng cách băm với OTP quên mật khẩu (AuthService.HashOtp).
+    private static string HashOtp(string code)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(code));
+        return Convert.ToHexString(hash);
+    }
+
+    private static bool IsUniqueViolation(DbUpdateException exception, string? indexName = null) =>
+        exception.InnerException is SqlException { Number: 2601 or 2627 } sql
+        && (indexName is null || sql.Message.Contains(indexName, StringComparison.OrdinalIgnoreCase));
 
     // Action của log có dạng "{loại} gói cho {tên}".
     private static string GetRenewalType(ActivityLog log)
@@ -663,9 +1155,18 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
             PayOsQrImage.ToDataUrl(payment.QrCode),
             payment.Status == "pending" && payment.Invoice is not null ? PaymentTimeout.SecondsLeft(payment.Invoice.IssuedAt) : 0);
 
-    private sealed record RenewalPlan(string Type, DateOnly StartDate, DateOnly EndDate, List<Membership> Running);
+    private enum RenewalKind
+    {
+        New,
+        Renew,
+        Upgrade,
+        Queued,
+    }
 
-    // Mã hóa đơn INV-{năm}-{số}, số lấy từ dbo.invoice_code_seq (05_payment_pending_unique.sql).
+    // Current: gói đang dùng (active) lúc tính, null khi chưa có.
+    private sealed record RenewalPlan(RenewalKind Kind, string Type, DateOnly StartDate, DateOnly EndDate, Membership? Current);
+
+    // Mã hóa đơn INV-{năm}-{số}, số lấy từ dbo.invoice_code_seq.
     // Seed đã có INV-2026-0001 nên gặp số trùng thì lấy số tiếp theo.
     private async Task<string> NextInvoiceCodeAsync(DateTime now)
     {

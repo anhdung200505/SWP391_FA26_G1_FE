@@ -140,6 +140,20 @@ CREATE TABLE password_reset (
 );
 GO
 
+-- Đổi email đang chờ xác thực OTP (cùng cách làm với password_reset). OTP gửi tới new_email, chỉ lưu hash.
+-- ON DELETE CASCADE: học viên tự xóa tài khoản thì yêu cầu đổi email cũng mất theo.
+CREATE TABLE email_change (
+    user_id     INT           NOT NULL,
+    new_email   NVARCHAR(200) NOT NULL,
+    otp_hash    NVARCHAR(64)  NOT NULL,
+    attempts    INT           NOT NULL CONSTRAINT DF_email_change_attempts DEFAULT (0),
+    created_at  DATETIME2(0)  NOT NULL,
+    expires_at  DATETIME2(0)  NOT NULL,
+    CONSTRAINT PK_email_change PRIMARY KEY (user_id),
+    CONSTRAINT FK_email_change_user FOREIGN KEY (user_id) REFERENCES [user] (user_id) ON DELETE CASCADE
+);
+GO
+
 /* ===================== Môn, phòng, khóa học ===================== */
 
 CREATE TABLE sport (
@@ -576,7 +590,8 @@ CREATE TABLE membership_package (
     CONSTRAINT PK_membership_package PRIMARY KEY (membership_package_id),
     CONSTRAINT UQ_membership_package_code UNIQUE (package_code),
     CONSTRAINT CK_membership_package_fee CHECK (fee > 0),
-    CONSTRAINT CK_membership_package_months CHECK (validity_months = 1),
+    -- Gói bao nhiêu tháng cũng được (1 tháng = 30 ngày); chặn trên 1200 tháng chỉ để không tràn ngày.
+    CONSTRAINT CK_membership_package_months CHECK (validity_months >= 1 AND validity_months <= 1200),
     CONSTRAINT CK_membership_package_status CHECK (status IN (N'active', N'inactive')),
     CONSTRAINT CK_membership_package_upgrade_discount CHECK (upgrade_discount_percent >= 0 AND upgrade_discount_percent <= 100)
 );
@@ -653,6 +668,8 @@ GO
 
 CREATE UNIQUE INDEX UX_membership_payment ON membership (payment_id) WHERE payment_id IS NOT NULL;
 CREATE UNIQUE INDEX UX_membership_one_active ON membership (user_id) WHERE status = N'active';
+-- Mỗi học viên chỉ giữ 1 đơn gói chờ thanh toán (hai yêu cầu chọn gói cùng lúc không tạo được 2 đơn).
+CREATE UNIQUE INDEX UX_membership_one_pending ON membership (user_id) WHERE status = N'pending';
 GO
 
 -- Lịch sử đăng ký lớp (ai xếp học viên vào lớp, rút lớp, học lại...).
