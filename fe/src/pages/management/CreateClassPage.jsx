@@ -210,7 +210,7 @@ export default function CreateClassPage() {
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
             <Link
-              to={`/quan-ly/lich-hoc?classId=${created.id}`}
+              to={`/quan-ly/lop-hoc/${created.id}/lich`}
               className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-colors"
             >
               Xem lịch buổi học
