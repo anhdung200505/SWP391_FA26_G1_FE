@@ -40,14 +40,14 @@ function RoleBadge({ item }) {
   );
 }
 
-// Chuông "Hoạt động". audience "admin" xem cả lễ tân và quản trị. "receptionist" chỉ xem lễ tân.
+// Chuông "Hoạt động". audience "admin" xem toàn bộ lễ tân và quản trị.
+// "receptionist" xem lễ tân và các thao tác lớp / buổi học của quản trị (backend tự giới hạn theo vai trò).
 export default function StaffActivityBell({ dark = false, audience = 'admin' }) {
   const { user } = useAuth();
-  const receptionistOnly = audience === 'receptionist';
-  const tabs = receptionistOnly ? [{ id: 'RECEPTIONIST', label: 'Lễ tân' }] : TABS;
+  const receptionistView = audience === 'receptionist';
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState(receptionistOnly ? 'RECEPTIONIST' : '');
+  const [tab, setTab] = useState('');
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState(null);
   const [seenId, setSeenId] = useState(() => Number(localStorage.getItem(seenKey(user?.id))) || 0);
@@ -56,7 +56,7 @@ export default function StaffActivityBell({ dark = false, audience = 'admin' }) 
   const rootRef = useRef(null);
 
   const refresh = useCallback(() => {
-    getStaffActivity(receptionistOnly ? { role: 'RECEPTIONIST' } : {})
+    getStaffActivity({})
       .then((data) => {
         const rows = Array.isArray(data) ? data : [];
         setItems(rows);
@@ -70,7 +70,7 @@ export default function StaffActivityBell({ dark = false, audience = 'admin' }) 
         });
       })
       .catch((err) => setError(err.message || 'Không tải được hoạt động.'));
-  }, [user?.id, receptionistOnly]);
+  }, [user?.id]);
 
   useEffect(() => {
     refresh();
@@ -91,9 +91,8 @@ export default function StaffActivityBell({ dark = false, audience = 'admin' }) 
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
-  const scoped = receptionistOnly ? items.filter((item) => item.actorRole === 'RECEPTIONIST') : items;
-  const newCount = scoped.filter((item) => Number(item.id) > seenId).length;
-  const visible = tab ? scoped.filter((item) => item.actorRole === tab) : scoped;
+  const newCount = items.filter((item) => Number(item.id) > seenId).length;
+  const visible = tab ? items.filter((item) => item.actorRole === tab) : items;
 
   // Mở chuông là đã xem: ghi mốc id lớn nhất hiện có, số trên nút về 0.
   const toggle = () => {
@@ -113,7 +112,7 @@ export default function StaffActivityBell({ dark = false, audience = 'admin' }) 
     <div className="relative" ref={rootRef}>
       <BellButton
         label="Hoạt động"
-        ariaLabel={receptionistOnly ? 'Hoạt động của lễ tân' : 'Hoạt động của lễ tân và quản trị'}
+        ariaLabel="Hoạt động của lễ tân và quản trị"
         count={newCount}
         variant={dark ? 'dark' : 'default'}
         onClick={toggle}
@@ -121,14 +120,14 @@ export default function StaffActivityBell({ dark = false, audience = 'admin' }) 
 
       {open && (
         <BellPanel
-          title={receptionistOnly ? 'Hoạt động lễ tân' : 'Hoạt động lễ tân & quản trị'}
+          title={receptionistView ? 'Hoạt động lễ tân & thay đổi lớp' : 'Hoạt động lễ tân & quản trị'}
           subtitle="Staff activity"
           action={
             <button type="button" onClick={refresh} className="text-[11px] font-bold text-[#e31b23] hover:underline cursor-pointer">
               Làm mới
             </button>
           }
-          toolbar={tabs.map((item) => (
+          toolbar={TABS.map((item) => (
             <PanelTab key={item.id || 'all'} active={tab === item.id} onClick={() => setTab(item.id)}>
               {item.label}
             </PanelTab>
