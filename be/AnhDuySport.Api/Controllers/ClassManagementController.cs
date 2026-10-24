@@ -32,6 +32,18 @@ public class ClassManagementController(ClassManagementFlowService classes) : Con
     public async Task<ActionResult<IReadOnlyList<RoomOptionDto>>> AccessRooms([FromQuery] string? centerId, [FromQuery] string? sportId) =>
         Ok(await classes.AccessRoomsAsync(centerId, sportId));
 
+    [HttpGet("~/api/management/coaches")]
+    [EndpointSummary("Quản trị xem HLV để chọn khi thêm lớp")]
+    [EndpointDescription("HLV đang hoạt động. sportId: chỉ HLV dạy được môn đó (coach_sport). Mỗi HLV kèm danh sách môn dạy được.")]
+    public async Task<ActionResult<IReadOnlyList<ManagementCoachDto>>> AccessCoaches([FromQuery] string? sportId) =>
+        Ok(await classes.AccessCoachesAsync(sportId));
+
+    [HttpPost("availability")]
+    [EndpointSummary("Kiểm tra HLV và phòng còn trống trước khi thêm lớp")]
+    [EndpointDescription("Sinh thử buổi học theo schedules trong [startDate, endDate] và đối chiếu với các buổi đã có. Trả số buổi sẽ sinh, HLV và phòng của môn kèm isBusy/busyReason (trùng lớp nào, ngày nào, hoặc phòng không đủ sức chứa). excludeClassId dùng khi sửa lớp.")]
+    public async Task<ActionResult<ClassAvailabilityDto>> CheckAvailability(ClassAvailabilityRequest request) =>
+        Ok(await classes.CheckAvailabilityAsync(request));
+
     [HttpPost]
     [EndpointSummary("Quản trị thêm lớp")]
     [EndpointDescription("Lớp luôn tạo ở trạng thái open. Giáo án tự chọn theo môn của khóa học (400 nếu môn chưa có giáo án chuẩn). startDate nếu có phải sau hôm nay. HLV phải dạy môn của khóa học, phòng phải thuộc môn và đủ sức chứa. schedules (weekday 2..7, timeSlotId từ GET /api/time-slots?kind=group) kèm startDate, endDate thì sinh luôn toàn bộ buổi học; trùng lịch HLV hoặc phòng trả 400. Trả 201 kèm lớp vừa tạo.")]
