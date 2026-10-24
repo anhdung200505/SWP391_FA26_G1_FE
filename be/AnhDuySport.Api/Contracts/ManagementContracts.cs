@@ -85,3 +85,37 @@ public sealed class UpdatePackageSettingRequest
     public decimal UpgradeDiscountPercent { get; set; }
     public List<string> Benefits { get; set; } = [];
 }
+
+public sealed class UpdateAiQuotaRequest
+{
+    public int RegenerationLimit { get; set; }
+    public int TokenLimit { get; set; }
+}
+
+public sealed record AiPackageQuotaDto(
+    string PackageId,
+    string PackageCode,
+    string PackageName,
+    int RegenerationLimit,
+    int TokenLimit,
+    int ActiveMembers);
+
+public sealed record AiTokenUsageRowDto(
+    string MemberUserId,
+    string MemberName,
+    string? PackageCode,
+    string? PackageName,
+    int TokensUsed,
+    int PeriodTokensUsed,
+    int TokenLimit,
+    int RegenerationsUsed,
+    int RegenerationLimit);
+
+public sealed record AiTokenUsageReportDto(
+    int TotalTokensUsed,
+    IReadOnlyList<AiPackageQuotaDto> Packages,
+    IReadOnlyList<AiTokenUsageRowDto> Members);
+
+public sealed record UpdateAiPackageQuotaResponse(
+    AiPackageQuotaDto Package,
+    string Message);

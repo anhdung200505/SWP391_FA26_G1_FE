@@ -573,12 +573,16 @@ CREATE TABLE membership_package (
     created_at               DATETIME2(0)   NOT NULL CONSTRAINT DF_membership_package_created_at DEFAULT (SYSUTCDATETIME()),
     updated_at               DATETIME2(0)   NULL,
     upgrade_discount_percent DECIMAL(5,2)   NOT NULL CONSTRAINT DF_membership_package_upgrade_discount DEFAULT (0),
+    ai_regeneration_limit    INT            NOT NULL CONSTRAINT DF_membership_package_ai_regeneration DEFAULT (0),
+    ai_token_limit           INT            NOT NULL CONSTRAINT DF_membership_package_ai_token DEFAULT (0),
     CONSTRAINT PK_membership_package PRIMARY KEY (membership_package_id),
     CONSTRAINT UQ_membership_package_code UNIQUE (package_code),
     CONSTRAINT CK_membership_package_fee CHECK (fee > 0),
     CONSTRAINT CK_membership_package_months CHECK (validity_months = 1),
     CONSTRAINT CK_membership_package_status CHECK (status IN (N'active', N'inactive')),
-    CONSTRAINT CK_membership_package_upgrade_discount CHECK (upgrade_discount_percent >= 0 AND upgrade_discount_percent <= 100)
+    CONSTRAINT CK_membership_package_upgrade_discount CHECK (upgrade_discount_percent >= 0 AND upgrade_discount_percent <= 100),
+    CONSTRAINT CK_membership_package_ai_regeneration CHECK (ai_regeneration_limit >= 0),
+    CONSTRAINT CK_membership_package_ai_token CHECK (ai_token_limit >= 0)
 );
 GO
 
@@ -826,6 +830,25 @@ CREATE TABLE personal_exercise (
 GO
 
 CREATE INDEX IX_personal_exercise_user_date ON personal_exercise (user_id, exercise_date);
+GO
+
+CREATE TABLE ai_token_usage (
+    ai_token_usage_id INT IDENTITY(1,1) NOT NULL,
+    user_id           INT           NOT NULL,
+    membership_id     INT           NOT NULL,
+    action            NVARCHAR(30)  NOT NULL,
+    total_tokens      INT           NOT NULL,
+    created_at        DATETIME2(0)  NOT NULL,
+    CONSTRAINT PK_ai_token_usage PRIMARY KEY (ai_token_usage_id),
+    CONSTRAINT FK_ai_token_usage_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_ai_token_usage_membership FOREIGN KEY (membership_id) REFERENCES membership (membership_id),
+    CONSTRAINT CK_ai_token_usage_action CHECK (action IN (N'generate', N'regenerate')),
+    CONSTRAINT CK_ai_token_usage_tokens CHECK (total_tokens >= 0)
+);
+GO
+
+CREATE INDEX IX_ai_token_usage_membership ON ai_token_usage (membership_id, action);
+CREATE INDEX IX_ai_token_usage_user ON ai_token_usage (user_id);
 GO
 
 /* ===================== Chỉ mục khóa ngoại ===================== */

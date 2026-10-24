@@ -335,6 +335,10 @@ INSERT INTO membership_package (package_code, package_name, fee, validity_months
     (N'PKG-002', N'Hạng Bạc',  350000, 1, N'Tự do sử dụng phòng tập đa năng. Sử dụng hồ bơi giờ thấp điểm. Giảm 50% khi lên cấp cùng lúc đăng ký lớp.', N'active', SYSUTCDATETIME(), 50),
     (N'PKG-003', N'Hạng Vàng', 500000, 1, N'Tự do sử dụng toàn bộ cơ sở vật chất. 1 buổi tập riêng với HLV mỗi tháng. Giảm 25% khi lên cấp cùng lúc đăng ký lớp.', N'active', SYSUTCDATETIME(), 25);
 
+UPDATE membership_package SET ai_regeneration_limit = 5,  ai_token_limit = 50000  WHERE package_code = N'PKG-001';
+UPDATE membership_package SET ai_regeneration_limit = 10, ai_token_limit = 100000 WHERE package_code = N'PKG-002';
+UPDATE membership_package SET ai_regeneration_limit = 25, ai_token_limit = 250000 WHERE package_code = N'PKG-003';
+
 -- Hóa đơn chỉ gồm học phí của 2 lớp Khang đã ghi danh (bơi sáng thứ 3 + bóng rổ chiều thứ 3); invoice_code_seq bắt đầu từ 2.
 INSERT INTO invoice (user_id, invoice_code, issued_at, total_amount, status)
 SELECT u.user_id, N'INV-2026-0001', @registered_at, CAST(2700000 AS DECIMAL(18,2)), N'paid'
