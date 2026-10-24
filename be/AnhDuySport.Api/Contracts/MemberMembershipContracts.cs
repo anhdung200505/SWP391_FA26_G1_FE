@@ -17,7 +17,9 @@ public sealed record MemberProfileDto(
     string Phone,
     DateOnly? DateOfBirth,
     string Gender,
-    string Status);
+    string Status,
+    // Đường dẫn ảnh đại diện (vd. /api/uploads/avatars/12-....png), null khi chưa có ảnh.
+    string? AvatarUrl);
 
 public sealed record MemberProfileMutationResponse(MemberProfileDto Profile, string Message, ActivityLogDto Log);
 
@@ -47,7 +49,9 @@ public sealed record MembershipCheckoutDto(
     string? QrCode,
     string Message,
     // Ảnh PNG của QrCode (data URL), dùng thẳng làm src của <img>.
-    string QrImage);
+    string QrImage,
+    // Số giây còn lại trước khi đơn chờ thanh toán bị hủy (0 khi không còn chờ).
+    int ExpiresInSeconds);
 
 // Display Success Message + Receive Updated Membership Info
 // Kết quả kiểm tra thanh toán. Membership chỉ chuyển active khi payment đã paid.
@@ -68,7 +72,11 @@ public sealed record MembershipDto(
     string Status,
     decimal AmountPaid,
     string InvoiceCode,
-    string PaymentMethod);
+    string PaymentMethod,
+    // Lúc tạo thanh toán (phát hành hóa đơn). Null với gói tặng kèm không có thanh toán.
+    DateTime? CreatedAt,
+    // Số giây còn lại của đơn đang chờ thanh toán; 0 khi không còn chờ.
+    int PaymentExpiresInSeconds);
 
 // View membership management
 public sealed record MembershipManagementDto(
@@ -76,4 +84,6 @@ public sealed record MembershipManagementDto(
     MembershipDto? CurrentMembership,
     DateOnly? MembershipEndDate,
     IReadOnlyList<MembershipDto> History,
-    IReadOnlyList<PackageDto> Packages);
+    IReadOnlyList<PackageDto> Packages,
+    // Gói cao nhất đang có (đang dùng hoặc chờ kích hoạt). Chỉ được mua gói này hoặc gói cao hơn; null khi chưa có gói.
+    string? HighestPackageId);
