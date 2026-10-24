@@ -25,6 +25,8 @@ public sealed record UpdateEnrollmentConsultationRequest(
     string? Note,
     string? ResolutionNote);
 
+public sealed record HandleMemberSupportRequest(string Action, string? Note, string? Category);
+
 public sealed record ClassifySupportRequest(string Category);
 
 public sealed record EscalateSupportRequest(string Reason);
