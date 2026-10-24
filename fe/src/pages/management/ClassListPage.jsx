@@ -2,23 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption } from '../../components/management/ManagementBits';
+import ClassListTable from '../../components/classes/ClassListTable';
+import { CLASS_STATUS } from '../../components/classes/classUtils';
 import { getManagementClasses, getSports } from '../../api/managementApi';
-
-const STATUS_STYLES = {
-  open: { label: 'Sắp mở', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  ongoing: { label: 'Đang học', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  closed: { label: 'Đã kết thúc', className: 'bg-slate-100 text-slate-600 border-slate-200' },
-  cancelled: { label: 'Đã hủy', className: 'bg-red-50 text-[#e31b23] border-red-200' },
-};
 
 const selectClass =
   'w-full sm:w-44 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-[#e31b23] cursor-pointer';
-
-function formatDate(value) {
-  if (!value) return '—';
-  const [year, month, day] = String(value).split('-');
-  return `${day}/${month}/${year}`;
-}
 
 export default function ClassListPage() {
   const [classes, setClasses] = useState([]);
@@ -108,7 +97,7 @@ export default function ClassListPage() {
           </select>
           <select value={selectedStatus} onChange={changeFilter(setSelectedStatus)} className={selectClass}>
             <option value="">Mọi trạng thái</option>
-            {Object.entries(STATUS_STYLES).map(([value, status]) => (
+            {Object.entries(CLASS_STATUS).map(([value, status]) => (
               <option key={value} value={value}>
                 {status.label}
               </option>
@@ -157,60 +146,17 @@ export default function ClassListPage() {
             <p className="text-xs font-bold text-gray-400">Đang tải danh sách lớp học...</p>
           </div>
         ) : filteredClasses.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-gray-100 text-gray-400 font-extrabold uppercase text-[10px] tracking-wider">
-                  <th className="p-4">Lớp</th>
-                  <th className="p-4">Môn</th>
-                  <th className="p-4">Level</th>
-                  <th className="p-4">Coach</th>
-                  <th className="p-4">Phòng</th>
-                  <th className="p-4">Khai giảng</th>
-                  <th className="p-4">Kết thúc</th>
-                  <th className="p-4 text-center">Học viên</th>
-                  <th className="p-4 text-center">Sĩ số</th>
-                  <th className="p-4">Trạng thái</th>
-                  <th className="p-4 text-right" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 font-medium text-slate-700">
-                {filteredClasses.map((item) => {
-                  const status = STATUS_STYLES[item.status] || STATUS_STYLES.open;
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-4 min-w-[180px] font-bold text-slate-900 text-sm">{item.name}</td>
-                      <td className="p-4 whitespace-nowrap">
-                        <span className="inline-block bg-red-50 text-[#e31b23] border border-red-100 font-bold text-[10px] px-2 py-0.5 rounded">
-                          {item.sportName}
-                        </span>
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-[11px] font-bold text-slate-500">{item.level}</td>
-                      <td className="p-4 whitespace-nowrap font-bold text-slate-800">{item.coachName}</td>
-                      <td className="p-4 whitespace-nowrap text-slate-600">{item.roomName || 'Chưa xếp phòng'}</td>
-                      <td className="p-4 whitespace-nowrap">{formatDate(item.startDate)}</td>
-                      <td className="p-4 whitespace-nowrap">{formatDate(item.endDate)}</td>
-                      <td className="p-4 text-center font-bold text-slate-900">{item.enrolledCount}</td>
-                      <td className="p-4 text-center font-bold text-slate-900">{item.capacity ?? '∞'}</td>
-                      <td className="p-4">
-                        <span className={`inline-block whitespace-nowrap border text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${status.className}`}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right whitespace-nowrap">
-                        <Link
-                          to={`/quan-ly/lop-hoc/${item.id}/lich`}
-                          className="inline-block bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors"
-                        >
-                          📅 Xem lịch
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ClassListTable
+            classes={filteredClasses}
+            renderAction={(item) => (
+              <Link
+                to={`/quan-ly/lop-hoc/${item.id}/lich`}
+                className="inline-block bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors"
+              >
+                📅 Xem lịch
+              </Link>
+            )}
+          />
         ) : (
           <div className="py-16 text-center text-xs font-bold text-gray-400">Không tìm thấy lớp học nào phù hợp.</div>
         )}
