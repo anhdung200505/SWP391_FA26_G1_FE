@@ -96,8 +96,8 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
 
     [Authorize(Roles = "MEMBER")]
     [HttpPost("membership/renewals")]
-    [EndpointSummary("Không bán gói hội viên lẻ")]
-    [EndpointDescription("Gói hội viên chỉ mua kèm khi đăng ký lớp. Endpoint này luôn trả 400.")]
+    [EndpointSummary("Select Membership Package: gia hạn hoặc nâng cấp gói, tạo link thanh toán payOS")]
+    [EndpointDescription("Chỉ cho học viên đã có gói (đang dùng hoặc chờ kích hoạt), không được chọn gói thấp hơn gói đang có. Chưa có gói thì trả 400: gói chỉ mua kèm khi đăng ký lớp. Tạo hóa đơn, payment pending và membership pending, trả checkoutUrl / qrCode payOS.")]
     public async Task<ActionResult<MembershipCheckoutDto>> SelectMembershipPackage(string memberUserId, RenewMembershipRequest request)
     {
         if (EnsureOwner(memberUserId) is { } denied) return denied;

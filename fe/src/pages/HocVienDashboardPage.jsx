@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import WorkspaceShell from '../components/workspace/WorkspaceShell';
+import NotificationBell from '../components/NotificationBell';
 import {
   getMyClassRegistrations,
   getMemberProfile,
@@ -36,7 +37,6 @@ const TIER_THEMES = {
     titleGradient: 'linear-gradient(90deg, #ffe0c2 0%, #e39a5c 45%, #b8692f 100%)',
     accent: '#f3b07a',
     subText: 'rgba(255,226,200,0.75)',
-    chip: ['#f5c79a', '#9c5a28'],
     buttonStyle: { background: 'linear-gradient(135deg, #f3b07a, #b8692f)', color: '#2a1206' },
   },
   silver: {
@@ -50,7 +50,6 @@ const TIER_THEMES = {
     titleGradient: 'linear-gradient(90deg, #ffffff 0%, #d1d5db 45%, #8e959e 100%)',
     accent: '#e5e7eb',
     subText: 'rgba(229,231,235,0.75)',
-    chip: ['#f3f4f6', '#8b929b'],
     buttonStyle: { background: 'linear-gradient(135deg, #f9fafb, #9ca3af)', color: '#111827' },
   },
   gold: {
@@ -65,7 +64,6 @@ const TIER_THEMES = {
     titleGradient: 'linear-gradient(90deg, #fff4c2 0%, #e8c766 40%, #b8892a 100%)',
     accent: '#e8c766',
     subText: 'rgba(240,222,160,0.75)',
-    chip: ['#fbe7a1', '#a87b22'],
     buttonStyle: { background: 'linear-gradient(135deg, #fbe7a1, #c9971f)', color: '#1a1200' },
   },
 };
@@ -361,6 +359,7 @@ export default function HocVienDashboardPage() {
       activeId={activeTab}
       onSelect={selectTab}
       breadcrumb={[{ label: 'Học viên' }, { label: currentItem?.label || 'Tổng quan' }]}
+      headerExtra={<NotificationBell />}
     >
         {isProcessing && <p className="text-sm font-semibold text-slate-500">Đang xác nhận thanh toán...</p>}
         {notice.msg && (
@@ -425,34 +424,6 @@ export default function HocVienDashboardPage() {
           </div>
         </section>
 
-          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 text-balance">Giáo án tập với AI</h2>
-                <p className="mt-1 text-sm text-pretty text-slate-500">
-                  {currentMembership
-                    ? 'Nhập chỉ số BMI và mục tiêu để nhận giáo án, rồi lưu vào lịch tập cá nhân.'
-                    : 'Giáo án AI cần gói hội viên đang hiệu lực. Gói chỉ có khi đăng ký kèm khóa học.'}
-                </p>
-              </div>
-              {currentMembership ? (
-                <Link
-                  to="/hoc-vien/giao-an-ai"
-                  className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
-                >
-                  Mở giáo án AI
-                </Link>
-              ) : (
-                <Link
-                  to="/dang-ky-khoa-hoc"
-                  className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
-                >
-                  Đăng ký khóa học
-                </Link>
-              )}
-            </div>
-          </section>
-
           {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG */}
           {currentMembership && (
             <section
@@ -493,18 +464,6 @@ export default function HocVienDashboardPage() {
                     </span>
                   </div>
 
-                  {/* Chip thẻ */}
-                  <svg width="46" height="34" viewBox="0 0 46 34" aria-hidden="true">
-                    <defs>
-                      <linearGradient id="cardChip" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor={cardTheme.chip[0]} />
-                        <stop offset="100%" stopColor={cardTheme.chip[1]} />
-                      </linearGradient>
-                    </defs>
-                    <rect x="1" y="1" width="44" height="32" rx="6" fill="url(#cardChip)" />
-                    <path d="M1 12h14M1 22h14M31 12h14M31 22h14M15 1v32M31 1v32" stroke="rgba(0,0,0,0.35)" strokeWidth="1.2" fill="none" />
-                  </svg>
-
                   <div>
                     <h2
                       className="text-3xl sm:text-4xl font-black uppercase tracking-wide"
@@ -528,7 +487,7 @@ export default function HocVienDashboardPage() {
               {highestPackage && (
                 <div className="relative z-10 mt-6 flex flex-wrap gap-3">
                   <Link
-                    to={`/dang-ky-khoa-hoc?packageId=${highestPackage.id}`}
+                    to={`/dang-ky-khoa-hoc?packageId=${highestPackage.id}&mode=renew`}
                     className="font-black text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5"
                     style={TIER_THEMES[packageTier(highestPackage)].buttonStyle}
                   >
@@ -537,7 +496,7 @@ export default function HocVienDashboardPage() {
                   {upgradePackages.map((pkg) => (
                     <Link
                       key={pkg.id}
-                      to={`/dang-ky-khoa-hoc?packageId=${pkg.id}`}
+                      to={`/dang-ky-khoa-hoc?packageId=${pkg.id}&mode=renew`}
                       className="font-black text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5"
                       style={TIER_THEMES[packageTier(pkg)].buttonStyle}
                     >
@@ -548,6 +507,34 @@ export default function HocVienDashboardPage() {
               )}
             </section>
           )}
+
+          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 text-balance">Giáo án tập với AI</h2>
+                <p className="mt-1 text-sm text-pretty text-slate-500">
+                  {currentMembership
+                    ? 'Nhập chỉ số BMI và mục tiêu để nhận giáo án, rồi lưu vào lịch tập cá nhân.'
+                    : 'Giáo án AI cần gói hội viên đang hiệu lực. Gói chỉ có khi đăng ký kèm khóa học.'}
+                </p>
+              </div>
+              {currentMembership ? (
+                <Link
+                  to="/hoc-vien/giao-an-ai"
+                  className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
+                >
+                  Mở giáo án AI
+                </Link>
+              ) : (
+                <Link
+                  to="/dang-ky-khoa-hoc"
+                  className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
+                >
+                  Đăng ký khóa học
+                </Link>
+              )}
+            </div>
+          </section>
 
           {/* ĐƠN ĐANG CHỜ THANH TOÁN */}
           {livePendingCheckouts.length > 0 && (
