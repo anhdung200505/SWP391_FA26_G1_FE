@@ -85,6 +85,42 @@ public sealed class CreateClassRequest
     public List<ClassScheduleRequest>? Schedules { get; set; }
 }
 
+// HLV dạy được môn (coach_sport). SportNames: các môn HLV dạy được.
+public sealed record ManagementCoachDto(
+    string Id,
+    string FullName,
+    string Phone,
+    IReadOnlyList<string> SportNames);
+
+// Kiểm tra trước khi thêm hoặc sửa lớp: HLV và phòng nào trùng lịch với các buổi đã có trong khoảng ngày.
+// ExcludeClassId: khi sửa lớp, bỏ qua buổi của chính lớp đó.
+public sealed class ClassAvailabilityRequest
+{
+    [Required]
+    public string CourseId { get; set; } = "";
+
+    [Required]
+    public DateOnly? StartDate { get; set; }
+
+    [Required]
+    public DateOnly? EndDate { get; set; }
+
+    [Range(1, int.MaxValue)]
+    public int? Capacity { get; set; }
+
+    public List<ClassScheduleRequest> Schedules { get; set; } = [];
+
+    public string? ExcludeClassId { get; set; }
+}
+
+// SessionCount: số buổi sẽ sinh. Coaches, Rooms: isBusy kèm busyReason (trùng lớp nào, ngày nào, hoặc phòng không đủ sức chứa).
+public sealed record ClassAvailabilityDto(
+    int SessionCount,
+    DateOnly? FirstSession,
+    DateOnly? LastSession,
+    IReadOnlyList<SessionOptionDto> Coaches,
+    IReadOnlyList<SessionOptionDto> Rooms);
+
 public sealed record CourseOptionDto(
     string Id,
     string Code,
