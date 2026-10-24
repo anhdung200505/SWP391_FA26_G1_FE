@@ -44,15 +44,24 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         return rows.FirstOrDefault() ?? throw new KeyNotFoundException("Không tìm thấy buổi học.");
     }
 
-    // Lịch học của học viên: các buổi chưa hủy của những lớp đang ghi danh.
+    // Lịch học của học viên: mọi buổi (kể cả đã hủy) của những lớp đang ghi danh, kèm điểm danh của học viên.
     public async Task<IReadOnlyList<SessionDto>> AccessMemberSessionsAsync(int memberUserId, DateOnly? from, DateOnly? to)
     {
         var classIds = db.ClassEnrollments
             .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled")
             .Select(enrollment => enrollment.ClassId);
         var query = db.ClassSessions.AsNoTracking()
-            .Where(session => classIds.Contains(session.ClassId) && session.Status != "cancelled");
-        return await ProjectAsync(FilterDates(query, from, to));
+            .Where(session => classIds.Contains(session.ClassId));
+        var rows = await ProjectAsync(FilterDates(query, from, to));
+
+        // Buổi đã hủy vẫn hiện (kèm lý do ở note) để học viên biết mà không đến; kèm trạng thái điểm danh của riêng học viên.
+        var sessionIds = rows.Select(row => int.Parse(row.Id)).ToList();
+        var attendance = await db.ClassAttendances.AsNoTracking()
+            .Where(item => item.UserId == memberUserId && sessionIds.Contains(item.SessionId))
+            .ToDictionaryAsync(item => item.SessionId, item => item.Status);
+        return rows
+            .Select(row => row with { AttendanceStatus = attendance.GetValueOrDefault(int.Parse(row.Id)) })
+            .ToList();
     }
 
     // Lịch dạy của HLV theo HLV của từng buổi (session.coach_user_id), không theo HLV của lớp, vì HLV có thể được đổi cho riêng một buổi.
