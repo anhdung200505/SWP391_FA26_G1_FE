@@ -19,12 +19,23 @@ public sealed record CoachOptionDto(
     string FullName,
     string ClassId);
 
+// Một buổi học (bảng session). Tên "slot" giữ nguyên trong JSON (nextSlot, slots, slotId) cho frontend.
+// Status: scheduled, held, cancelled, completed.
 public sealed record ClassSlotDto(
     string Id,
     DateOnly Date,
     TimeOnly StartTime,
     TimeOnly EndTime,
-    string Title);
+    string Title,
+    string Status);
+
+// Lịch tuần của lớp. Weekday: 2..7 = thứ 2..thứ 7.
+public sealed record ClassScheduleDto(
+    int Weekday,
+    string WeekdayName,
+    string TimeSlotId,
+    TimeOnly StartTime,
+    TimeOnly EndTime);
 
 public sealed record ClassSummaryDto(
     string Id,
@@ -41,7 +52,9 @@ public sealed record ClassSummaryDto(
     int EnrolledCount,
     int? AvailableSeats,
     decimal Tuition,
-    ClassSlotDto? NextSlot);
+    // Buổi học sắp tới gần nhất (từ hôm nay), null nếu lớp không còn buổi nào.
+    ClassSlotDto? NextSlot,
+    IReadOnlyList<ClassScheduleDto> Schedule);
 
 public sealed record ClassDetailDto(
     string Id,
@@ -64,7 +77,9 @@ public sealed record ClassDetailDto(
     int? AvailableSeats,
     decimal Tuition,
     bool IsOpenForRegistration,
-    IReadOnlyList<ClassSlotDto> Slots);
+    // Toàn bộ buổi học của lớp theo ngày.
+    IReadOnlyList<ClassSlotDto> Slots,
+    IReadOnlyList<ClassScheduleDto> Schedule);
 
 public sealed record EnrolledClassDto(
     string ClassId,
@@ -93,6 +108,7 @@ public sealed record RegisteredByDto(
 public sealed class PayRegistrationRequest
 {
     public string ClassId { get; set; } = "";
+    // Id buổi học (session) của lớp; bắt buộc khi GroupStudy = false.
     public string? SlotId { get; set; }
     public bool GroupStudy { get; set; }
     public string FullName { get; set; } = "";
@@ -116,7 +132,7 @@ public sealed record RegistrationPaymentResponse(
     MembershipPackageQuoteDto? MembershipPackage);
 
 // Bắt buộc chọn môn. Không chọn lớp thì hệ thống chọn lớp còn chỗ bắt đầu sớm nhất của môn đó;
-// chỉ chọn slot thì lấy lớp của slot. Slot chỉ là nguyện vọng, lễ tân đăng ký slot hoặc dời slot sau khi thanh toán.
+// chỉ gửi slotId (id buổi học) thì lấy lớp của buổi đó. Ghi danh lớp là học mọi buổi của lớp.
 // Các trường hồ sơ đều tùy chọn: có gửi thì ghi đè hồ sơ học viên khi tạo đơn mới.
 public sealed record CreateClassRegistrationRequest(
     string SportId,
@@ -142,7 +158,6 @@ public sealed record ClassRegistrationDto(
     string PaymentUrl,
     bool IsExisting,
     RegisteredByDto? RegisteredBy,
-    RequestedSlotDto? RequestedSlot,
     decimal Tuition,
     MembershipPackageQuoteDto? MembershipPackage,
     string PayosQrCode,
@@ -176,15 +191,6 @@ public sealed record MembershipPackageQuoteDto(
     int ValidityMonths,
     bool IsFree);
 
-// Slot học viên mong muốn. Remaining = 0 nghĩa là slot đã đầy, lễ tân sẽ dời sang slot khác.
-public sealed record RequestedSlotDto(
-    string Id,
-    DateOnly Date,
-    TimeOnly StartTime,
-    TimeOnly EndTime,
-    string Title,
-    int Remaining);
-
 public sealed record RegistrationStatusDto(
     string PaymentId,
     string InvoiceCode,
@@ -196,6 +202,5 @@ public sealed record RegistrationStatusDto(
     string? EnrollmentStatus,
     string Message,
     RegisteredByDto? RegisteredBy,
-    RequestedSlotDto? RequestedSlot,
     decimal Tuition,
     MembershipPackageQuoteDto? MembershipPackage);

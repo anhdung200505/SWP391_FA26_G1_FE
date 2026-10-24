@@ -37,7 +37,7 @@ builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<ClassManagementFlowService>();
 builder.Services.AddScoped<ReceptionFlowService>();
-builder.Services.AddScoped<SlotFlowService>();
+builder.Services.AddScoped<SessionFlowService>();
 builder.Services.AddScoped<MemberMembershipFlowService>();
 builder.Services.AddScoped<CustomerServiceFlowService>();
 builder.Services.AddScoped<PayOsPaymentService>();
@@ -138,12 +138,7 @@ app.MapControllers();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
-    var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
-    await auth.EnsurePendingRegistrationTableAsync();
-    await auth.EnsureBootstrapAdminPasswordAsync();
-    var workouts = scope.ServiceProvider.GetRequiredService<WorkoutRecommendationFlowService>();
-    await workouts.EnsureTablesAsync();
-    await scope.ServiceProvider.GetRequiredService<ReceptionFlowService>().EnsureSchemaAsync();
+    await scope.ServiceProvider.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 
 app.Run();

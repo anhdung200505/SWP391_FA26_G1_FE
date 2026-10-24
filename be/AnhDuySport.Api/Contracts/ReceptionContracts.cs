@@ -15,9 +15,6 @@ public sealed record MoveOutRequest(string Reason);
 // targetClassId để trống thì học lại đúng lớp cũ. Lớp khác phải cùng khóa học.
 public sealed record ReEnrollRequest(string Reason, string? TargetClassId = null);
 
-// Dời từ slot học viên đang đăng ký sang slot khác cùng lớp.
-public sealed record MoveSlotRequest(string ToSlotId, string? Reason = null);
-
 public sealed record ReceptionEnrollmentDto(
     string MemberUserId,
     string MemberName,
@@ -35,9 +32,8 @@ public sealed record ReceptionRegistrationDto(
     ReceptionPaymentDto? Payment,
     RegisteredByDto? RegisteredBy,
     ClassAssignedByDto? ClassAssignedBy,
-    RequestedSlotDto? RequestedSlot,
-    string? RequestedSlotStatus,
-    IReadOnlyList<RequestedSlotDto> RegisteredSlots,
+    // Buổi học sắp tới gần nhất của lớp.
+    ClassSlotDto? NextSlot,
     IReadOnlyList<ReceptionHistoryDto> History,
     DateTime LastActivityAt);
 
@@ -75,7 +71,6 @@ public sealed record ReceptionHistoryDto(
     string Action,
     string ActionLabel,
     string? Reason,
-    string? SlotId,
     string? PaymentId,
     RegisteredByDto PerformedBy,
     DateTime CreatedAt);
