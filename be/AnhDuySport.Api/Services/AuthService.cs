@@ -472,13 +472,11 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             UPDATE payment SET registered_by_user_id = NULL WHERE registered_by_user_id = {user.UserId};
             DELETE FROM notification WHERE user_id = {user.UserId};
             DELETE FROM attendance WHERE user_id = {user.UserId};
-            DELETE FROM slot_registration WHERE user_id = {user.UserId};
             DELETE FROM class_enrollment WHERE user_id = {user.UserId};
             DELETE FROM evaluation WHERE evaluator_user_id = {user.UserId} OR evaluated_user_id = {user.UserId};
             UPDATE evaluation SET reviewer_user_id = NULL WHERE reviewer_user_id = {user.UserId};
             DELETE FROM support_request WHERE member_user_id = {user.UserId};
             UPDATE support_request SET assigned_to_user_id = NULL WHERE assigned_to_user_id = {user.UserId};
-            UPDATE consultation_request SET received_by_user_id = NULL WHERE received_by_user_id = {user.UserId};
             UPDATE audit_log SET user_id = NULL WHERE user_id = {user.UserId};
             DELETE FROM personal_exercise WHERE user_id = {user.UserId};
             DELETE FROM ai_workout_recommendation WHERE user_id = {user.UserId};
@@ -502,42 +500,6 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
         return db.PendingRegistrations
             .Where(row => row.ExpiresAt <= now)
             .ExecuteDeleteAsync(cancellationToken);
-    }
-
-    public async Task EnsurePendingRegistrationTableAsync()
-    {
-        await db.Database.ExecuteSqlRawAsync(
-            """
-            SET QUOTED_IDENTIFIER ON;
-            IF OBJECT_ID(N'dbo.pending_registration', N'U') IS NULL
-            BEGIN
-                CREATE TABLE pending_registration (
-                    email          NVARCHAR(200) NOT NULL,
-                    full_name      NVARCHAR(200) NOT NULL,
-                    phone          NVARCHAR(20)  NULL,
-                    password_hash  NVARCHAR(255) NOT NULL,
-                    otp_hash       NVARCHAR(64)  NOT NULL,
-                    attempts       INT           NOT NULL CONSTRAINT DF_pending_registration_attempts DEFAULT (0),
-                    created_at     DATETIME2(0)  NOT NULL,
-                    expires_at     DATETIME2(0)  NOT NULL,
-                    CONSTRAINT PK_pending_registration PRIMARY KEY (email)
-                );
-            END
-            IF NOT EXISTS (
-                SELECT 1 FROM sys.indexes
-                WHERE name = N'UQ_user_phone' AND object_id = OBJECT_ID(N'dbo.[user]'))
-            BEGIN
-                CREATE UNIQUE INDEX UQ_user_phone ON [user] (phone) WHERE phone IS NOT NULL;
-            END
-            IF OBJECT_ID(N'dbo.pending_registration', N'U') IS NOT NULL
-               AND NOT EXISTS (
-                    SELECT 1 FROM sys.indexes
-                    WHERE name = N'UQ_pending_registration_phone' AND object_id = OBJECT_ID(N'dbo.pending_registration'))
-            BEGIN
-                CREATE UNIQUE INDEX UQ_pending_registration_phone
-                    ON pending_registration (phone) WHERE phone IS NOT NULL;
-            END
-            """);
     }
 
     public async Task<LoginResponse> IssueAsync(UserAccount user)
