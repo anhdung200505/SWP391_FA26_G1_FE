@@ -21,6 +21,9 @@ import RequireAuth from './components/RequireAuth';
 import { AccountManagementProvider } from './context/AccountManagementContext';
 import { AuthProvider } from './context/AuthContext';
 import ClassListPage from './pages/management/ClassListPage';
+import AiWorkoutPage from './pages/AiWorkoutPage';
+import AiQuotaPage from './pages/management/AiQuotaPage';
+import CoachTrainingHistoryPage from './pages/CoachTrainingHistoryPage';
 
 function Protected({ children, allowedRoles }) {
   return <RequireAuth allowedRoles={allowedRoles}>{children}</RequireAuth>;
@@ -69,6 +72,24 @@ export default function App() {
               } 
             />
 
+            <Route
+              path="/hoc-vien/giao-an-ai"
+              element={
+                <Protected allowedRoles={['MEMBER']}>
+                  <AiWorkoutPage />
+                </Protected>
+              }
+            />
+
+            <Route
+              path="/hlv/lich-su-tap"
+              element={
+                <Protected allowedRoles={['COACH']}>
+                  <CoachTrainingHistoryPage />
+                </Protected>
+              }
+            />
+
             {/* Route LỄ TÂN DASHBOARD (Không chứa Header/Footer chung) */}
             <Route 
               path="/le-tan" 
@@ -87,6 +108,7 @@ export default function App() {
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected allowedRoles={['ADMIN']}><UserAccountPage /></Protected>} />
             
             <Route path="/quan-ly/goi" element={<Protected allowedRoles={['ADMIN']}><PackageListPage /></Protected>} />
+            <Route path="/quan-ly/han-muc-ai" element={<Protected allowedRoles={['ADMIN']}><AiQuotaPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="create" /></Protected>} />
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
             <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />

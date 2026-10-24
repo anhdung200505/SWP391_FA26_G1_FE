@@ -251,15 +251,38 @@ export default function Header({ forceWhite = false }) {
                   <div className="py-1">
                     {/* KHÓA HỌC CỦA TÔI (CHO HỌC VIÊN / MEMBER) */}
                     {(userRole === 'MEMBER' || userRole === 'STUDENT' || !userRole) && (
+                      <>
+                        <Link
+                          to="/hoc-vien-dashboard"
+                          className="flex items-center px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#e31b23]"
+                        >
+                          <svg className="w-4 h-4 mr-2 text-[#e31b23]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                          </svg>
+                          Khóa học của tôi
+                        </Link>
+                        <Link
+                          to="/hoc-vien/giao-an-ai"
+                          className="flex items-center px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#e31b23]"
+                        >
+                          <svg className="w-4 h-4 mr-2 text-[#e31b23]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          Giáo án AI
+                        </Link>
+                      </>
+                    )}
+
+                    {userRole === 'COACH' && (
                       <Link
-                        to="/hoc-vien-dashboard"
+                        to="/hlv/lich-su-tap"
                         className="flex items-center px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#e31b23]"
                       >
                         <svg className="w-4 h-4 mr-2 text-[#e31b23]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
-                        Khóa học của tôi
+                        Lịch sử tập
                       </Link>
                     )}
 

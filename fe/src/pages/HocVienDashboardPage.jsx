@@ -381,6 +381,22 @@ export default function HocVienDashboardPage() {
         </section>
 
         <div className="max-w-6xl mx-auto px-4 sm:px-8 mt-8 space-y-8">
+          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 text-balance">Giáo án tập với AI</h2>
+                <p className="mt-1 text-sm text-pretty text-slate-500">
+                  Nhập chỉ số BMI và mục tiêu để nhận giáo án, rồi lưu vào lịch tập cá nhân.
+                </p>
+              </div>
+              <Link
+                to="/hoc-vien/giao-an-ai"
+                className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
+              >
+                Mở giáo án AI
+              </Link>
+            </div>
+          </section>
           {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG */}
           {currentMembership && (
             <section
