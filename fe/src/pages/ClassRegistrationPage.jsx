@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import QRCode from 'qrcode';
 import logoImg from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -11,8 +10,20 @@ import {
   getClassRegistrationStatus,
   getPackages,
   cancelPayment,
+  createMembershipRenewal,
+  confirmMembershipRenewal,
+  getPendingCheckouts,
+  getMemberMembership,
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
+
+// Đơn chờ thanh toán chỉ giữ 3 phút (khớp với backend), quá hạn thì hủy và quay lại form đăng ký.
+const PAYMENT_TIMEOUT_SECONDS = 180;
+const PAID_REDIRECT_SECONDS = 5;
+const MY_COURSES_PATH = '/hoc-vien-dashboard';
+
+const formatCountdown = (seconds) =>
+  `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
 export default function ClassRegistrationPage() {
   const { user } = useAuth();
@@ -35,7 +46,15 @@ export default function ClassRegistrationPage() {
   // State lựa chọn
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedClass, setSelectedClass] = useState(null);
-  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [pickedPackage, setSelectedPackage] = useState(null);
+
+  // Gói cao nhất học viên đang có (đang dùng hoặc chờ kích hoạt): khóa các gói rẻ hơn.
+  // Có Vàng thì chỉ mua Vàng; có Bạc thì mua Bạc hoặc Vàng.
+  const [ownedPackageId, setOwnedPackageId] = useState(null);
+  const ownedPackage = packages.find((pkg) => String(pkg.id) === String(ownedPackageId)) || null;
+  const isPackageLocked = (pkg) => !!ownedPackage && (pkg?.fee || 0) < (ownedPackage.fee || 0);
+  // Gói đang chọn mà bị khóa (vd. mặc định Bạc nhưng đã có Vàng) thì dùng gói đang có.
+  const selectedPackage = pickedPackage && isPackageLocked(pickedPackage) ? ownedPackage : pickedPackage;
 
   const [loading, setLoading] = useState(true);
   const [loadingClasses, setLoadingClasses] = useState(false);
@@ -54,7 +73,10 @@ export default function ClassRegistrationPage() {
   // Kết quả & Thanh toán từ Server
   const [registrationResult, setRegistrationResult] = useState(null);
   const [paymentStatusData, setPaymentStatusData] = useState(null);
-  const [qrState, setQrState] = useState({ code: '', url: '' });
+  const [now, setNow] = useState(() => Date.now());
+  const [redirectLeft, setRedirectLeft] = useState(PAID_REDIRECT_SECONDS);
+  // Gói hội viên sau khi thanh toán xong (đã gia hạn / nâng cấp) để báo hạn mới
+  const [membershipAfterPay, setMembershipAfterPay] = useState(null);
 
   // 1. Fetch danh sách Gói hội viên, Thông tin Lớp học ban đầu & Danh sách Bộ môn
   useEffect(() => {
@@ -148,7 +170,11 @@ export default function ClassRegistrationPage() {
 
     const checkStatus = async () => {
       try {
-        const status = await getClassRegistrationStatus(registrationResult.paymentId);
+        // Chỉ mua gói: hỏi API xác nhận gói (backend tự hỏi payOS, gọi lặp lại không cộng hạn hai lần)
+        const status =
+          registrationResult.kind === 'membership'
+            ? await confirmMembershipRenewal(user?.id, registrationResult.paymentId)
+            : await getClassRegistrationStatus(registrationResult.paymentId);
         setPaymentStatusData(status);
       } catch {
         // Ignored
@@ -158,40 +184,133 @@ export default function ClassRegistrationPage() {
     checkStatus();
     const interval = setInterval(checkStatus, 5000);
     return () => clearInterval(interval);
-  }, [registrationResult]);
+  }, [registrationResult, user?.id]);
 
-  // Mã QR lấy đúng chuỗi VietQR payOS trả về (tài khoản nhận tiền của kênh payOS trung tâm)
-  const payosQrCode = registrationResult?.payosQrCode || '';
+  // Gói cao nhất đang có để khóa các gói thấp hơn
   useEffect(() => {
-    if (!payosQrCode) return undefined;
+    if (!user?.id) return undefined;
 
     let active = true;
-    QRCode.toDataURL(payosQrCode, { width: 416, margin: 1 })
-      .then((url) => {
-        if (active) setQrState({ code: payosQrCode, url });
+    getMemberMembership(user.id)
+      .then((res) => {
+        if (active) setOwnedPackageId(res?.highestPackageId || null);
       })
       .catch(() => {});
     return () => {
       active = false;
     };
-  }, [payosQrCode]);
-  const qrImage = payosQrCode && qrState.code === payosQrCode ? qrState.url : '';
+  }, [user?.id]);
+
+  // Quay lại trang khi còn đơn chờ thanh toán (vd. bấm Quay lại rồi vào lại): mở lại đúng màn hình QR của đơn đó.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    let active = true;
+    const restorePending = async () => {
+      const pending = await getPendingCheckouts().catch(() => []);
+      const latest = Array.isArray(pending) ? pending[0] : null;
+      if (!active || !latest) return;
+      setRegistrationResult((current) =>
+        current || {
+          ...latest,
+          packageName: latest.packageName || (latest.kind === 'class' ? 'Hạng Đồng (tặng kèm lớp)' : null),
+          isExisting: true,
+          deadline: Date.now() + latest.expiresInSeconds * 1000,
+        }
+      );
+      setNow(Date.now());
+    };
+    restorePending();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  // Ảnh QR do backend vẽ sẵn từ mã VietQR payOS (tài khoản nhận tiền của kênh payOS trung tâm).
+  // Không tự vẽ QR từ số tài khoản ở frontend.
+  const qrImage = registrationResult?.payosQrImage || '';
+
+  const isPaid = paymentStatusData?.paymentStatus === 'paid' || paymentStatusData?.paymentStatus === 'success';
+  const secondsLeft = registrationResult?.deadline
+    ? Math.max(0, Math.ceil((registrationResult.deadline - now) / 1000))
+    : 0;
+
+  // Đếm ngược giữ đơn. Hết giờ: hỏi lại trạng thái lần cuối, chưa trả thì hủy đơn và quay về form đăng ký.
+  useEffect(() => {
+    if (!registrationResult?.deadline || isPaid) return undefined;
+
+    const result = registrationResult;
+    const tick = setInterval(async () => {
+      const current = Date.now();
+      setNow(current);
+      if (current < result.deadline) return;
+
+      clearInterval(tick);
+      try {
+        const status =
+          result.kind === 'membership'
+            ? await confirmMembershipRenewal(user?.id, result.paymentId)
+            : await getClassRegistrationStatus(result.paymentId);
+        if (status?.paymentStatus === 'paid') {
+          setPaymentStatusData(status);
+          return;
+        }
+      } catch {
+        // Không hỏi được thì vẫn hủy đơn
+      }
+
+      await cancelPayment(result.paymentId).catch(() => {});
+      setRegistrationResult(null);
+      setPaymentStatusData(null);
+      setError(`Hết ${PAYMENT_TIMEOUT_SECONDS / 60} phút giữ đơn nên đơn đã bị hủy. Vui lòng bấm đăng ký lại.`);
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [registrationResult, isPaid, user?.id]);
+
+  // Thanh toán xong: hiện lời cảm ơn, đếm lùi rồi tự chuyển về Khóa học của tôi.
+  useEffect(() => {
+    if (!isPaid) return undefined;
+    let active = true;
+    if (user?.id) {
+      getMemberMembership(user.id)
+        .then((res) => {
+          if (!active || !res) return;
+          setMembershipAfterPay({
+            planName: res.currentMembership?.planName || '',
+            endDate: res.membershipEndDate || res.currentMembership?.endDate || '',
+          });
+        })
+        .catch(() => {});
+    }
+
+    const until = Date.now() + PAID_REDIRECT_SECONDS * 1000;
+    const tick = setInterval(() => {
+      const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+      setRedirectLeft(left);
+      if (left === 0) {
+        clearInterval(tick);
+        navigate(MY_COURSES_PATH);
+      }
+    }, 250);
+    return () => {
+      active = false;
+      clearInterval(tick);
+    };
+  }, [isPaid, navigate, user?.id]);
 
   // Logic tính giá Gói hội viên: CHỈ CHIẾT KHẤU KHI CÓ TICK ĐĂNG KÝ KÈM LỚP
   const calculatePackagePrice = (pkg) => {
     if (!pkg) return 0;
 
-    // Nếu KHÔNG ĐĂNG KÝ KÈM LỚP -> Giữ nguyên giá gốc
     if (!includeClass) {
       return pkg.fee || 0;
     }
 
-    // Nếu CÓ ĐĂNG KÝ KÈM LỚP -> Áp dụng Discount đặc quyền
     const isBronze = pkg.name?.toLowerCase().includes('đồng') || pkg.code === 'PKG-001';
     const isSilver = pkg.name?.toLowerCase().includes('bạc') || pkg.code === 'PKG-002';
 
-    if (isBronze) return 0; // Hạng đồng được TẶNG FREE 0đ khi mua kèm lớp
-    if (isSilver) return (pkg.fee || 0) * 0.5; // Hạng bạc giảm 50% khi mua kèm lớp
+    if (isBronze) return 0;
+    if (isSilver) return (pkg.fee || 0) * 0.5;
     if (pkg.upgradeDiscountPercent) {
       return (pkg.fee || 0) * ((100 - pkg.upgradeDiscountPercent) / 100);
     }
@@ -231,6 +350,25 @@ export default function ClassRegistrationPage() {
 
     setSubmitting(true);
     try {
+      // Chỉ mua gói (không kèm lớp): dùng API gia hạn gói, payOS trả link và mã QR theo giá gốc của gói
+      if (!includeClass) {
+        const res = await createMembershipRenewal(user?.id, selectedPackage.id);
+        setRegistrationResult({
+          kind: 'membership',
+          paymentId: res.paymentId,
+          invoiceCode: res.invoiceCode,
+          amount: res.amount,
+          status: res.paymentStatus,
+          paymentUrl: res.checkoutUrl || '',
+          payosQrCode: res.qrCode || '',
+          payosQrImage: res.qrImage || '',
+          isExisting: false,
+          deadline: Date.now() + (res.expiresInSeconds ?? PAYMENT_TIMEOUT_SECONDS) * 1000,
+        });
+        setNow(Date.now());
+        return;
+      }
+
       const payload = {
         ...(includeClass ? { sportId: selectedSportId || sportsList[0]?.id || '1' } : {}),
         ...(includeClass && selectedClass?.id ? { classId: selectedClass.id } : {}),
@@ -243,7 +381,11 @@ export default function ClassRegistrationPage() {
       };
 
       const res = await registerClass(payload);
-      setRegistrationResult(res);
+      setRegistrationResult({
+        ...res,
+        deadline: Date.now() + (res.expiresInSeconds ?? PAYMENT_TIMEOUT_SECONDS) * 1000,
+      });
+      setNow(Date.now());
     } catch (err) {
       setError(err.message || 'Đăng ký thất bại. Vui lòng thử lại.');
     } finally {
@@ -264,8 +406,6 @@ export default function ClassRegistrationPage() {
     setPaymentStatusData(null);
   };
 
-  const isPaid = paymentStatusData?.paymentStatus === 'paid' || paymentStatusData?.paymentStatus === 'success';
-
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans select-none flex flex-col justify-between">
       {/* 1. THANH TIÊU ĐỀ STANDALONE */}
@@ -278,12 +418,15 @@ export default function ClassRegistrationPage() {
             </span>
           </Link>
 
-          <button
-            onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-[#e31b23] bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-all cursor-pointer"
-          >
-            ← Quay lại
-          </button>
+          {/* Màn hình QR đã có nút điều hướng ở dưới nên ẩn nút Quay lại ở trên */}
+          {!registrationResult && (
+            <button
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-[#e31b23] bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-all cursor-pointer"
+            >
+              ← Quay lại
+            </button>
+          )}
         </div>
       </header>
 
@@ -326,7 +469,7 @@ export default function ClassRegistrationPage() {
               </h2>
               <p className="text-xs text-slate-500 mt-1">
                 {isPaid
-                  ? paymentStatusData?.message || 'Hệ thống đã ghi nhận dịch vụ của bạn!'
+                  ? 'Cảm ơn bạn đã tin chọn AnhDuy Sport. Hẹn gặp bạn tại lớp học!'
                   : registrationResult.isExisting
                   ? 'Bạn đang có một đơn hàng chờ thanh toán trước đó cho dịch vụ này.'
                   : 'Quét mã VietQR bằng App Ngân hàng bất kỳ để hoàn tất thanh toán.'}
@@ -345,15 +488,18 @@ export default function ClassRegistrationPage() {
                 <div>
                   <span className="text-slate-400 font-bold uppercase block">Gói hội viên</span>
                   <span className="text-sm font-bold text-slate-800">
-                    Gói {selectedPackage?.name}
+                    Gói{' '}
+                    {registrationResult.packageName ||
+                      registrationResult.membershipPackage?.name ||
+                      selectedPackage?.name}
                   </span>
                 </div>
 
-                {includeClass && selectedClass && (
+                {(registrationResult.className || (includeClass && selectedClass)) && (
                   <div>
                     <span className="text-slate-400 font-bold uppercase block">Khóa học đăng ký kèm</span>
                     <span className="text-xs font-semibold text-slate-700">
-                      {selectedClass.name}
+                      {registrationResult.className || selectedClass?.name}
                     </span>
                   </div>
                 )}
@@ -370,7 +516,17 @@ export default function ClassRegistrationPage() {
                 {isPaid ? (
                   <div className="py-6">
                     <span className="text-5xl block mb-2">🎉</span>
-                    <p className="text-sm font-black text-emerald-600">ĐÃ XÁC NHẬN THANH TOÁN</p>
+                    <p className="text-sm font-black text-emerald-600">CẢM ƠN BẠN ĐÃ THANH TOÁN!</p>
+                    {membershipAfterPay?.endDate && (
+                      <p className="text-xs font-bold text-slate-800 mt-2">
+                        Gói hội viên{membershipAfterPay.planName ? ` ${membershipAfterPay.planName}` : ''} có hiệu lực đến hết{' '}
+                        {new Date(membershipAfterPay.endDate).toLocaleDateString('vi-VN')}.
+                      </p>
+                    )}
+                    <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
+                      AnhDuy Sport đã ghi nhận đăng ký của bạn. Tự động chuyển về Khóa học của tôi sau{' '}
+                      <span className="font-black text-emerald-600">{redirectLeft}</span> giây...
+                    </p>
                   </div>
                 ) : qrImage ? (
                   <>
@@ -378,6 +534,9 @@ export default function ClassRegistrationPage() {
                       <img src={qrImage} alt="Mã VietQR payOS" className="w-52 h-52 object-contain" />
                     </div>
                     <p className="text-[11px] font-bold text-slate-600">Quét mã VietQR bằng App Ngân Hàng</p>
+                    <p className={`text-xs font-black mt-1 ${secondsLeft <= 30 ? 'text-[#e31b23]' : 'text-amber-600'}`}>
+                      Mã hết hạn sau {formatCountdown(secondsLeft)}
+                    </p>
                     <p className="text-[10px] text-slate-400 mt-1">Trang tự cập nhật khi thanh toán xong.</p>
                   </>
                 ) : (
@@ -410,10 +569,10 @@ export default function ClassRegistrationPage() {
               )}
 
               <button
-                onClick={() => navigate('/hoc-vien-dashboard')}
+                onClick={() => navigate(MY_COURSES_PATH)}
                 className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs uppercase px-8 py-3 rounded-xl shadow transition-all cursor-pointer"
               >
-                Trang cá nhân học viên →
+                {isPaid ? 'Về Khóa học của tôi ngay →' : 'Trang cá nhân học viên →'}
               </button>
             </div>
           </div>
@@ -431,8 +590,14 @@ export default function ClassRegistrationPage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
+                  {ownedPackage && (
+                    <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Bạn đang có {ownedPackage.name} nên chỉ gia hạn {ownedPackage.name} hoặc nâng cấp lên hạng cao hơn.
+                    </p>
+                  )}
                   {packages.map((pkg) => {
                     const isSelected = selectedPackage?.id === pkg.id;
+                    const isLocked = isPackageLocked(pkg);
                     const discountedPrice = calculatePackagePrice(pkg);
                     const isBronze = pkg.name?.toLowerCase().includes('đồng') || pkg.code === 'PKG-001';
                     const isSilver = pkg.name?.toLowerCase().includes('bạc') || pkg.code === 'PKG-002';
@@ -440,11 +605,15 @@ export default function ClassRegistrationPage() {
                     return (
                       <div
                         key={pkg.id}
-                        onClick={() => setSelectedPackage(pkg)}
-                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'border-[#e31b23] bg-red-50/40 shadow-sm'
-                            : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+                        onClick={() => {
+                          if (!isLocked) setSelectedPackage(pkg);
+                        }}
+                        className={`p-4 rounded-xl border-2 transition-all flex items-center justify-between ${
+                          isLocked
+                            ? 'border-slate-200 bg-slate-100 opacity-50 cursor-not-allowed'
+                            : isSelected
+                            ? 'border-[#e31b23] bg-red-50/40 shadow-sm cursor-pointer'
+                            : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -452,11 +621,15 @@ export default function ClassRegistrationPage() {
                             type="radio"
                             name="package_select"
                             checked={isSelected}
+                            disabled={isLocked}
                             onChange={() => {}}
                             className="accent-[#e31b23] w-4 h-4 cursor-pointer"
                           />
                           <div>
-                            <p className="text-sm font-black text-slate-900">{pkg.name}</p>
+                            <p className="text-sm font-black text-slate-900">
+                              {pkg.name}
+                              {isLocked && <span className="ml-2 text-[10px] font-bold text-slate-500">🔒 Thấp hơn gói đang có</span>}
+                            </p>
                             <p className="text-[11px] text-slate-500 font-medium">
                               Thời hạn: {pkg.validityMonths || 1} tháng
                             </p>

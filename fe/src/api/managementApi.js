@@ -8,13 +8,14 @@ export function setUnauthorizedHandler(handler) {
 
 async function request(path, options = {}) {
   const { anonymous = false, headers, ...rest } = options;
-  const token = anonymous ? '' : readSession()?.token;
+  const token = anonymous ? '' : readSession()?.token || localStorage.getItem('token');
   let response;
   try {
     response = await fetch(`/api${path}`, {
       ...rest,
       headers: {
         'Content-Type': 'application/json',
+        'accept': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(headers || {}),
       },
@@ -117,6 +118,94 @@ export function getClassDetail(classId) {
   return request(`/catalog/classes/${classId}`);
 }
 
+export function getCoachesBySport(sportId) {
+  return request(`/catalog/sports/${sportId}/coaches`);
+}
+
+// ==========================================
+// API QUẢN LÝ LỚP HỌC (ADMIN)
+// ==========================================
+
+function toQuery(params = {}) {
+  const query = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, value]) => value)),
+  ).toString();
+  return query ? `?${query}` : '';
+}
+
+// Mọi trạng thái lớp, kèm lịch tuần (schedule) và số buổi (sessionCount)
+export function getManagementClasses(params = {}) {
+  return request(`/management/classes${toQuery(params)}`);
+}
+
+export function getManagementCourses(sportId) {
+  return request(`/management/courses${toQuery({ sportId })}`);
+}
+
+export function getManagementCoaches(sportId) {
+  return request(`/management/coaches${toQuery({ sportId })}`);
+}
+
+export function getManagementRooms(sportId) {
+  return request(`/management/rooms${toQuery({ sportId })}`);
+}
+
+export function getTimeSlots(kind = 'group') {
+  return request(`/time-slots${toQuery({ kind })}`);
+}
+
+// { courseId, startDate, endDate, capacity, schedules: [{ weekday, timeSlotId }] } → số buổi, HLV/phòng kèm isBusy
+export function checkClassAvailability(payload) {
+  return request('/management/classes/availability', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createClass(payload) {
+  return request('/management/classes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// ==========================================
+// API LỊCH BUỔI HỌC (SESSIONS)
+// ==========================================
+
+// params: classId, sportId, from, to (yyyy-MM-dd). Mặc định từ hôm nay trở đi.
+export function getSessions(params = {}) {
+  return request(`/sessions${toQuery(params)}`);
+}
+
+// HLV và phòng có thể đổi cho buổi, kèm isBusy / busyReason
+export function getSessionOptions(sessionId) {
+  return request(`/sessions/${sessionId}/options`);
+}
+
+// Quản trị: { coachUserId?, roomId?, note? }
+export function updateSession(sessionId, payload) {
+  return request(`/sessions/${sessionId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+// Lễ tân (và quản trị): { coachUserId, note? }
+export function changeSessionCoach(sessionId, payload) {
+  return request(`/sessions/${sessionId}/coach`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function cancelSession(sessionId, reason) {
+  return request(`/sessions/${sessionId}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
 // ==========================================
 // API ĐĂNG KÝ & THANH TOÁN (REGISTRATIONS & PAYMENTS)
 // ==========================================
@@ -136,6 +225,11 @@ export function getClassRegistrationStatus(paymentId) {
   return request(`/class-registrations/${paymentId}`);
 }
 
+// Đơn đang chờ thanh toán còn trong 3 phút (đăng ký lớp và mua gói), mới nhất lên đầu
+export function getPendingCheckouts() {
+  return request('/class-registrations/pending');
+}
+
 export function payRegistration(payload) {
   return request('/registrations/pay', {
     method: 'POST',
@@ -143,7 +237,7 @@ export function payRegistration(payload) {
   });
 }
 
-// HÀM HỦY ĐƠN PENDING (GIÚP TẠO ĐƠN MỚI KHÔNG BỊ KHÓA TRÙNG)
+// Hủy đơn pending giúp tạo đơn mới không bị khóa trùng
 export function cancelPayment(paymentId) {
   return request(`/payments/${paymentId}/cancel`, {
     method: 'POST',
@@ -221,6 +315,39 @@ export function updateMemberProfile(memberUserId, payload) {
   });
 }
 
+// Gửi ảnh đại diện dạng form-data (không dùng request() vì request() luôn đặt Content-Type JSON)
+export async function uploadMemberAvatar(memberUserId, file) {
+  const token = readSession()?.token || localStorage.getItem('token');
+  const form = new FormData();
+  form.append('file', file);
+
+  let response;
+  try {
+    response = await fetch(`/api/members/${memberUserId}/profile/avatar`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: form,
+    });
+  } catch {
+    throw new Error('Không kết nối được máy chủ. Vui lòng kiểm tra lại kết nối mạng hoặc API.');
+  }
+
+  if (response.status === 401) {
+    clearSession();
+    onUnauthorized();
+    throw new Error('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.');
+  }
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.message || 'Tải ảnh đại diện thất bại.');
+  }
+  return body;
+}
+
 // ==========================================
 // API YÊU CẦU HỖ TRỢ & TƯ VẤN (SUPPORT REQUESTS)
 // ==========================================
@@ -240,45 +367,17 @@ export function createSupportRequest(payload) {
   });
 }
 
-// ==========================================
-// API QUẢN LÝ GÓI HỘI VIÊN & GIA HẠN PAYOS (MEMBERSHIP & RENEWALS)
-// ==========================================
-
-// 1. Lấy gói đang dùng, lịch sử & danh sách gói đang bán
-export function getMemberMembership(memberUserId) {
-  return request(`/members/${memberUserId}/membership`);
+// Lấy danh sách đơn/yêu cầu hỗ trợ cá nhân của học viên
+export function getMySupportRequests() {
+  return request('/support-requests/mine');
 }
 
-// 2. Lấy hotline tư vấn chăm sóc khách hàng
-export function getConsultationContact(memberUserId) {
-  return request(`/members/${memberUserId}/consultation-contact`);
-}
-
-// 3. Chọn gói & tạo liên kết/mã QR thanh toán PayOS
-export function createMembershipRenewal(memberUserId, packageId) {
-  return request(`/members/${memberUserId}/membership/renewals`, {
-    method: 'POST',
-    body: JSON.stringify({ packageId }),
-  });
-}
-
-// 4. Kiểm tra & xác nhận cập nhật hạn gói sau khi thanh toán PayOS
-export function confirmMembershipRenewal(memberUserId, paymentId) {
-  return request(`/members/${memberUserId}/membership/renewals/${paymentId}/confirm`, {
-    method: 'POST',
-  });
-}
-
-// ==========================================
-// API QUẢN TRỊ TRUNG TÂM XỬ LÝ ĐƠN HỖ TRỢ (ADMIN DECISION)
-// ==========================================
-
-// 1. Quản trị trung tâm lấy danh sách các yêu cầu Lễ tân chuyển lên
+// Quản trị trung tâm lấy danh sách các yêu cầu Lễ tân chuyển lên
 export function getEscalatedSupportRequests() {
   return request('/support-requests/financial');
 }
 
-// 2. Quản trị trung tâm ra quyết định phê duyệt (approved) hoặc từ chối (rejected)
+// Quản trị trung tâm ra quyết định phê duyệt (approved) hoặc từ chối (rejected)
 export function processSupportRequestDecision(requestId, { decision, note }) {
   return request(`/support-requests/${requestId}/decision`, {
     method: 'POST',
@@ -286,11 +385,31 @@ export function processSupportRequestDecision(requestId, { decision, note }) {
   });
 }
 
-export function getMySupportRequests() {
-  return request('/support-requests/mine');
+// ==========================================
+// API QUẢN LÝ GÓI HỘI VIÊN & GIA HẠN PAYOS (MEMBERSHIP & RENEWALS)
+// ==========================================
+
+// Lấy gói đang dùng, lịch sử & danh sách gói đang bán
+export function getMemberMembership(memberUserId) {
+  return request(`/members/${memberUserId}/membership`);
 }
 
-// Lấy danh sách Huấn luyện viên theo bộ môn
-export function getCoachesBySport(sportId) {
-  return request(`/catalog/sports/${sportId}/coaches`);
+// Lấy hotline tư vấn chăm sóc khách hàng
+export function getConsultationContact(memberUserId) {
+  return request(`/members/${memberUserId}/consultation-contact`);
+}
+
+// Chọn gói & tạo liên kết/mã QR thanh toán PayOS
+export function createMembershipRenewal(memberUserId, packageId) {
+  return request(`/members/${memberUserId}/membership/renewals`, {
+    method: 'POST',
+    body: JSON.stringify({ packageId }),
+  });
+}
+
+// Kiểm tra & xác nhận cập nhật hạn gói sau khi thanh toán PayOS
+export function confirmMembershipRenewal(memberUserId, paymentId) {
+  return request(`/members/${memberUserId}/membership/renewals/${paymentId}/confirm`, {
+    method: 'POST',
+  });
 }

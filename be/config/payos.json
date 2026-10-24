@@ -1,0 +1,9 @@
+{
+  "PayOS": {
+    "ClientId": "0cec55cf-21d3-43e3-8826-1b7dbc87d493",
+    "ApiKey": "bb81d5d0-9dfd-49d7-a2cf-e3b8dae725ef",
+    "ChecksumKey": "4fe4439bb5ed4d985ccf9ac6773247e07e7aeb143428d33656319629dfcfdc8e",
+    "ReturnUrl": "http://localhost:5173/payment/result",
+    "CancelUrl": "http://localhost:5173/payment/cancel"
+  }
+}

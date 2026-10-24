@@ -14,8 +14,6 @@ public static class ClassRegistrationLogs
     public const string MoveOut = "move_out";
     public const string ReEnroll = "re_enroll";
     public const string ConfirmPayment = "confirm_payment";
-    public const string SlotRegister = "slot_register";
-    public const string SlotMove = "slot_move";
 
     public const string SystemAssigned = "SYSTEM";
 
@@ -29,7 +27,6 @@ public static class ClassRegistrationLogs
         Payment? payment = null,
         string? reason = null,
         string? classAssignedBy = null,
-        int? slotId = null,
         int? paymentId = null)
     {
         db.ClassRegistrationLogs.Add(new ClassRegistrationLog
@@ -40,7 +37,6 @@ public static class ClassRegistrationLogs
             PaymentId = payment is null ? paymentId : null,
             Action = action,
             Reason = reason is { Length: > 500 } ? reason[..500] : reason,
-            SlotId = slotId,
             ClassAssignedBy = classAssignedBy,
             PerformedByUserId = performedBy.UserId,
             PerformedByRole = performedBy.RoleCode,
@@ -54,8 +50,6 @@ public static class ClassRegistrationLogs
         MoveOut => "Cho ra khỏi lớp",
         ReEnroll => "Đăng ký học lại",
         ConfirmPayment => "Xác nhận thu học phí",
-        SlotRegister => "Đăng ký slot",
-        SlotMove => "Dời slot",
         _ => action,
     };
 
