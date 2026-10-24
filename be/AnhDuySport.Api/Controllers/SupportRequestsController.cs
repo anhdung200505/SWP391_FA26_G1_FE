@@ -117,78 +117,14 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     }
 
     [Authorize(Roles = "RECEPTIONIST")]
-    [HttpPost("{requestId}/classify")]
-    [EndpointSummary("Lễ tân phân loại yêu cầu")]
-    [EndpointDescription("category: account_issue hoặc consultation. Chỉ đơn support request của học viên. Đơn tư vấn khách dùng PUT enrollment/{id}.")]
-    public async Task<ActionResult<SupportRequestDto>> Classify(string requestId, ClassifySupportRequest request)
+    [HttpPost("{requestId}/handle")]
+    [EndpointSummary("Lễ tân xử lý đơn của học viên")]
+    [EndpointDescription("Một API cho mọi cách lễ tân xử lý đơn học viên. action: resolve lưu kết quả, escalate chuyển quản trị, classify phân loại. note là kết quả hoặc lý do chuyển. category khi resolve hoặc classify: account_issue hoặc consultation. Đơn tư vấn ghi danh dùng PUT enrollment/{id}. Đơn tài chính chỉ escalate.")]
+    public async Task<ActionResult<SupportRequestDto>> HandleMember(string requestId, HandleMemberSupportRequest request)
     {
         try
         {
-            return Ok(await flow.ClassifyServiceRequestAsync(requestId, request));
-        }
-        catch (Exception exception) when (MapFlowError(exception, out var result))
-        {
-            return result!;
-        }
-    }
-
-    [Authorize(Roles = "RECEPTIONIST")]
-    [HttpPost("{requestId}/escalate")]
-    [EndpointSummary("Lễ tân chuyển yêu cầu ngoài phạm vi lên quản trị")]
-    [EndpointDescription("reason: lý do yêu cầu vượt phạm vi lễ tân. Sau đó quản trị xem tại GET financial và quyết định.")]
-    public async Task<ActionResult<SupportRequestDto>> Escalate(string requestId, EscalateSupportRequest request)
-    {
-        try
-        {
-            return Ok(await flow.EscalateToManagerAsync(requestId, request));
-        }
-        catch (Exception exception) when (MapFlowError(exception, out var result))
-        {
-            return result!;
-        }
-    }
-
-    [Authorize(Roles = "RECEPTIONIST")]
-    [HttpPost("{requestId}/resolve")]
-    [EndpointSummary("Lễ tân lưu kết quả xử lý đơn của học viên")]
-    [EndpointDescription("Lưu resolution note và chuyển trạng thái resolved. Học viên xem lại tại GET /api/support-requests/mine.")]
-    public async Task<ActionResult<SupportRequestResultDto>> ResolveMember(string requestId, SupportResultRequest request)
-    {
-        try
-        {
-            return Ok(await flow.ResolveMemberRequestAsync(requestId, request));
-        }
-        catch (Exception exception) when (MapFlowError(exception, out var result))
-        {
-            return result!;
-        }
-    }
-
-    [Authorize(Roles = "RECEPTIONIST")]
-    [HttpPost("{requestId}/resolve-account")]
-    [EndpointSummary("Lễ tân xử lý sự cố tài khoản")]
-    [EndpointDescription("Hệ thống lưu kết quả và gửi email thông báo cho học viên.")]
-    public async Task<ActionResult<SupportRequestResultDto>> ResolveAccount(string requestId, SupportResultRequest request)
-    {
-        try
-        {
-            return Ok(await flow.ResolveAccountIssueAsync(requestId, request));
-        }
-        catch (Exception exception) when (MapFlowError(exception, out var result))
-        {
-            return result!;
-        }
-    }
-
-    [Authorize(Roles = "RECEPTIONIST")]
-    [HttpPost("{requestId}/provide-consultation")]
-    [EndpointSummary("Lễ tân tư vấn")]
-    [EndpointDescription("Hệ thống lưu kết quả và gửi email thông báo cho học viên.")]
-    public async Task<ActionResult<SupportRequestResultDto>> ProvideConsultation(string requestId, SupportResultRequest request)
-    {
-        try
-        {
-            return Ok(await flow.ProvideConsultationAsync(requestId, request));
+            return Ok(await flow.HandleMemberRequestAsync(requestId, request));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {

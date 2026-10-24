@@ -34,7 +34,7 @@ public class ClassManagementController(ClassManagementFlowService classes) : Con
 
     [HttpGet("~/api/management/coaches")]
     [EndpointSummary("Quản trị xem HLV để chọn khi thêm lớp")]
-    [EndpointDescription("HLV đang hoạt động. sportId: chỉ HLV dạy được môn đó (coach_sport). Mỗi HLV kèm danh sách môn dạy được.")]
+    [EndpointDescription("HLV đang hoạt động. sportId: chỉ HLV đã được gán môn đó (coach_sport). Mỗi HLV kèm danh sách môn dạy được.")]
     public async Task<ActionResult<IReadOnlyList<ManagementCoachDto>>> AccessCoaches([FromQuery] string? sportId) =>
         Ok(await classes.AccessCoachesAsync(sportId));
 
@@ -46,7 +46,7 @@ public class ClassManagementController(ClassManagementFlowService classes) : Con
 
     [HttpGet("{classId}/coach-options")]
     [EndpointSummary("Xem HLV có thể nhận lớp đang học")]
-    [EndpointDescription("HLV dạy được môn của lớp. isBusy = true khi trùng giờ với một buổi chưa diễn ra của lớp (busyReason). isCurrent = HLV hiện tại. remainingSessions: số buổi sẽ đổi HLV.")]
+    [EndpointDescription("HLV đã được gán môn của lớp. isBusy = true khi trùng giờ với một buổi chưa diễn ra của lớp (busyReason). isCurrent = HLV hiện tại. remainingSessions: số buổi sẽ đổi HLV.")]
     public async Task<ActionResult<ClassCoachOptionsDto>> AccessClassCoachOptions(string classId) =>
         Ok(await classes.AccessClassCoachOptionsAsync(classId));
 

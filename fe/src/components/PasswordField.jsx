@@ -1,12 +1,15 @@
 import { useState } from 'react';
 
-export default function PasswordField({ label, value, onChange, autoComplete, hint, placeholder }) {
+export default function PasswordField({ label, value, onChange, autoComplete, hint, placeholder, required, variant = 'dark' }) {
   const [visible, setVisible] = useState(false);
+  const light = variant === 'light';
 
   return (
     <label className="block">
       {label && (
-        <span className="block text-xs font-extrabold uppercase tracking-wider text-gray-300 mb-1">
+        <span className={light
+          ? 'block text-sm font-bold text-gray-700'
+          : 'block text-xs font-extrabold uppercase tracking-wider text-gray-300 mb-1'}>
           {label}
         </span>
       )}
@@ -17,7 +20,10 @@ export default function PasswordField({ label, value, onChange, autoComplete, hi
           onChange={onChange}
           autoComplete={autoComplete}
           placeholder={placeholder || '••••••••'}
-          className="w-full rounded-xl bg-[#0d0f17] border border-gray-700/80 px-4 py-2.5 pr-11 text-sm font-medium text-white placeholder-gray-500 outline-none focus:border-[#e31b23] focus:ring-1 focus:ring-[#e31b23] transition-all"
+          required={required}
+          className={light
+            ? 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 pr-11 text-sm font-medium text-gray-900 outline-none ring-[#e31b23] focus:ring-2'
+            : 'w-full rounded-xl bg-[#0d0f17] border border-gray-700/80 px-4 py-2.5 pr-11 text-sm font-medium text-white placeholder-gray-500 outline-none focus:border-[#e31b23] focus:ring-1 focus:ring-[#e31b23] transition-all'}
         />
         <button
           type="button"

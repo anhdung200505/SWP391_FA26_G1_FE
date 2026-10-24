@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnhDuySport.Api.Controllers;
 
-[Authorize(Roles = "MEMBER")]
+[Authorize]
 [ApiController]
 [Route("api/members/{memberUserId}")]
 public class MemberMembershipController(MemberMembershipFlowService flow, CurrentActor actor) : ControllerBase
 {
+    [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
     [HttpGet("profile")]
     [EndpointSummary("Access System: xem hồ sơ học viên")]
     public async Task<ActionResult<MemberProfileDto>> AccessSystem(string memberUserId)
@@ -25,6 +26,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
     [HttpPut("profile")]
     [EndpointSummary("Edit personal information: học viên sửa thông tin cá nhân")]
     [EndpointDescription("gender: Nam, Nữ hoặc Khác. Hệ thống kiểm tra rồi cập nhật database và ghi nhật ký.")]
@@ -41,6 +43,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
     [HttpPost("profile/avatar")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(3 * 1024 * 1024)]
@@ -59,6 +62,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpGet("membership")]
     [EndpointSummary("View membership management: gói đang dùng, lịch sử và các gói đang bán")]
     public async Task<ActionResult<MembershipManagementDto>> ViewMembershipManagement(string memberUserId)
@@ -74,6 +78,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpGet("consultation-contact")]
     [EndpointSummary("Need Consultation? = Yes: hiển thị số chăm sóc khách hàng của trung tâm")]
     public async Task<ActionResult<ConsultationContactDto>> AccessConsultationContact(string memberUserId)
@@ -89,9 +94,10 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpPost("membership/renewals")]
-    [EndpointSummary("Select Membership Package: chọn gói và tạo link thanh toán payOS")]
-    [EndpointDescription("Tạo hóa đơn, payment pending và membership pending, trả checkoutUrl / qrCode payOS. Membership chỉ có hiệu lực sau khi thanh toán.")]
+    [EndpointSummary("Không bán gói hội viên lẻ")]
+    [EndpointDescription("Gói hội viên chỉ mua kèm khi đăng ký lớp. Endpoint này luôn trả 400.")]
     public async Task<ActionResult<MembershipCheckoutDto>> SelectMembershipPackage(string memberUserId, RenewMembershipRequest request)
     {
         if (EnsureOwner(memberUserId) is { } denied) return denied;
@@ -105,6 +111,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpPost("membership/renewals/{paymentId}/confirm")]
     [EndpointSummary("Process Payment → Update Membership Expiry: kiểm tra thanh toán payOS")]
     [EndpointDescription("Gọi sau khi payOS chuyển về trang kết quả. Đã thanh toán thì cập nhật hạn gói và trả thông tin mới. Gọi lại nhiều lần không bị cộng hạn hai lần.")]

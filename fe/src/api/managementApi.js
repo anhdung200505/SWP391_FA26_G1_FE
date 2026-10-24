@@ -51,6 +51,13 @@ async function request(path, options = {}) {
 // API XÁC THỰC (AUTHENTICATION)
 // ==========================================
 
+export function changePassword(payload) {
+  return request('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function loginStaff(email, password, portal = 'staff') {
   return request('/auth/login', {
     method: 'POST',
@@ -318,6 +325,17 @@ export function getDashboard() {
   return request('/management/dashboard');
 }
 
+export function getAiTokenUsage() {
+  return request('/management/ai-token-usage');
+}
+
+export function updatePackageAiQuota(packageId, payload) {
+  return request(`/management/packages/${encodeURIComponent(packageId)}/ai-quota`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getUserAccounts(params = {}) {
   const query = new URLSearchParams(params).toString();
   return request(`/user-accounts${query ? `?${query}` : ''}`);
@@ -334,6 +352,13 @@ export function updateAccountStatus(userId, status) {
   return request(`/user-accounts/${userId}/status`, {
     method: 'PUT',
     body: JSON.stringify({ status }),
+  });
+}
+
+export function updateCoachSports(userId, sportIds) {
+  return request(`/user-accounts/${userId}/sports`, {
+    method: 'PUT',
+    body: JSON.stringify({ sportIds }),
   });
 }
 

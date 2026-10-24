@@ -233,6 +233,33 @@ public class CustomerServiceFlowService(
         return await AccessMemberRequestsAsync(actor.UserId.ToString());
     }
 
+    public async Task<SupportRequestDto> HandleMemberRequestAsync(string requestId, HandleMemberSupportRequest request)
+    {
+        var action = request.Action?.Trim().ToLowerInvariant() ?? "";
+        if (action is not ("resolve" or "escalate" or "classify"))
+        {
+            throw new InvalidOperationException("Hành động phải là resolve, escalate hoặc classify.");
+        }
+
+        if (action == "classify")
+        {
+            return await ClassifyServiceRequestAsync(requestId, new ClassifySupportRequest(request.Category ?? ""));
+        }
+
+        if (action == "escalate")
+        {
+            return await EscalateToManagerAsync(requestId, new EscalateSupportRequest(request.Note ?? ""));
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Category))
+        {
+            await ClassifyServiceRequestAsync(requestId, new ClassifySupportRequest(request.Category));
+        }
+
+        var result = await ResolveMemberRequestAsync(requestId, new SupportResultRequest(request.Note ?? ""));
+        return result.Request;
+    }
+
     public async Task<SupportRequestResultDto> ResolveMemberRequestAsync(string requestId, SupportResultRequest request)
     {
         var note = RequireText(request.Note, "Nhập kết quả xử lý cho học viên.", 2000);

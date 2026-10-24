@@ -40,7 +40,7 @@ public class UserAccountFlowService(
                 .ToList();
         }
 
-        return users.Select(AccountFlowMapper.ToDto).ToList();
+        return await MapUsersAsync(users);
     }
 
     public async Task<UserMutationResponse> CreateStaffAccountAsync(CreateStaffRequest request)
@@ -72,6 +72,10 @@ public class UserAccountFlowService(
         {
             throw new InvalidOperationException("Chỉ tạo được tài khoản lễ tân hoặc huấn luyện viên.");
         }
+
+        var sportIds = roleCode == "COACH"
+            ? await ResolveSportIdsAsync(request.SportIds, requireAtLeastOne: true)
+            : [];
 
         PasswordHasher.EnsureAcceptable(password);
 
@@ -108,14 +112,20 @@ public class UserAccountFlowService(
             throw new InvalidOperationException("Email này đã được dùng.");
         }
 
+        foreach (var sportId in sportIds)
+        {
+            db.CoachSports.Add(new CoachSport { CoachUserId = user.UserId, SportId = sportId });
+        }
+
         var actorName = await ActorNameAsync();
+        var sportNote = sportIds.Count == 0 ? "" : $" Môn: {await SportNamesAsync(sportIds)}.";
         var log = AddLog(
             $"Thêm {role.RoleName} {user.FullName}",
             "user",
             user.UserId,
-            "Quản trị trung tâm tạo tài khoản lễ tân hoặc huấn luyện viên.");
+            $"Quản trị trung tâm tạo tài khoản lễ tân hoặc huấn luyện viên.{sportNote}");
         await db.SaveChangesAsync();
-        return new UserMutationResponse(AccountFlowMapper.ToDto(user), ToLogDto(log, actorName, user.FullName, null));
+        return new UserMutationResponse(await MapUserAsync(user), ToLogDto(log, actorName, user.FullName, null));
     }
 
     public async Task<UserAccountDto?> SelectUserAccountAsync(string userId)
@@ -126,7 +136,7 @@ public class UserAccountFlowService(
         }
 
         var user = await db.UserAccounts.AsNoTracking().Include(item => item.Role).FirstOrDefaultAsync(item => item.UserId == id);
-        return user is null ? null : AccountFlowMapper.ToDto(user);
+        return user is null ? null : await MapUserAsync(user);
     }
 
     public async Task<UserMutationResponse> ModifyRoleAsync(string userId, string roleCode)
@@ -154,7 +164,51 @@ public class UserAccountFlowService(
             user.UserId,
             $"{previousLabel} → {nextRole.RoleName}");
         await db.SaveChangesAsync();
-        return new UserMutationResponse(AccountFlowMapper.ToDto(user), ToLogDto(log, actor, user.FullName, null));
+        return new UserMutationResponse(await MapUserAsync(user), ToLogDto(log, actor, user.FullName, null));
+    }
+
+    // Thay toàn bộ môn của HLV. Một HLV có thể dạy nhiều môn. Không bỏ môn khi HLV còn lớp hoặc buổi sắp tới của môn đó.
+    public async Task<UserMutationResponse> UpdateCoachSportsAsync(string userId, IReadOnlyList<string>? sportIds)
+    {
+        var user = await FindEditableUserAsync(userId);
+        if (user.Role?.RoleCode != "COACH")
+        {
+            throw new InvalidOperationException("Chỉ gán môn cho tài khoản huấn luyện viên.");
+        }
+
+        var nextIds = await ResolveSportIdsAsync(sportIds, requireAtLeastOne: true);
+        var existing = await db.CoachSports.Where(link => link.CoachUserId == user.UserId).ToListAsync();
+        var currentIds = existing.Select(link => link.SportId).OrderBy(id => id).ToList();
+        if (currentIds.SequenceEqual(nextIds))
+        {
+            throw new InvalidOperationException("Môn dạy không thay đổi.");
+        }
+
+        var removed = currentIds.Where(id => !nextIds.Contains(id)).ToList();
+        if (removed.Count > 0)
+        {
+            var blocked = await BlockedSportNamesAsync(user.UserId, removed);
+            if (blocked.Count > 0)
+            {
+                throw new InvalidOperationException($"Không bỏ được môn {string.Join(", ", blocked)} vì huấn luyện viên còn lớp hoặc buổi sắp tới của môn đó.");
+            }
+        }
+
+        db.CoachSports.RemoveRange(existing.Where(link => !nextIds.Contains(link.SportId)));
+        foreach (var sportId in nextIds.Where(id => !currentIds.Contains(id)))
+        {
+            db.CoachSports.Add(new CoachSport { CoachUserId = user.UserId, SportId = sportId });
+        }
+
+        var actorName = await ActorNameAsync();
+        var names = await SportNamesAsync(nextIds);
+        var log = AddLog(
+            $"Cập nhật môn của {user.FullName}",
+            "user",
+            user.UserId,
+            names);
+        await db.SaveChangesAsync();
+        return new UserMutationResponse(await MapUserAsync(user), ToLogDto(log, actorName, user.FullName, null));
     }
 
     public async Task<UserMutationResponse> ActiveOrInactiveUserAccountAsync(string userId, string nextStatus)
@@ -192,7 +246,100 @@ public class UserAccountFlowService(
             $"{previousLabel} → {nextLabel}",
             now);
         await db.SaveChangesAsync();
-        return new UserMutationResponse(AccountFlowMapper.ToDto(user), ToLogDto(log, actor, user.FullName, email));
+        return new UserMutationResponse(await MapUserAsync(user), ToLogDto(log, actor, user.FullName, email));
+    }
+
+    private async Task<List<UserAccountDto>> MapUsersAsync(IReadOnlyList<UserAccount> users)
+    {
+        var sports = await AccountFlowMapper.LoadCoachSportsAsync(db, users.Select(user => user.UserId).ToList());
+        return users.Select(user => AccountFlowMapper.ToDto(user, sports.GetValueOrDefault(user.UserId))).ToList();
+    }
+
+    private async Task<UserAccountDto> MapUserAsync(UserAccount user)
+    {
+        var sports = await AccountFlowMapper.LoadCoachSportsAsync(db, [user.UserId]);
+        return AccountFlowMapper.ToDto(user, sports.GetValueOrDefault(user.UserId));
+    }
+
+    private async Task<List<int>> ResolveSportIdsAsync(IReadOnlyList<string>? sportIds, bool requireAtLeastOne)
+    {
+        var parsed = new List<int>();
+        foreach (var value in sportIds ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            if (!int.TryParse(value, out var sportId))
+            {
+                throw new InvalidOperationException("Không tìm thấy môn thể thao.");
+            }
+
+            if (!parsed.Contains(sportId))
+            {
+                parsed.Add(sportId);
+            }
+        }
+
+        parsed.Sort();
+        if (requireAtLeastOne && parsed.Count == 0)
+        {
+            throw new InvalidOperationException("Chọn ít nhất một môn cho huấn luyện viên.");
+        }
+
+        if (parsed.Count == 0)
+        {
+            return parsed;
+        }
+
+        var known = await db.Sports.AsNoTracking()
+            .Where(sport => parsed.Contains(sport.SportId))
+            .Select(sport => sport.SportId)
+            .ToListAsync();
+        if (known.Count != parsed.Count)
+        {
+            throw new InvalidOperationException("Không tìm thấy môn thể thao.");
+        }
+
+        return parsed;
+    }
+
+    private async Task<string> SportNamesAsync(IReadOnlyList<int> sportIds)
+    {
+        var names = await db.Sports.AsNoTracking()
+            .Where(sport => sportIds.Contains(sport.SportId))
+            .OrderBy(sport => sport.SportName)
+            .Select(sport => sport.SportName)
+            .ToListAsync();
+        return string.Join(", ", names);
+    }
+
+    private async Task<List<string>> BlockedSportNamesAsync(int coachId, IReadOnlyList<int> sportIds)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var classNames = await (
+            from item in db.Classes.AsNoTracking()
+            join course in db.Courses.AsNoTracking() on item.CourseId equals course.CourseId
+            join sport in db.Sports.AsNoTracking() on course.SportId equals sport.SportId
+            where item.CoachUserId == coachId
+                && item.Status != "cancelled"
+                && item.Status != "closed"
+                && sportIds.Contains(course.SportId)
+            select sport.SportName).Distinct().ToListAsync();
+
+        var sessionNames = await (
+            from session in db.ClassSessions.AsNoTracking()
+            join item in db.Classes.AsNoTracking() on session.ClassId equals item.ClassId
+            join course in db.Courses.AsNoTracking() on item.CourseId equals course.CourseId
+            join sport in db.Sports.AsNoTracking() on course.SportId equals sport.SportId
+            where session.CoachUserId == coachId
+                && session.Status != "cancelled"
+                && session.SessionDate >= today
+                && sportIds.Contains(course.SportId)
+            select sport.SportName).Distinct().ToListAsync();
+
+        return classNames.Concat(sessionNames).Distinct().OrderBy(name => name).ToList();
     }
 
     private async Task<UserAccount> FindEditableUserAsync(string userId)

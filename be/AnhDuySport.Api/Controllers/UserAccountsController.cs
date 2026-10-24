@@ -19,7 +19,7 @@ public class UserAccountsController(UserAccountFlowService accounts) : Controlle
 
     [HttpPost]
     [EndpointSummary("Quản trị trung tâm tạo lễ tân hoặc huấn luyện viên")]
-    [EndpointDescription("Chỉ tài khoản ADMIN. roleId nhận RECEPTIONIST hoặc COACH. Mật khẩu từ 6 ký tự và có @, # hoặc !.")]
+    [EndpointDescription("Chỉ tài khoản ADMIN. roleId nhận RECEPTIONIST hoặc COACH. HLV bắt buộc sportIds, một HLV có thể dạy nhiều môn. Mật khẩu từ 6 ký tự và có @, # hoặc !.")]
     public async Task<ActionResult<UserMutationResponse>> CreateStaff(CreateStaffRequest request)
     {
         try
@@ -46,6 +46,21 @@ public class UserAccountsController(UserAccountFlowService accounts) : Controlle
         try
         {
             return Ok(await accounts.ModifyRoleAsync(userId, request.RoleId));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
+    [HttpPut("{userId}/sports")]
+    [EndpointSummary("Quản trị gán môn cho huấn luyện viên")]
+    [EndpointDescription("Thay toàn bộ môn của HLV. sportIds là danh sách id môn, ít nhất một môn, một HLV có thể có nhiều môn. Không bỏ môn khi HLV còn lớp đang mở hoặc buổi sắp tới của môn đó.")]
+    public async Task<ActionResult<UserMutationResponse>> UpdateCoachSports(string userId, UpdateCoachSportsRequest request)
+    {
+        try
+        {
+            return Ok(await accounts.UpdateCoachSportsAsync(userId, request.SportIds));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {

@@ -7,6 +7,7 @@ import {
   getPackages as getPackagesRequest,
   getUserAccounts,
   updateAccountStatus as updateAccountStatusRequest,
+  updateCoachSports as updateCoachSportsRequest,
   updatePackageSetting as updatePackageSettingRequest,
   updateUserRole as updateUserRoleRequest,
 } from '../api/managementApi';
@@ -87,6 +88,16 @@ export function AccountManagementProvider({ children }) {
     return result?.log;
   };
 
+  const updateCoachSports = async (userId, sportIds) => {
+    const result = await updateCoachSportsRequest(userId, sportIds);
+    setState((current) => ({
+      ...current,
+      users: current.users.map((item) => (item.id === userId ? (result?.user || item) : item)),
+      logs: result?.log ? [result.log, ...current.logs] : current.logs,
+    }));
+    return result?.log;
+  };
+
   const createPackage = async (payload) => {
     const result = await createPackageRequest(payload);
     setState((current) => ({
@@ -119,6 +130,7 @@ export function AccountManagementProvider({ children }) {
         createStaffAccount,
         updateUserRole,
         updateAccountStatus,
+        updateCoachSports,
         createPackage,
         updatePackageSetting,
       }}

@@ -145,7 +145,7 @@ export default function AdmissionsPage() {
     
     // Nếu là MEMBER -> Chuyển hướng tới page /dang-ky-khoa-hoc
     if (user && (userRole === 'MEMBER' || userRole === 'HỌC VIÊN')) {
-      navigate('/dang-ky-khoa-hoc');
+      navigate(`/dang-ky-khoa-hoc?packageId=${pkg.id}`);
     } else {
       // Role khác hoặc chưa đăng nhập -> Hiện popup thông báo
       setIsMemberOnlyModalOpen(true);
@@ -411,9 +411,13 @@ export default function AdmissionsPage() {
                       <span className="text-xs font-semibold text-gray-400 block mt-1">
                         Thời hạn sử dụng: {pkg.validityMonths || 1} tháng
                       </span>
-                      {pkg.upgradeDiscountPercent > 0 && (
+                      {pkg.upgradeDiscountPercent > 0 ? (
                         <span className="inline-block mt-2 text-[11px] font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-700/80 px-2.5 py-0.5 rounded-sm">
-                          Giảm {pkg.upgradeDiscountPercent}% khi nâng cấp cùng lúc đăng ký lớp
+                          Giảm {pkg.upgradeDiscountPercent}% khi mua cùng khóa học
+                        </span>
+                      ) : (
+                        <span className="inline-block mt-2 text-[11px] font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-700/80 px-2.5 py-0.5 rounded-sm">
+                          Tặng khi đăng ký kèm lớp
                         </span>
                       )}
                     </div>
@@ -452,7 +456,7 @@ export default function AdmissionsPage() {
                         : 'bg-[#1e2433] hover:bg-[#e31b23] text-white border border-gray-700/80 hover:border-[#e31b23] hover:scale-[1.02]'
                     }`}
                   >
-                    ĐĂNG KÝ GÓI NÀY →
+                    ĐĂNG KÝ KÈM KHÓA HỌC →
                   </button>
                 </div>
               );

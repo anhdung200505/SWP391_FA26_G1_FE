@@ -24,6 +24,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
     public async Task<AiRecommendationAccessDto> AccessAsync(string memberUserId)
     {
         var member = await FindActiveMemberAsync(memberUserId);
+        var allowance = await AiMembershipQuota.LoadAsync(db, member.UserId);
         var body = await LatestBodyAsync(member.UserId);
         var plans = await db.WorkoutRecommendations
             .AsNoTracking()
@@ -65,13 +66,15 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             message,
             body is null ? null : ToBodyDto(body),
             proposed is null ? null : ToPlan(proposed),
-            saved is null ? null : ToPlan(saved));
+            saved is null ? null : ToPlan(saved),
+            allowance.ToDto());
     }
 
     // ===== Input Body BMI Data =====
     public async Task<BodyMetricResponse> InputBodyAsync(string memberUserId, BodyMetricRequest request)
     {
         var member = await FindActiveMemberAsync(memberUserId);
+        await AiMembershipQuota.LoadAsync(db, member.UserId);
         var height = decimal.Round(request.HeightCm, 1, MidpointRounding.AwayFromZero);
         var weight = decimal.Round(request.WeightKg, 1, MidpointRounding.AwayFromZero);
         if (height is < 100 or > 250)
@@ -128,6 +131,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
     public async Task<WorkoutPlanResponse> InputGoalsAsync(string memberUserId, PersonalGoalsRequest request)
     {
         var member = await FindActiveMemberAsync(memberUserId);
+        var allowance = await AiMembershipQuota.LoadAsync(db, member.UserId);
         var metric = await LatestBodyAsync(member.UserId)
             ?? throw new InvalidOperationException("Hãy nhập chỉ số BMI trước khi nhập mục tiêu.");
         var goal = RequireText(request.Goal, "Nhập mục tiêu cá nhân.", 500);
@@ -143,6 +147,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         var history = await CollectHistoryAsync(member.UserId);
         RequireCoachHistory(history);
+        AiMembershipQuota.EnsureCanCall(allowance, regenerating: false);
         var health = DescribeHealth(member, metric);
         var spec = BuildSpec(goal, request.SessionsPerWeek, request.SessionMinutes, metric.Bmi, history, null, DefaultStart);
         var now = DateTime.Now;
@@ -166,7 +171,8 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             recommendation.Revision = 1;
         }
 
-        await ApplySpecAsync(recommendation, metric, goal, spec, health, history, member.FullName, null, now);
+        var tokens = await ApplySpecAsync(recommendation, metric, goal, spec, health, history, member.FullName, null, now);
+        AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Generate, tokens, now);
         var log = AddLog(member, "Tạo giáo án AI", recommendation.PlanName, now);
         await db.SaveChangesAsync();
         log.EntityId = recommendation.RecommendationId;
@@ -176,7 +182,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutPlanResponse(
             recommendation.RecommendationId.ToString(),
             ToPlan(recommendation),
-            $"recommendationId = {recommendation.RecommendationId}. Dùng số này ở POST .../{recommendation.RecommendationId}/decision. Giáo án do {gemini.ProviderLabel} tạo.",
+            $"recommendationId = {recommendation.RecommendationId}. Dùng số này ở POST .../{recommendation.RecommendationId}/decision. Giáo án do {gemini.ProviderLabel} tạo. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: false)}",
             ToLogDto(log, member.FullName));
     }
 
@@ -199,12 +205,14 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             throw new InvalidOperationException("Giáo án chưa gắn chỉ số BMI.");
         }
 
+        var allowance = await AiMembershipQuota.LoadAsync(db, member.UserId);
         var now = DateTime.Now;
         if (request.EditRequired)
         {
             var changes = RequireText(request.Changes, "Nhập nội dung cần chỉnh.", 1000);
             var history = await CollectHistoryAsync(member.UserId);
             RequireCoachHistory(history);
+            AiMembershipQuota.EnsureCanCall(allowance, regenerating: true);
             var spec = BuildSpec(
                 recommendation.Goal,
                 recommendation.SessionsPerWeek,
@@ -217,7 +225,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             db.WorkoutSessions.RemoveRange(recommendation.Sessions);
             recommendation.Sessions.Clear();
             recommendation.Revision += 1;
-            await ApplySpecAsync(
+            var tokens = await ApplySpecAsync(
                 recommendation,
                 recommendation.BodyMetric,
                 recommendation.Goal,
@@ -227,6 +235,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 member.FullName,
                 changes,
                 now);
+            AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Regenerate, tokens, now);
             var log = AddLog(member, "Tạo lại giáo án AI", changes, now);
             await db.SaveChangesAsync();
             log.EntityId = recommendation.RecommendationId;
@@ -234,7 +243,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             return new WorkoutDecisionResponse(
                 recommendation.RecommendationId.ToString(),
                 false,
-                $"Đã gọi {gemini.ProviderLabel} tạo lại giáo án lần {recommendation.Revision}. recommendationId vẫn là {recommendation.RecommendationId}.",
+                $"Đã gọi {gemini.ProviderLabel} tạo lại giáo án lần {recommendation.Revision}. recommendationId vẫn là {recommendation.RecommendationId}. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
                 ToPlan(recommendation),
                 null,
                 ToLogDto(log, member.FullName));
@@ -261,6 +270,8 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         var history = await CollectHistoryAsync(member.UserId);
         RequireCoachHistory(history);
+        var allowance = await AiMembershipQuota.LoadAsync(db, member.UserId);
+        AiMembershipQuota.EnsureCanCall(allowance, regenerating: true);
         var health = DescribeHealth(member, metric);
         var spec = BuildSpec(
             source.Goal,
@@ -290,7 +301,8 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         }
 
         recommendation.Revision += 1;
-        await ApplySpecAsync(recommendation, metric, source.Goal, spec, health, history, member.FullName, changes, now);
+        var tokens = await ApplySpecAsync(recommendation, metric, source.Goal, spec, health, history, member.FullName, changes, now);
+        AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Regenerate, tokens, now);
         var log = AddLog(member, "Yêu cầu tạo lại giáo án AI", changes, now);
         await db.SaveChangesAsync();
         log.EntityId = recommendation.RecommendationId;
@@ -300,7 +312,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutPlanResponse(
             recommendation.RecommendationId.ToString(),
             ToPlan(recommendation),
-            $"Đã nhận yêu cầu tạo lại giáo án. recommendationId = {recommendation.RecommendationId}. Gọi decision với editRequired=false để lưu lịch mới.",
+            $"Đã nhận yêu cầu tạo lại giáo án. recommendationId = {recommendation.RecommendationId}. Gọi decision với editRequired=false để lưu lịch mới. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
             ToLogDto(log, member.FullName));
     }
 
@@ -308,6 +320,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
     public async Task<DailyRoutineDto> ViewRoutineAsync(string memberUserId)
     {
         var member = await FindActiveMemberAsync(memberUserId);
+        await AiMembershipQuota.LoadAsync(db, member.UserId);
         var plan = await db.WorkoutRecommendations
             .AsNoTracking()
             .Where(item => item.UserId == member.UserId && item.Status == "saved")
@@ -529,30 +542,44 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new SaveCoachTrainingHistoryResponse(history, "Đã lưu lịch sử tập. Học viên có thể tạo hoặc tạo lại giáo án AI.", ToLogDto(log, coach.FullName));
     }
 
+    // Lớp coach phụ trách, kể cả lớp chưa có học viên. Học viên chỉ gồm người đang ghi danh.
     private async Task<IReadOnlyList<CoachClassOptionDto>> CoachClassesAsync(int coachUserId)
     {
-        var rows = await (
+        var classes = await (
             from trainingClass in db.Classes.AsNoTracking()
             join course in db.Courses.AsNoTracking() on trainingClass.CourseId equals course.CourseId
-            join enrollment in db.ClassEnrollments.AsNoTracking() on trainingClass.ClassId equals enrollment.ClassId
-            join member in db.UserAccounts.AsNoTracking() on enrollment.UserId equals member.UserId
-            where trainingClass.CoachUserId == coachUserId && enrollment.Status == "enrolled"
-            orderby course.CourseName, member.FullName
+            where trainingClass.CoachUserId == coachUserId
+            orderby course.CourseName, trainingClass.ClassName
             select new
             {
                 trainingClass.ClassId,
                 course.CourseName,
                 trainingClass.ClassName,
-                member.UserId,
-                member.FullName,
             }).ToListAsync();
-        return rows
-            .GroupBy(item => new { item.ClassId, item.CourseName, item.ClassName })
-            .Select(group => new CoachClassOptionDto(
-                group.Key.ClassId,
-                group.Key.CourseName,
-                group.Key.ClassName,
-                group.Select(item => new CoachMemberOptionDto(item.UserId.ToString(), item.FullName)).ToList()))
+
+        var classIds = classes.Select(item => item.ClassId).ToList();
+        var members = classIds.Count == 0
+            ? []
+            : await (
+                from enrollment in db.ClassEnrollments.AsNoTracking()
+                join member in db.UserAccounts.AsNoTracking() on enrollment.UserId equals member.UserId
+                where classIds.Contains(enrollment.ClassId) && enrollment.Status == "enrolled"
+                orderby member.FullName
+                select new { enrollment.ClassId, member.UserId, member.FullName }).ToListAsync();
+        var membersByClass = members
+            .GroupBy(item => item.ClassId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<CoachMemberOptionDto>)group
+                    .Select(item => new CoachMemberOptionDto(item.UserId.ToString(), item.FullName))
+                    .ToList());
+
+        return classes
+            .Select(item => new CoachClassOptionDto(
+                item.ClassId,
+                item.CourseName,
+                item.ClassName,
+                membersByClass.GetValueOrDefault(item.ClassId) ?? []))
             .ToList();
     }
 
@@ -712,7 +739,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         };
     }
 
-    private async Task ApplySpecAsync(
+    private async Task<int> ApplySpecAsync(
         AiWorkoutRecommendation recommendation,
         MemberBodyMetric metric,
         string goal,
@@ -770,6 +797,8 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 Exercises = session.Exercises,
             });
         }
+
+        return generated.TotalTokens;
     }
 
     private static List<PersonalExercise> BuildCalendar(

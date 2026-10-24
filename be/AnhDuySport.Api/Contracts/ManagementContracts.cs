@@ -4,6 +4,8 @@ public sealed record RoleDto(string Id, string Label, IReadOnlyList<string> Perm
 
 public sealed record EmailDto(string To, string Subject, string Body);
 
+public sealed record CoachSportItemDto(string Id, string Name);
+
 public sealed record UserAccountDto(
     string Id,
     string Code,
@@ -13,7 +15,13 @@ public sealed record UserAccountDto(
     string RoleId,
     string Status,
     string Unit,
-    DateOnly JoinedAt);
+    DateOnly JoinedAt,
+    IReadOnlyList<CoachSportItemDto> Sports);
+
+public sealed class UpdateCoachSportsRequest
+{
+    public List<string> SportIds { get; set; } = [];
+}
 
 public sealed record ActivityLogDto(
     string Id,
@@ -57,6 +65,7 @@ public sealed class CreateStaffRequest
     public string? Phone { get; set; }
     public string Password { get; set; } = "";
     public string RoleId { get; set; } = "";
+    public List<string> SportIds { get; set; } = [];
 }
 
 public sealed class UpdateRoleRequest
@@ -85,3 +94,41 @@ public sealed class UpdatePackageSettingRequest
     public decimal UpgradeDiscountPercent { get; set; }
     public List<string> Benefits { get; set; } = [];
 }
+
+public sealed class UpdateAiQuotaRequest
+{
+    public int RegenerationLimit { get; set; }
+    public int TokenLimit { get; set; }
+}
+
+public sealed record AiPackageQuotaDto(
+    string PackageId,
+    string PackageCode,
+    string PackageName,
+    int RegenerationLimit,
+    int TokenLimit,
+    int ActiveMembers);
+
+public sealed record AiTokenMonthDto(int Year, int Month, int TokensUsed);
+
+public sealed record AiTokenUsageRowDto(
+    string MemberUserId,
+    string MemberName,
+    string? PackageCode,
+    string? PackageName,
+    int TokensUsed,
+    int PeriodTokensUsed,
+    int TokenLimit,
+    int RegenerationsUsed,
+    int RegenerationLimit,
+    IReadOnlyList<AiTokenMonthDto> Months);
+
+public sealed record AiTokenUsageReportDto(
+    int TotalTokensUsed,
+    IReadOnlyList<AiPackageQuotaDto> Packages,
+    IReadOnlyList<AiTokenUsageRowDto> Members,
+    IReadOnlyList<AiTokenMonthDto> Months);
+
+public sealed record UpdateAiPackageQuotaResponse(
+    AiPackageQuotaDto Package,
+    string Message);
