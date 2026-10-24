@@ -55,6 +55,14 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         return await ProjectAsync(FilterDates(query, from, to));
     }
 
+    // Lịch dạy của HLV theo HLV của từng buổi (session.coach_user_id), không theo HLV của lớp, vì HLV có thể được đổi cho riêng một buổi.
+    public async Task<IReadOnlyList<SessionDto>> AccessCoachSessionsAsync(int coachUserId, DateOnly? from, DateOnly? to)
+    {
+        var query = db.ClassSessions.AsNoTracking()
+            .Where(session => session.CoachUserId == coachUserId && session.Status != "cancelled");
+        return await ProjectAsync(FilterDates(query, from, to));
+    }
+
     public async Task<IReadOnlyList<TimeSlotDto>> AccessTimeSlotsAsync(string? kind)
     {
         var query = db.TimeSlots.AsNoTracking().Where(slot => slot.IsActive);
@@ -219,6 +227,11 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         EnsureEditable(session);
 
         var reason = NormalizeNote(request.Reason) ?? throw new RegistrationException("Nhập lý do hủy buổi học.");
+        if (await db.ClassAttendances.AnyAsync(row => row.SessionId == session.SessionId))
+        {
+            throw new RegistrationException("Buổi học đã có điểm danh, không thể hủy.");
+        }
+
         session.Status = "cancelled";
         session.Note = reason;
         await NotifyMembersAsync(session, $"Hủy buổi học lớp {session.Class!.ClassName}", $"{When(session)} bị hủy. Lý do: {reason}.");
@@ -253,6 +266,12 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         if (session.SessionDate < DateOnly.FromDateTime(DateTime.Now))
         {
             throw new RegistrationException("Buổi học đã qua ngày, không thể thay đổi.");
+        }
+
+        var now = DateTime.Now;
+        if (session.SessionDate == DateOnly.FromDateTime(now) && session.EndTime <= TimeOnly.FromDateTime(now))
+        {
+            throw new RegistrationException("Buổi học đã kết thúc, không thể thay đổi.");
         }
     }
 
@@ -353,7 +372,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
     private static int ParseId(string sessionId) =>
         int.TryParse(sessionId, out var id) ? id : throw new KeyNotFoundException("Không tìm thấy buổi học.");
 
-    private static IQueryable<ClassSession> FilterDates(IQueryable<ClassSession> query, DateOnly? from, DateOnly? to)
+    internal static IQueryable<ClassSession> FilterDates(IQueryable<ClassSession> query, DateOnly? from, DateOnly? to)
     {
         if (from is { } start && to is { } end && end < start)
         {
@@ -365,7 +384,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         return to is { } until ? query.Where(session => session.SessionDate <= until) : query;
     }
 
-    private async Task<List<SessionDto>> ProjectAsync(IQueryable<ClassSession> query)
+    internal async Task<List<SessionDto>> ProjectAsync(IQueryable<ClassSession> query)
     {
         var rows = await query
             .OrderBy(session => session.SessionDate)
