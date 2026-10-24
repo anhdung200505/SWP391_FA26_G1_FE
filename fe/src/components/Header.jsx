@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell';
 
 // Danh sách các khóa học kèm đường dẫn chi tiết chuẩn slug
 const courseCategories = [
@@ -101,6 +102,7 @@ export default function Header({ forceWhite = false }) {
   };
 
   const userRole = user?.roleId || user?.role;
+  const isMember = userRole === 'MEMBER' || userRole === 'STUDENT' || !userRole;
 
   return (
     <header
@@ -222,7 +224,9 @@ export default function Header({ forceWhite = false }) {
               ĐĂNG NHẬP
             </a>
           ) : (
-            <div className="relative group ml-2">
+            <div className="flex items-center gap-3 ml-2">
+              {isMember && <NotificationBell light={isHeaderTransparent} />}
+              <div className="relative group">
               <button
                 type="button"
                 className="flex items-center focus:outline-none cursor-pointer"
@@ -298,6 +302,7 @@ export default function Header({ forceWhite = false }) {
                     </button>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
           )}
