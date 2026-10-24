@@ -95,12 +95,12 @@ public class ReceptionFlowService(
         {
             UserId = memberId,
             Title = $"Bạn đã được cho ra khỏi lớp {className}",
-            Content = $"Lý do: {reason}. Khi muốn học tiếp, hãy liên hệ lễ tân AnhDuy Sport để đăng ký học lại.",
+            Content = $"Lý do: {TextFormat.Sentence(reason)} Khi muốn học tiếp, hãy liên hệ lễ tân AnhDuy Sport để đăng ký học lại.",
             IsRead = false,
             CreatedAt = now,
         });
         AddActivity(performer, $"Cho {member.FullName} ra khỏi lớp {className}", enrollment.ClassEnrollmentId,
-            $"Lý do: {reason}.", now);
+            $"Lý do: {TextFormat.Sentence(reason)}", now);
         await db.SaveChangesAsync();
 
         return new ReceptionEnrollmentDto(
@@ -207,7 +207,7 @@ public class ReceptionFlowService(
         {
             UserId = memberId,
             Title = $"Bạn đã được đăng ký học lại lớp {target.ClassName}",
-            Content = $"Lễ tân AnhDuy Sport đã đăng ký học lại cho bạn. Lý do: {reason}.",
+            Content = $"Lễ tân AnhDuy Sport đã đăng ký học lại cho bạn. Lý do: {TextFormat.Sentence(reason)}",
             IsRead = false,
             CreatedAt = now,
         });
