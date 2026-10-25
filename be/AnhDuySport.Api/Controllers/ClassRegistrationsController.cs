@@ -25,9 +25,14 @@ public class ClassRegistrationsController(ClassRegistrationFlowService registrat
 
     [HttpGet("pending")]
     [EndpointSummary("Học viên xem các đơn đang chờ thanh toán")]
-    [EndpointDescription("Đơn đăng ký lớp (kind = class) và đơn mua gói (kind = membership) còn trong 3 phút giữ đơn, mới nhất lên đầu. Kèm ảnh QR payOS và số giây còn lại để quay lại màn hình thanh toán.")]
+    [EndpointDescription("Đơn đăng ký lớp còn chờ thanh toán, kể cả lễ tân tạo giúp và đã quá 3 phút giữ chỗ. Đơn mua gói chỉ còn trong 3 phút. Kèm ảnh QR payOS.")]
     public async Task<ActionResult<IReadOnlyList<PendingCheckoutDto>>> AccessPendingCheckouts() =>
         Ok(await registrations.AccessPendingCheckoutsAsync(actor.UserId));
+
+    [HttpPost("{paymentId}/refresh")]
+    [EndpointSummary("Học viên tạo lại mã thanh toán khi mã cũ hết hạn")]
+    public async Task<ActionResult<PendingCheckoutDto>> RefreshCheckout(string paymentId) =>
+        Ok(await registrations.RefreshClassCheckoutAsync(paymentId, actor.UserId));
 
     [HttpGet("{paymentId}")]
     [EndpointSummary("Học viên xem trạng thái đơn đăng ký")]
