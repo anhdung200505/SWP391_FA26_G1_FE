@@ -19,16 +19,16 @@ public class StaffActivityFlowService(AppDbContext db)
         ["ADMIN"] = "Quản trị",
     };
 
-    // Lễ tân chỉ thấy hoạt động lễ tân. Quản trị thấy cả hai. role để trống với quản trị: cả hai. Mới nhất trước.
+    // Thao tác của quản trị mà lễ tân cần biết để điều phối: lớp (thêm, sửa, xóa, đổi HLV cả lớp) và buổi học (đổi HLV, phòng, hủy).
+    private static readonly string[] ReceptionVisibleAdminEntities = ["class", "session"];
+
+    // Lễ tân thấy hoạt động lễ tân và các thao tác lớp / buổi học của quản trị.
+    // Quản trị thấy cả hai. role (RECEPTIONIST hoặc ADMIN) lọc thêm theo vai trò người làm. Mới nhất trước.
     public async Task<IReadOnlyList<StaffActivityDto>> AccessRecentAsync(string? actorRole, string? role, int? limit)
     {
-        var receptionistOnly = string.Equals(actorRole, "RECEPTIONIST", StringComparison.OrdinalIgnoreCase);
+        var receptionistViewer = string.Equals(actorRole, "RECEPTIONIST", StringComparison.OrdinalIgnoreCase);
         var roles = StaffRoles.Keys.ToList();
-        if (receptionistOnly)
-        {
-            roles = ["RECEPTIONIST"];
-        }
-        else if (!string.IsNullOrWhiteSpace(role))
+        if (!string.IsNullOrWhiteSpace(role))
         {
             var roleKey = role.Trim().ToUpperInvariant();
             if (!StaffRoles.ContainsKey(roleKey))
@@ -43,7 +43,11 @@ public class StaffActivityFlowService(AppDbContext db)
         var rows = await (
                 from log in db.ActivityLogs.AsNoTracking()
                 join user in db.UserAccounts.AsNoTracking() on log.ActorUserId equals (int?)user.UserId
-                where roles.Contains(user.Role!.RoleCode) && log.Action != SeedAction
+                where roles.Contains(user.Role!.RoleCode)
+                    && log.Action != SeedAction
+                    && (!receptionistViewer
+                        || user.Role!.RoleCode == "RECEPTIONIST"
+                        || ReceptionVisibleAdminEntities.Contains(log.EntityName))
                 orderby log.CreatedAt descending, log.AuditLogId descending
                 select new
                 {

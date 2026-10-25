@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getMemberCoursePlans } from '../api/coachCourseApi';
 import WorkspaceShell from '../components/workspace/WorkspaceShell';
+import NotificationBell from '../components/NotificationBell';
 import { studentWorkspaceItems, useHasClassRegistration } from '../components/workspace/studentNav';
 import { formatDateTime } from '../components/coach/coachUi';
 
@@ -42,6 +43,7 @@ export default function MemberCoursePlanPage() {
       homeTo="/hoc-vien-dashboard"
       items={studentWorkspaceItems(hasClass)}
       breadcrumb={[{ label: 'Học viên', to: '/hoc-vien-dashboard' }, { label: 'Bài tập lớp' }]}
+      headerExtra={<NotificationBell />}
     >
         <h1 className="text-2xl font-black text-balance">Bài tập lớp</h1>
         <p className="mt-2 max-w-prose text-sm text-pretty text-gray-500">Bản huấn luyện viên đã phát hành. Đề thi không kèm đáp án.</p>
