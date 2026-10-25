@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -94,6 +95,81 @@ public sealed record ConsultationContactDto(
 
 // Thanh toán qua payOS nên không cần chọn phương thức thanh toán.
 public sealed record RenewMembershipRequest(string PackageId);
+
+// ===== Lễ tân đăng ký giùm: lớp học, gói hội viên hoặc cả hai =====
+
+// Có sportId (kèm classId / slotId nếu muốn) → đăng ký lớp. Thêm membershipPackageId → mua gói kèm lớp (giá ưu đãi lên cấp).
+// Chỉ có membershipPackageId → mua gói riêng (giá gốc). Các trường hồ sơ chỉ dùng khi đăng ký lớp, có gửi thì ghi đè hồ sơ.
+public sealed record ReceptionCheckoutRequest(
+    string? SportId = null,
+    string? ClassId = null,
+    string? SlotId = null,
+    string? MembershipPackageId = null,
+    [StringLength(200, MinimumLength = 1)] string? FullName = null,
+    [RegularExpression(@"^\+?[0-9 ]{8,20}$")] string? Phone = null,
+    DateOnly? DateOfBirth = null,
+    [RegularExpression("^(Nam|Nữ|Khác)$")] string? Gender = null);
+
+// Kind: class (chỉ lớp, tặng Hạng Đồng), class_membership (lớp kèm gói), membership (chỉ gói).
+// Các trường chung dùng thẳng cho màn hình QR; ClassRegistration hoặc Membership là chi tiết theo Kind.
+// PaymentUrl / PayosQrCode / PayosQrImage rỗng khi máy chưa cấu hình payOS (chỉ thu tại quầy).
+public sealed record ReceptionCheckoutDto(
+    string Kind,
+    string PaymentId,
+    string InvoiceCode,
+    decimal Amount,
+    string PaymentStatus,
+    string PaymentUrl,
+    string PayosQrCode,
+    string PayosQrImage,
+    int ExpiresInSeconds,
+    string Message,
+    ClassRegistrationDto? ClassRegistration,
+    MembershipCheckoutDto? Membership);
+
+public sealed record ReceptionCheckoutResultDto(
+    string Kind,
+    string PaymentId,
+    string PaymentStatus,
+    string Message,
+    RegistrationStatusDto? ClassRegistration,
+    MembershipPaymentResultDto? Membership);
+
+// ===== Học viên đăng ký qua 1 endpoint: lớp học, gói hội viên hoặc cả hai =====
+
+// Giống ReceptionCheckoutRequest: có sportId → đăng ký lớp; thêm membershipPackageId → lớp kèm gói; chỉ membershipPackageId → mua gói riêng.
+public sealed record MemberCheckoutRequest(
+    string? SportId = null,
+    string? ClassId = null,
+    string? SlotId = null,
+    string? MembershipPackageId = null,
+    [StringLength(200, MinimumLength = 1)] string? FullName = null,
+    [RegularExpression(@"^\+?[0-9 ]{8,20}$")] string? Phone = null,
+    DateOnly? DateOfBirth = null,
+    [RegularExpression("^(Nam|Nữ|Khác)$")] string? Gender = null);
+
+// Kind: class, class_membership hoặc membership. Các trường chung dùng thẳng cho màn hình QR.
+public sealed record MemberCheckoutDto(
+    string Kind,
+    string PaymentId,
+    string InvoiceCode,
+    decimal Amount,
+    string PaymentStatus,
+    string PaymentUrl,
+    string PayosQrCode,
+    string PayosQrImage,
+    int ExpiresInSeconds,
+    string Message,
+    ClassRegistrationDto? ClassRegistration,
+    MembershipCheckoutDto? Membership);
+
+public sealed record MemberCheckoutStatusDto(
+    string Kind,
+    string PaymentId,
+    string PaymentStatus,
+    string Message,
+    RegistrationStatusDto? ClassRegistration,
+    MembershipPaymentResultDto? Membership);
 
 // Select Membership Package → Process Payment: link / mã QR payOS cho gói vừa chọn
 public sealed record MembershipCheckoutDto(
