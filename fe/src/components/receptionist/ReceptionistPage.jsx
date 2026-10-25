@@ -8,6 +8,7 @@ import {
   resolveAccountIssue,
   provideConsultation,
   escalateSupportRequest,
+  escalateEnrollmentConsultation,
 } from '../../api/receptionistSupportApi';
 import ReceptionistTable from './ReceptionistTable';
 import ReceptionistModals from './ReceptionistModals';
@@ -210,6 +211,22 @@ export default function ReceptionistPage() {
     }
   };
 
+  const handleEscalateEnrollment = async (e) => {
+    e.preventDefault();
+    if (!selectedItem || !actionNote.trim()) return;
+    setSubmitting(true);
+    try {
+      await escalateEnrollmentConsultation(selectedItem.id, actionNote.trim());
+      showNotice('Đã chuyển đơn tư vấn ghi danh lên quản lý trung tâm.');
+      closeModal();
+      fetchData();
+    } catch (err) {
+      showNotice(err.message, true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const currentList = activeTab === 'enrollment' ? enrollments : serviceRequests;
   const filteredList = currentList.filter((item) => {
     const matchName =
@@ -332,6 +349,7 @@ export default function ReceptionistPage() {
         handleResolveAccount={handleResolveAccount}
         handleProvideConsultation={handleProvideConsultation}
         handleEscalate={handleEscalate}
+        handleEscalateEnrollment={handleEscalateEnrollment}
         submitting={submitting}
       />
     </div>

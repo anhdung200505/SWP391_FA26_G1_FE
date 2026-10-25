@@ -7,6 +7,7 @@ const links = [
   { id: 'packages', to: '/quan-ly/goi', label: 'Gói hội viên' },
   { id: 'ai', to: '/quan-ly/han-muc-ai', label: 'Hạn mức AI' },
   { id: 'classes', to: '/quan-ly/lop-hoc', label: 'Lớp học' },
+  { id: 'enrollment', to: '/quan-ly/tu-van-ghi-danh', label: 'Tư vấn ghi danh' },
 ];
 
 export default function ManagementShell({ breadcrumb = [], children }) {

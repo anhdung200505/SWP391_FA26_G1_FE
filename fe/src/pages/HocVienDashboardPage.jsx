@@ -11,7 +11,10 @@ import {
   confirmMembershipRenewal,
   getMySupportRequests,
   getPendingCheckouts,
+  getClassRegistrationStatus,
+  refreshClassCheckout,
 } from '../api/managementApi';
+import { readSupportRequestType } from '../api/supportRequestType';
 import MemberSchedule from '../components/member/MemberSchedule';
 import PaymentHistory from '../components/member/PaymentHistory';
 import goldDragonImg from '../assets/membership/gold-dragon.jpg';
@@ -189,6 +192,39 @@ export default function HocVienDashboardPage() {
     };
   }, [hasPendingCheckouts, loadPayments]);
 
+  // Đơn lớp còn hạn: hỏi payOS vài giây một lần. Thanh toán xong thì lớp mới hiện.
+  useEffect(() => {
+    const due = pendingCheckouts.filter((item) => item.kind === 'class' && item.deadline > Date.now());
+    if (due.length === 0) return undefined;
+    const timer = setInterval(async () => {
+      for (const item of due) {
+        try {
+          const status = await getClassRegistrationStatus(item.paymentId);
+          if (status?.paymentStatus === 'paid') {
+            fetchDashboardData();
+            return;
+          }
+        } catch {
+          // Lần hỏi sau sẽ thử lại.
+        }
+      }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [pendingCheckouts]);
+
+  const renewCheckout = async (paymentId) => {
+    try {
+      setIsProcessing(true);
+      await refreshClassCheckout(paymentId);
+      await loadPayments();
+      setNotice({ type: 'success', msg: 'Đã tạo lại mã thanh toán. Quét mã để đóng học phí.' });
+    } catch (error) {
+      setNotice({ type: 'error', msg: error.message || 'Chưa tạo lại được mã thanh toán.' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Xử lý khi PayOS redirect về (có paymentId)
   useEffect(() => {
     const paymentId = searchParams.get('paymentId');
@@ -283,8 +319,8 @@ export default function HocVienDashboardPage() {
     </div>
   ) : null;
 
-  // Chỉ hiện đơn còn trong thời gian giữ; hết giờ thì tự biến mất.
-  const livePendingCheckouts = pendingCheckouts.filter((item) => item.deadline > now);
+  // Đơn lớp lễ tân tạo giúp vẫn hiện sau khi hết giờ giữ chỗ, để học viên tạo lại mã và thanh toán.
+  const payableCheckouts = pendingCheckouts.filter((item) => item.kind === 'class' || item.deadline > now);
 
   // Chưa ghi danh lớp nào thì thay Lịch học và Đơn hỗ trợ bằng tab đăng ký khóa học.
   const sidebarItems = useMemo(() => {
@@ -536,37 +572,62 @@ export default function HocVienDashboardPage() {
             </div>
           </section>
 
-          {/* ĐƠN ĐANG CHỜ THANH TOÁN */}
-          {livePendingCheckouts.length > 0 && (
-            <section className="bg-amber-50 rounded-3xl p-6 sm:p-8 border border-amber-200 shadow-xs">
-              <h2 className="text-lg font-black text-slate-900 uppercase mb-1">ĐƠN ĐANG CHỜ THANH TOÁN</h2>
+          {/* THANH TOÁN ĐƠN LỄ TÂN TẠO GIÚP HOẶC ĐƠN HỌC VIÊN CHƯA TRẢ */}
+          {payableCheckouts.length > 0 && (
+            <section id="payment" className="scroll-mt-24 bg-white rounded-3xl p-6 sm:p-8 border border-amber-200 shadow-xs">
+              <h2 className="text-lg font-black text-slate-900 uppercase mb-1">Thanh toán lớp học</h2>
               <p className="text-xs text-slate-500 mb-4">
-                Mỗi đơn chỉ giữ 3 phút. Quá thời gian chưa thanh toán thì đơn tự hủy và bạn cần đăng ký lại.
+                Lễ tân đã ghi danh giúp hoặc bạn đã tạo đơn nhưng chưa đóng tiền. Quét mã để thanh toán. Lớp và lịch học chỉ hiện sau khi thanh toán thành công.
               </p>
-              <div className="space-y-3">
-                {livePendingCheckouts.map((item) => (
-                  <div
-                    key={item.paymentId}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white rounded-2xl p-4 border border-amber-200"
-                  >
-                    <div className="text-xs space-y-0.5">
-                      <p className="font-black text-slate-900 text-sm">
-                        {item.kind === 'class'
-                          ? `Đăng ký lớp ${item.className || ''}${item.packageName ? ` + Gói ${item.packageName}` : ''}`
-                          : `Mua gói ${item.packageName || ''}`}
-                      </p>
-                      <p className="font-mono text-slate-500">#{item.invoiceCode}</p>
-                      <p className="font-bold text-emerald-600">{item.amount?.toLocaleString('vi-VN')}đ</p>
-                      <p className="font-bold text-amber-700">Còn {formatCountdown(item.deadline - now)}</p>
+              <div className="space-y-4">
+                {payableCheckouts.map((item) => {
+                  const secondsLeft = Math.max(0, Math.ceil((item.deadline - now) / 1000));
+                  const expired = secondsLeft <= 0;
+                  return (
+                    <div key={item.paymentId} className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                      <div className="space-y-2 text-xs">
+                        <p className="font-black text-slate-900 text-sm">
+                          {item.kind === 'class'
+                            ? `Đăng ký lớp ${item.className || ''}${item.packageName ? ` + Gói ${item.packageName}` : ''}`
+                            : `Mua gói ${item.packageName || ''}`}
+                        </p>
+                        <p className="font-mono text-slate-500">#{item.invoiceCode}</p>
+                        <p className="text-lg font-black text-emerald-600">{item.amount?.toLocaleString('vi-VN')}đ</p>
+                        <p className={`font-bold ${expired ? 'text-[#e31b23]' : 'text-amber-700'}`}>
+                          {expired ? 'Mã thanh toán đã hết hạn.' : `Còn ${formatCountdown(secondsLeft * 1000)}`}
+                        </p>
+                        {expired && item.kind === 'class' && (
+                          <button
+                            type="button"
+                            onClick={() => renewCheckout(item.paymentId)}
+                            className="mt-2 bg-[#e31b23] text-white font-bold text-xs uppercase px-4 py-2.5 rounded-xl"
+                          >
+                            Tạo lại mã thanh toán
+                          </button>
+                        )}
+                        {!expired && item.paymentUrl && (
+                          <a href={item.paymentUrl} target="_blank" rel="noreferrer" className="inline-block font-bold text-[#e31b23] hover:underline">
+                            Mở trang thanh toán payOS
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-center text-center">
+                        {!expired && item.payosQrImage ? (
+                          <>
+                            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                              <img src={item.payosQrImage} alt="Mã VietQR payOS" className="h-52 w-52 object-contain" />
+                            </div>
+                            <p className="mt-2 text-[11px] font-bold text-slate-600">Quét mã VietQR bằng app ngân hàng</p>
+                          </>
+                        ) : (
+                          <p className="text-xs font-semibold text-slate-500">
+                            {expired ? 'Tạo lại mã để quét và đóng học phí.' : 'Chưa có mã QR cho đơn này.'}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <Link
-                      to="/dang-ky-khoa-hoc"
-                      className="text-center bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
-                    >
-                      Tiếp tục thanh toán →
-                    </Link>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           )}
@@ -697,7 +758,9 @@ export default function HocVienDashboardPage() {
               </div>
             ) : supportRequests.length > 0 ? (
               <div className="space-y-4">
-                {supportRequests.map((req) => (
+                {supportRequests.map((req) => {
+                  const requestType = readSupportRequestType(req.classificationReason);
+                  return (
                   <div
                     key={req.id}
                     className="bg-slate-50 hover:bg-slate-100/80 rounded-2xl p-5 border border-slate-200 transition-all space-y-3"
@@ -706,9 +769,9 @@ export default function HocVienDashboardPage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-mono text-slate-400 font-bold">#{req.id?.slice(-6)}</span>
-                          {req.receptionistCategory || req.systemCategory ? (
-                            <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded">
-                              {req.receptionistCategory || req.systemCategory}
+                          {requestType ? (
+                            <span className="text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200 px-2 py-0.5 rounded">
+                              {requestType}
                             </span>
                           ) : null}
                         </div>
@@ -746,7 +809,8 @@ export default function HocVienDashboardPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="py-6 text-center text-xs text-slate-400 font-medium bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">

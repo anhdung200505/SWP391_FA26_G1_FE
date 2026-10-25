@@ -1,4 +1,5 @@
 import React from 'react';
+import { readSupportRequestType } from '../../api/supportRequestType';
 
 export default function ReceptionistTable({
   loading,
@@ -38,6 +39,8 @@ export default function ReceptionistTable({
         <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
           {filteredList.map((item) => {
             const isResolved = item.status === 'resolved' || item.status === 'RESOLVED';
+            const forwarded = item.status === 'pending_manager';
+            const requestType = readSupportRequestType(item.classificationReason);
             return (
               <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                 <td className="p-4">
@@ -56,6 +59,11 @@ export default function ReceptionistTable({
 
                 <td className="p-4">
                   <div className="font-bold text-slate-800">{item.title || 'Gửi yêu cầu'}</div>
+                  {requestType && (
+                    <span className="inline-block bg-sky-50 text-sky-800 border border-sky-200 text-[10px] font-bold px-2 py-0.5 rounded mt-1">
+                      Loại: {requestType}
+                    </span>
+                  )}
                   {item.receptionistCategory && (
                     <span className="inline-block bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded mt-1">
                       {item.receptionistCategory}
@@ -82,10 +90,12 @@ export default function ReceptionistTable({
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${
                       isResolved
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                        : 'bg-amber-50 text-amber-600 border-amber-200'
+                        : forwarded
+                          ? 'bg-sky-50 text-sky-700 border-sky-200'
+                          : 'bg-amber-50 text-amber-600 border-amber-200'
                     }`}
                   >
-                    {isResolved ? '✓ Đã xử lý' : '⏳ Chờ xử lý'}
+                    {isResolved ? '✓ Đã xử lý' : forwarded ? '↑ Đã chuyển quản lý' : '⏳ Chờ xử lý'}
                   </span>
                 </td>
 
@@ -97,13 +107,23 @@ export default function ReceptionistTable({
                     >
                       Xem kết quả
                     </button>
+                  ) : forwarded ? (
+                    <span className="text-[11px] font-bold text-sky-700">Chờ quản lý quyết định</span>
                   ) : activeTab === 'enrollment' ? (
-                    <button
-                      onClick={() => openActionModal(item, 'edit_enrollment')}
-                      className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3 py-1.5 rounded-lg cursor-pointer"
-                    >
-                      ✏️ Cập nhật & Giải quyết
-                    </button>
+                    <div className="flex justify-end gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => openActionModal(item, 'edit_enrollment')}
+                        className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3 py-1.5 rounded-lg cursor-pointer"
+                      >
+                        Cập nhật & Giải quyết
+                      </button>
+                      <button
+                        onClick={() => openActionModal(item, 'escalate_enrollment')}
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg cursor-pointer"
+                      >
+                        Chuyển quản lý
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex justify-end gap-1.5 flex-wrap">
                       <button
