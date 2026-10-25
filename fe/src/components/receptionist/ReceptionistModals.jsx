@@ -16,6 +16,7 @@ export default function ReceptionistModals({
   handleResolveAccount,
   handleProvideConsultation,
   handleEscalate,
+  handleEscalateEnrollment,
   submitting,
 }) {
   if (!selectedItem || !modalType) return null;
@@ -31,6 +32,7 @@ export default function ReceptionistModals({
             {modalType === 'resolve_account' && 'XỬ LÝ SỰ CỐ TÀI KHOẢN & GỬI EMAIL'}
             {modalType === 'provide_consultation' && 'CUNG CẤP TƯ VẤN & GỬI EMAIL'}
             {modalType === 'escalate' && 'CHUYỂN ĐƠN LÊN QUẢN TRỊ TRUNG TÂM'}
+            {modalType === 'escalate_enrollment' && 'CHUYỂN ĐƠN TƯ VẤN GHI DANH LÊN QUẢN LÝ'}
             {modalType === 'view_result' && 'KẾT QUẢ XỬ LÝ ĐƠN'}
           </h3>
           <button onClick={closeModal} className="text-slate-400 hover:text-slate-700 font-bold text-base p-1 cursor-pointer">
@@ -201,14 +203,18 @@ export default function ReceptionistModals({
         )}
 
         {/* 6. ESCALATE TO ADMIN */}
-        {modalType === 'escalate' && (
-          <form onSubmit={handleEscalate} className="space-y-3 text-xs">
+        {(modalType === 'escalate' || modalType === 'escalate_enrollment') && (
+          <form onSubmit={modalType === 'escalate_enrollment' ? handleEscalateEnrollment : handleEscalate} className="space-y-3 text-xs">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Lý do vượt thẩm quyền lễ tân *</label>
+              <label className="block font-bold text-slate-700 mb-1">
+                {modalType === 'escalate_enrollment' ? 'Lý do chuyển đơn tư vấn *' : 'Lý do vượt thẩm quyền lễ tân *'}
+              </label>
               <textarea
                 rows={4}
                 required
-                placeholder="Nhập rõ lý do chuyển lên Quản trị trung tâm..."
+                placeholder={modalType === 'escalate_enrollment'
+                  ? 'Nhập lý do cần quản lý trung tâm xem đơn tư vấn này...'
+                  : 'Nhập rõ lý do chuyển lên Quản trị trung tâm...'}
                 value={actionNote}
                 onChange={(e) => setActionNote(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 outline-none resize-none"
@@ -219,7 +225,7 @@ export default function ReceptionistModals({
               disabled={submitting || !actionNote.trim()}
               className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
             >
-              {submitting ? 'ĐANG GỬI...' : 'XÁC NHẬN CHUYỂN QUẢN TRỊ'}
+              {submitting ? 'ĐANG GỬI...' : 'XÁC NHẬN CHUYỂN QUẢN LÝ'}
             </button>
           </form>
         )}

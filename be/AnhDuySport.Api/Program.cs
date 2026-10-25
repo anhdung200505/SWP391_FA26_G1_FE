@@ -1,6 +1,7 @@
 using System.Text;
 using AnhDuySport.Api.Data;
 using AnhDuySport.Api.Services;
+using AnhDuySport.Api.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -94,6 +95,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "AnhDuy Sport API", Version = "v1" });
+    options.SchemaFilter<DescriptionSchemaFilter>();
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",

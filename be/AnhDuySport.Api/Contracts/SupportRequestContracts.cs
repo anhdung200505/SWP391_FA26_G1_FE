@@ -1,10 +1,15 @@
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+
 namespace AnhDuySport.Api.Contracts;
 
 public sealed record CreateSupportRequest(
-    string MemberUserId,
+    [property: Description("Id học viên gửi đơn.")] string MemberUserId,
+    [property: Description("Loại yêu cầu do học viên tự nhập, tối đa 80 ký tự. Hiện nguyên văn trên đơn của lễ tân và quản lý. Không nhận giảm giá, khuyến mãi hoặc ưu đãi.")]
+    [property: MaxLength(80)]
     string RequestType,
-    string Subject,
-    string Content);
+    [property: Description("Tiêu đề đơn.")] string Subject,
+    [property: Description("Nội dung học viên cần hỗ trợ.")] string Content);
 
 public sealed record CreateEnrollmentConsultationRequest(
     string FullName,
@@ -43,6 +48,7 @@ public sealed record SupportRequestDto(
     string Title,
     string Description,
     string SystemCategory,
+    [property: Description("Đơn học viên tự tạo có dòng 'Loại: ...' là loại yêu cầu học viên nhập. Khi lễ tân chuyển lên quản lý, dòng đó được giữ và thêm lý do chuyển.")]
     string? ClassificationReason,
     string? ReceptionistCategory,
     string Status,
