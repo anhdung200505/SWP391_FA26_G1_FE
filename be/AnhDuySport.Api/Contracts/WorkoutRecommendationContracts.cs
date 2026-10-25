@@ -98,6 +98,14 @@ public sealed record WorkoutDecisionResponse(
     CalendarSyncDto? Calendar,
     ActivityLogDto Log);
 
+public sealed record AiQuotaDto(
+    string PackageCode,
+    string PackageName,
+    int RegenerationsUsed,
+    int RegenerationLimit,
+    int TokensUsed,
+    int TokenLimit);
+
 public sealed record AiRecommendationAccessDto(
     string MemberUserId,
     string MemberName,
@@ -105,7 +113,8 @@ public sealed record AiRecommendationAccessDto(
     string Message,
     BodyMetricDto? LatestBody,
     WorkoutPlanDto? ProposedPlan,
-    WorkoutPlanDto? SavedPlan);
+    WorkoutPlanDto? SavedPlan,
+    AiQuotaDto Quota);
 
 public sealed record DailyExerciseDto(
     string Id,

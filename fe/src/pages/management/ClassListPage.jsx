@@ -1,26 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption } from '../../components/management/ManagementBits';
-import { getClassDetail, getManagementClasses, getSports } from '../../api/managementApi';
-
-const STATUS_STYLES = {
-  open: { label: 'Sắp mở', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  ongoing: { label: 'Đang học', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  closed: { label: 'Đã kết thúc', className: 'bg-slate-100 text-slate-600 border-slate-200' },
-  cancelled: { label: 'Đã hủy', className: 'bg-red-50 text-[#e31b23] border-red-200' },
-};
+import ClassListTable from '../../components/classes/ClassListTable';
+import { CLASS_STATUS, formatDate } from '../../components/classes/classUtils';
+import { changeClassCoach, deleteClass, getClassCoachOptions, getManagementClasses, getSports } from '../../api/managementApi';
 
 const selectClass =
   'w-full sm:w-44 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-[#e31b23] cursor-pointer';
-
-const formatTime = (value) => String(value || '').slice(0, 5);
-
-function formatDate(value) {
-  if (!value) return '—';
-  const [year, month, day] = String(value).split('-');
-  return `${day}/${month}/${year}`;
-}
 
 export default function ClassListPage() {
   const [classes, setClasses] = useState([]);
@@ -31,8 +18,17 @@ export default function ClassListPage() {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [deleting, setDeleting] = useState(null);
+  const [changingCoach, setChangingCoach] = useState(null);
+  const [notice, setNotice] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Lớp vừa tạo từ trang Tạo lớp mới (navigate state). Xóa state khỏi lịch sử để tải lại trang không hiện lại panel.
+  const [createdClass, setCreatedClass] = useState(location.state?.createdClass || null);
 
-  const [selectedClass, setSelectedClass] = useState(null);
+  useEffect(() => {
+    if (location.state?.createdClass) navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate]);
 
   useEffect(() => {
     getSports('1').then((data) => setSports(Array.isArray(data) ? data : [])).catch(() => setSports([]));
@@ -67,14 +63,6 @@ export default function ClassListPage() {
     setReloadKey((key) => key + 1);
   };
 
-  const handleViewDetail = async (classId) => {
-    try {
-      setSelectedClass(await getClassDetail(classId));
-    } catch (err) {
-      alert(err.message || 'Không thể lấy thông tin chi tiết lớp học.');
-    }
-  };
-
   const keyword = searchTerm.toLowerCase();
   const filteredClasses = classes.filter(
     (item) =>
@@ -84,7 +72,7 @@ export default function ClassListPage() {
   );
 
   return (
-    <ManagementShell breadcrumb={[{ label: 'Bảng điều khiển', to: '/quan-ly' }, { label: 'Quản lý lớp học' }]}>
+    <ManagementShell breadcrumb={[{ label: 'Bảng điều khiển', to: '/quan-ly' }, { label: 'Lớp học' }]}>
       {/* HEADER BANNER */}
       <section className="relative overflow-hidden rounded-3xl bg-[#12141d] px-6 py-8 text-white sm:px-8">
         <div
@@ -96,7 +84,7 @@ export default function ClassListPage() {
             <span className="inline-block skew-x-12">Class Catalog</span>
           </span>
           <h1 className="mt-4 text-3xl font-black uppercase italic leading-none tracking-tight sm:text-5xl">
-            Danh mục lớp học thể thao
+            Danh mục lớp học
           </h1>
           <p className="mt-4 max-w-md text-sm leading-6 text-white/75 sm:text-base">
             Quản lý thông tin khóa học, môn học, Huấn luyện viên phụ trách, phòng tập và lịch học chi tiết.
@@ -120,7 +108,7 @@ export default function ClassListPage() {
           </select>
           <select value={selectedStatus} onChange={changeFilter(setSelectedStatus)} className={selectClass}>
             <option value="">Mọi trạng thái</option>
-            {Object.entries(STATUS_STYLES).map(([value, status]) => (
+            {Object.entries(CLASS_STATUS).map(([value, status]) => (
               <option key={value} value={value}>
                 {status.label}
               </option>
@@ -153,6 +141,17 @@ export default function ClassListPage() {
         </div>
       </div>
 
+      {createdClass && <CreatedClassPanel item={createdClass} onClose={() => setCreatedClass(null)} />}
+
+      {notice && (
+        <div className="mt-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold flex items-center justify-between gap-3">
+          <span>✅ {notice}</span>
+          <button type="button" onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-800 cursor-pointer">
+            ✕
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="mt-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">⚠️ {error}</div>
       )}
@@ -160,7 +159,7 @@ export default function ClassListPage() {
       {/* DANH SÁCH BẢNG LỚP HỌC */}
       <div className="mt-6 bg-white rounded-3xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="border-b border-gray-100 px-6 py-4">
-          <h2 className="text-base font-black text-slate-900 uppercase">Danh sách Lớp học ({filteredClasses.length})</h2>
+          <h2 className="text-base font-black text-slate-900 uppercase">Danh sách lớp học ({filteredClasses.length})</h2>
         </div>
 
         {loading ? (
@@ -169,205 +168,316 @@ export default function ClassListPage() {
             <p className="text-xs font-bold text-gray-400">Đang tải danh sách lớp học...</p>
           </div>
         ) : filteredClasses.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-gray-100 text-gray-400 font-extrabold uppercase text-[10px] tracking-wider">
-                  <th className="p-4">Tên lớp / Môn</th>
-                  <th className="p-4">Lịch tuần</th>
-                  <th className="p-4">HLV / Phòng</th>
-                  <th className="p-4">Thời gian</th>
-                  <th className="p-4">Sĩ số</th>
-                  <th className="p-4">Trạng thái</th>
-                  <th className="p-4 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 font-medium text-slate-700">
-                {filteredClasses.map((item) => {
-                  const status = STATUS_STYLES[item.status] || STATUS_STYLES.open;
-                  const seatsLeft = item.capacity != null ? Math.max(item.capacity - item.enrolledCount, 0) : null;
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-4 min-w-[200px]">
-                        <p className="font-bold text-slate-900 text-sm">{item.name}</p>
-                        <span className="inline-block bg-red-50 text-[#e31b23] border border-red-100 font-bold text-[10px] px-2 py-0.5 rounded mt-1">
-                          {item.sportName}
-                        </span>
-                        <span className="ml-1.5 text-[10px] font-bold text-slate-400">{item.level}</span>
-                      </td>
-                      <td className="p-4">
-                        {item.schedule.length ? (
-                          <div className="flex flex-col gap-1">
-                            {item.schedule.map((row) => (
-                              <span key={`${row.weekday}-${row.timeSlotId}`} className="font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded whitespace-nowrap">
-                                {row.weekdayName} · {formatTime(row.startTime)}-{formatTime(row.endTime)}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-slate-300">Chưa xếp lịch</span>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <p className="font-bold text-slate-800">👤 {item.coachName}</p>
-                        <p className="text-[11px] text-slate-500">📍 {item.roomName || 'Chưa xếp phòng'}</p>
-                      </td>
-                      <td className="p-4 whitespace-nowrap">
-                        <p className="font-bold text-slate-800">
-                          {formatDate(item.startDate)} ~ {formatDate(item.endDate)}
-                        </p>
-                        <p className="text-[11px] text-slate-400">{item.sessionCount} buổi</p>
-                      </td>
-                      <td className="p-4 whitespace-nowrap">
-                        <span className="font-bold text-slate-900">
-                          {item.enrolledCount}/{item.capacity ?? '∞'}
-                        </span>
-                        {seatsLeft != null && (
-                          <span className="block text-[11px] text-emerald-600 font-bold">còn {seatsLeft} chỗ</span>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <span className={`inline-block whitespace-nowrap border text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${status.className}`}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right whitespace-nowrap">
-                        <div className="inline-flex flex-col items-stretch gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleViewDetail(item.id)}
-                            className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer"
-                          >
-                            👁️ Chi tiết & Lịch
-                          </button>
-                          <Link
-                            to={`/quan-ly/lich-hoc?classId=${item.id}`}
-                            className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors text-center"
-                          >
-                            📅 Buổi học
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ClassListTable
+            classes={filteredClasses}
+            renderAction={(item) => (
+              <div className="inline-flex flex-col items-stretch gap-1.5">
+                <Link
+                  to={`/quan-ly/lop-hoc/${item.id}/lich`}
+                  className="inline-block text-center bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors"
+                >
+                  📅 Xem lịch
+                </Link>
+                {['open', 'ongoing'].includes(item.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setChangingCoach(item)}
+                    className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                  >
+                    👤 Đổi HLV
+                  </button>
+                )}
+                {item.canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleting(item)}
+                    className="border border-red-200 bg-white text-[#e31b23] hover:bg-red-50 font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                  >
+                    🗑 Xóa lớp
+                  </button>
+                )}
+              </div>
+            )}
+          />
         ) : (
           <div className="py-16 text-center text-xs font-bold text-gray-400">Không tìm thấy lớp học nào phù hợp.</div>
         )}
       </div>
 
-      {/* MODAL POPUP CHI TIẾT LỚP HỌC & LỊCH HỌC */}
-      {selectedClass && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-fadeIn max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between pb-4 border-b border-gray-100">
-              <div>
-                <span className="inline-block bg-[#e31b23] text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded -skew-x-12 mb-1">
-                  <span className="inline-block skew-x-12">{selectedClass.sportName}</span>
-                </span>
-                <h3 className="text-xl font-black text-slate-900 uppercase">{selectedClass.name}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedClass(null)}
-                className="text-slate-400 hover:text-slate-700 font-bold text-lg p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
+      {changingCoach && (
+        <ChangeClassCoachModal
+          item={changingCoach}
+          onClose={() => setChangingCoach(null)}
+          onChanged={(updated) => {
+            setNotice(`Đã đổi HLV lớp ${updated.name} sang ${updated.coachName}. Học viên của lớp đã nhận thông báo.`);
+            setChangingCoach(null);
+            reload();
+          }}
+        />
+      )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200">
-              <div>
-                <span className="text-gray-400 font-bold block">Huấn luyện viên:</span>
-                <strong className="text-slate-800 text-sm">{selectedClass.coachName}</strong>
-              </div>
-              <div>
-                <span className="text-gray-400 font-bold block">Địa điểm / Phòng:</span>
-                <strong className="text-slate-800">{selectedClass.roomName}</strong>
-              </div>
-              <div>
-                <span className="text-gray-400 font-bold block">Cấp độ & Độ tuổi:</span>
-                <strong className="text-slate-800">
-                  {selectedClass.level} ({selectedClass.ageRange || 'Mọi độ tuổi'})
-                </strong>
-              </div>
-              <div>
-                <span className="text-gray-400 font-bold block">Thời gian khóa học:</span>
-                <strong className="text-slate-800">
-                  {formatDate(selectedClass.startDate)} ~ {formatDate(selectedClass.endDate)}
-                </strong>
-              </div>
-              <div>
-                <span className="text-gray-400 font-bold block">Học phí:</span>
-                <strong className="text-[#e31b23] text-sm font-black">{selectedClass.tuition?.toLocaleString('vi-VN')} đ</strong>
-              </div>
-              <div>
-                <span className="text-gray-400 font-bold block">Sĩ số:</span>
-                <strong className="text-emerald-600 font-bold">
-                  {selectedClass.enrolledCount}/{selectedClass.capacity} học viên
-                </strong>
-              </div>
-            </div>
+      {deleting && (
+        <DeleteClassModal
+          item={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setNotice(`Đã xóa lớp ${deleting.name}.`);
+            setDeleting(null);
+            reload();
+          }}
+        />
+      )}
 
-            {selectedClass.description && (
-              <div className="text-xs text-slate-600 bg-red-50/50 border border-red-100 p-3.5 rounded-xl">
-                <strong className="text-slate-900 block mb-1">Mô tả khóa học:</strong>
-                <p>{selectedClass.description}</p>
-              </div>
-            )}
+    </ManagementShell>
+  );
+}
 
-            <div>
-              <h4 className="text-xs font-black uppercase text-slate-900 mb-3">
-                📅 Danh sách các buổi học ({selectedClass.slots?.length || 0} buổi)
-              </h4>
+const formatTime = (value) => String(value || '').slice(0, 5);
 
-              {selectedClass.slots && selectedClass.slots.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                  {selectedClass.slots.map((slot) => (
-                    <div key={slot.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-slate-900 block">
-                          {slot.title || 'Buổi học'}
-                          {slot.status === 'cancelled' && (
-                            <span className="ml-1.5 bg-red-50 text-[#e31b23] border border-red-200 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">
-                              Đã hủy
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-slate-500 text-[11px]">{formatDate(slot.date)}</span>
-                      </div>
-                      <span className="font-mono font-bold bg-slate-200 text-slate-800 px-2 py-1 rounded">
-                        {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400 italic">Chưa có lịch học chi tiết được xếp.</p>
-              )}
-            </div>
+function CreatedClassPanel({ item, onClose }) {
+  return (
+    <section className="mt-6 relative overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-sm">
+      <div className="absolute inset-y-0 left-0 w-1.5 bg-emerald-500" />
+      <div className="p-6 sm:p-8 text-center">
+        <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-2xl text-emerald-600 ring-1 ring-emerald-200">
+          ✓
+        </span>
+        <p className="mt-3 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600">Thêm lớp thành công</p>
+        <h2 className="mt-1 text-2xl sm:text-3xl font-black uppercase italic text-slate-900">{item.name}</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          {item.sportName} · {item.courseName} · HLV {item.coachName} · {item.roomName}
+        </p>
 
-            <div className="pt-2 flex justify-end gap-2">
-              <Link
-                to={`/quan-ly/lich-hoc?classId=${selectedClass.id}`}
-                className="bg-[#e31b23] text-white font-bold text-xs px-6 py-2.5 rounded-xl hover:bg-[#c4131a] transition-colors"
-              >
-                Quản lý buổi học
-              </Link>
-              <button
-                type="button"
-                onClick={() => setSelectedClass(null)}
-                className="bg-slate-900 text-white font-bold text-xs px-6 py-2.5 rounded-xl hover:bg-[#e31b23] transition-colors cursor-pointer"
-              >
-                Đóng
-              </button>
-            </div>
+        <div className="mx-auto mt-5 grid max-w-2xl grid-cols-1 sm:grid-cols-3 gap-3 text-left text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200">
+          <div>
+            <span className="text-gray-400 font-bold block">Thời gian</span>
+            <strong className="text-slate-800">
+              {formatDate(item.startDate)} ~ {formatDate(item.endDate)}
+            </strong>
+          </div>
+          <div>
+            <span className="text-gray-400 font-bold block">Số buổi</span>
+            <strong className="text-slate-800">{item.sessionCount} buổi</strong>
+          </div>
+          <div>
+            <span className="text-gray-400 font-bold block">Lịch tuần</span>
+            <strong className="text-slate-800">
+              {item.schedule.map((row) => `${row.weekdayName} ${formatTime(row.startTime)}`).join(', ')}
+            </strong>
           </div>
         </div>
-      )}
-    </ManagementShell>
+
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Link
+            to={`/quan-ly/lop-hoc/${item.id}/lich`}
+            className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-colors"
+          >
+            📅 Xem lịch buổi học
+          </Link>
+          <Link
+            to="/quan-ly/lop-hoc/moi"
+            className="bg-slate-900 hover:bg-slate-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-colors"
+          >
+            ➕ Tạo thêm lớp khác
+          </Link>
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ChangeClassCoachModal({ item, onClose, onChanged }) {
+  const [options, setOptions] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const [coachId, setCoachId] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getClassCoachOptions(item.id)
+      .then(setOptions)
+      .catch((err) => setLoadError(err.message || 'Không tải được danh sách HLV.'));
+  }, [item.id]);
+
+  const free = options?.coaches.filter((coach) => !coach.isCurrent && !coach.isBusy) || [];
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!coachId) {
+      setError('Chọn huấn luyện viên mới.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      onChanged(await changeClassCoach(item.id, { coachUserId: coachId, note: note.trim() || null }));
+    } catch (err) {
+      setError(err.message || 'Đổi huấn luyện viên thất bại.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <form onSubmit={submit} className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+        <div className="flex items-start justify-between pb-4 border-b border-gray-100">
+          <div>
+            <span className="inline-block bg-[#e31b23] text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded -skew-x-12 mb-1">
+              <span className="inline-block skew-x-12">{item.sportName}</span>
+            </span>
+            <h3 className="text-xl font-black text-slate-900 uppercase">Đổi HLV cho lớp</h3>
+            <p className="mt-1 text-xs font-bold text-slate-500">
+              {item.name} · HLV hiện tại {item.coachName}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 font-bold text-lg p-1 cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        {loadError ? (
+          <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">⚠️ {loadError}</div>
+        ) : !options ? (
+          <div className="py-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-7 w-7 border-4 border-[#e31b23] border-t-transparent" />
+          </div>
+        ) : options.remainingSessions === 0 ? (
+          <div className="p-4 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-xs font-bold">
+            Lớp không còn buổi học nào sắp tới để đổi huấn luyện viên.
+          </div>
+        ) : (
+          <>
+            <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
+              Áp dụng cho <strong className="text-slate-900">{options.remainingSessions} buổi còn lại</strong> từ ngày{' '}
+              <strong className="text-slate-900">{formatDate(options.firstSession)}</strong>. Buổi đã học và buổi đã hủy giữ nguyên.{' '}
+              {item.enrolledCount} học viên của lớp sẽ nhận thông báo.
+            </div>
+
+            <label className="block space-y-1.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                Huấn luyện viên mới ({free.length} người rảnh)
+              </span>
+              <select
+                value={coachId}
+                onChange={(event) => setCoachId(event.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-[#e31b23] cursor-pointer"
+              >
+                <option value="">Chọn HLV...</option>
+                {options.coaches.map((coach) => (
+                  <option key={coach.id} value={coach.id} disabled={coach.isCurrent || coach.isBusy}>
+                    {coach.name}
+                    {coach.isCurrent ? ' · đang dạy lớp này' : coach.isBusy ? ` · ${coach.busyReason}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Lý do (gửi kèm thông báo cho học viên)</span>
+              <textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="VD: HLV cũ chuyển công tác, HLV mới tiếp nhận lớp đến hết khóa."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-800 outline-none focus:border-[#e31b23] resize-none"
+              />
+            </label>
+          </>
+        )}
+
+        {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">⚠️ {error}</div>}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            Đóng
+          </button>
+          {options && options.remainingSessions > 0 && (
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-xs px-6 py-2.5 rounded-xl transition-colors cursor-pointer disabled:opacity-60"
+            >
+              {saving ? 'Đang đổi...' : 'Đổi HLV & thông báo học viên'}
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function DeleteClassModal({ item, onClose, onDeleted }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const confirm = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await deleteClass(item.id);
+      onDeleted();
+    } catch (err) {
+      setError(err.message || 'Xóa lớp thất bại.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+        <div className="flex items-start justify-between pb-4 border-b border-gray-100">
+          <div>
+            <span className="inline-block bg-[#e31b23] text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded -skew-x-12 mb-1">
+              <span className="inline-block skew-x-12">Xác nhận</span>
+            </span>
+            <h3 className="text-xl font-black text-slate-900 uppercase">Xóa lớp học</h3>
+            <p className="mt-1 text-xs font-bold text-slate-500">
+              {item.name} · {item.sportName} · HLV {item.coachName}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 font-bold text-lg p-1 cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-600 bg-red-50/50 border border-red-100 p-3.5 rounded-xl">
+          Lớp chưa có học viên nào đăng ký. Xóa lớp sẽ xóa luôn lịch tuần và{' '}
+          <strong className="text-[#e31b23]">{item.sessionCount} buổi học</strong>, không thể hoàn tác. Giáo án của môn giữ nguyên.
+        </div>
+
+        {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">⚠️ {error}</div>}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            Không xóa
+          </button>
+          <button
+            type="button"
+            onClick={confirm}
+            disabled={saving}
+            className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs px-6 py-2.5 rounded-xl transition-colors cursor-pointer disabled:opacity-60"
+          >
+            {saving ? 'Đang xóa...' : 'Xác nhận xóa lớp'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

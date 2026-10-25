@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import WorkspaceShell from '../components/workspace/WorkspaceShell';
+import NotificationBell from '../components/NotificationBell';
 import {
   getMyClassRegistrations,
   getMemberProfile,
   getMemberMembership,
   getConsultationContact,
-  createMembershipRenewal,
   confirmMembershipRenewal,
   getMySupportRequests,
   getPendingCheckouts,
 } from '../api/managementApi';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
+import MemberSchedule from '../components/member/MemberSchedule';
+import PaymentHistory from '../components/member/PaymentHistory';
 import goldDragonImg from '../assets/membership/gold-dragon.jpg';
 
 // Hạng của gói theo mã hoặc tên: gold / silver / bronze
@@ -36,7 +37,6 @@ const TIER_THEMES = {
     titleGradient: 'linear-gradient(90deg, #ffe0c2 0%, #e39a5c 45%, #b8692f 100%)',
     accent: '#f3b07a',
     subText: 'rgba(255,226,200,0.75)',
-    chip: ['#f5c79a', '#9c5a28'],
     buttonStyle: { background: 'linear-gradient(135deg, #f3b07a, #b8692f)', color: '#2a1206' },
   },
   silver: {
@@ -50,7 +50,6 @@ const TIER_THEMES = {
     titleGradient: 'linear-gradient(90deg, #ffffff 0%, #d1d5db 45%, #8e959e 100%)',
     accent: '#e5e7eb',
     subText: 'rgba(229,231,235,0.75)',
-    chip: ['#f3f4f6', '#8b929b'],
     buttonStyle: { background: 'linear-gradient(135deg, #f9fafb, #9ca3af)', color: '#111827' },
   },
   gold: {
@@ -65,7 +64,6 @@ const TIER_THEMES = {
     titleGradient: 'linear-gradient(90deg, #fff4c2 0%, #e8c766 40%, #b8892a 100%)',
     accent: '#e8c766',
     subText: 'rgba(240,222,160,0.75)',
-    chip: ['#fbe7a1', '#a87b22'],
     buttonStyle: { background: 'linear-gradient(135deg, #fbe7a1, #c9971f)', color: '#1a1200' },
   },
 };
@@ -78,28 +76,34 @@ const formatCountdown = (ms) => {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 };
 
-// Nhãn trạng thái trong lịch sử gói: đơn chờ thanh toán / đã hủy không hiện như đã hoàn tất.
-const historyStatus = (status) => {
-  switch (status) {
-    case 'pending':
-      return { label: 'Chờ thanh toán', className: 'bg-amber-50 text-amber-700 border-amber-200' };
-    case 'cancelled':
-      return { label: 'Đã hủy', className: 'bg-slate-100 text-slate-500 border-slate-200' };
-    case 'expired':
-      return { label: 'Hết hạn', className: 'bg-slate-100 text-slate-500 border-slate-200' };
-    case 'scheduled':
-      return { label: 'Chờ kích hoạt', className: 'bg-blue-50 text-blue-700 border-blue-200' };
-    case 'active':
-      return { label: 'Đang dùng', className: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
-    default:
-      return { label: status || 'Hoàn tất', className: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
-  }
-};
+// Gói nhận kèm lớp được lưu tên "... (tặng kèm lớp)"; thẻ chỉ hiện tên hạng.
+const planTitle = (name) => String(name || 'Gói Hội Viên').replace(/\s*\(tặng kèm lớp\)\s*$/i, '');
+
+// yyyy-MM-dd -> dd/MM/yyyy
+const formatDay = (iso) => (iso ? String(iso).split('-').reverse().join('/') : '—');
+
+const SIDEBAR_ITEMS = [
+  { key: 'overview', label: 'Tổng quan', icon: '🏠' },
+  { key: 'classes', label: 'Lớp của tôi', icon: '🏅' },
+  { key: 'schedule', label: 'Lịch học', icon: '📅' },
+  { key: 'support', label: 'Đơn hỗ trợ', icon: '🛟' },
+  { key: 'history', label: 'Lịch sử thanh toán', icon: '🧾' },
+];
+
+const REGISTER_TAB = { key: 'register', label: 'Đăng ký khóa học', icon: '📝', href: '/dang-ky-khoa-hoc' };
+const COURSE_PLAN_TAB = { key: 'course-plan', label: 'Bài tập lớp', icon: '📋', href: '/hoc-vien/bai-tap-lop' };
+const MEMBER_ONLY_TABS = new Set(['schedule', 'support']);
+
+// Đỉnh vùng đang xem: dưới header cố định (cao khoảng 90px) một chút.
+const SPY_OFFSET = 88;
 
 export default function HocVienDashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const [activeTab, setActiveTab] = useState('overview');
+  const spyLockUntil = useRef(0);
   const [loading, setLoading] = useState(true);
   const [myClasses, setMyClasses] = useState([]);
   const [pendingCheckouts, setPendingCheckouts] = useState([]);
@@ -112,9 +116,6 @@ export default function HocVienDashboardPage() {
   const [supportRequests, setSupportRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
 
-  // Modal Thanh Toán & Gia Hạn Gói
-  const [selectedPackage, setSelectedPackage] = useState(null);
-  const [checkoutInfo, setCheckoutInfo] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [notice, setNotice] = useState({ type: '', msg: '' });
 
@@ -213,24 +214,6 @@ export default function HocVienDashboardPage() {
     }
   };
 
-  // Gọi API tạo Link/QR thanh toán Gia hạn
-  const handleCreateRenewal = async (packageItem) => {
-    try {
-      setIsProcessing(true);
-      setSelectedPackage(packageItem);
-      const data = await createMembershipRenewal(memberUserId, packageItem.id);
-      if (data && data.checkoutUrl) {
-        setCheckoutInfo(data);
-      } else {
-        alert(data.message || 'Không thể tạo đơn gia hạn gói.');
-      }
-    } catch (e) {
-      alert(e.message || 'Đã xảy ra lỗi kết nối thanh toán.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   // Badge hiển thị trạng thái đơn hỗ trợ
   const renderStatusBadge = (status) => {
     const statusUpper = status?.toUpperCase() || '';
@@ -271,7 +254,6 @@ export default function HocVienDashboardPage() {
   const displayEmail = profileData?.email || user?.email || 'Chưa cập nhật';
   const displayPhone = profileData?.phone || user?.phone || 'Chưa cập nhật';
   const currentMembership = membershipData?.currentMembership;
-  const historyList = membershipData?.history || [];
   // Gói cao nhất đang có (backend tính cả gói chờ kích hoạt): gia hạn gói này, chỉ nâng cấp lên gói đắt hơn.
   const packageList = membershipData?.packages || [];
   const highestPackage =
@@ -291,62 +273,124 @@ export default function HocVienDashboardPage() {
     >
       <div>
         <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Ngày bắt đầu</span>
-        <span className="text-xs font-bold text-white">{currentMembership.startDate}</span>
+        <span className="text-xs font-bold text-white whitespace-nowrap">{formatDay(currentMembership.startDate)}</span>
       </div>
       <div className="h-8 w-px" style={{ background: cardTheme.border }}></div>
       <div>
         <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Hạn sử dụng đến</span>
-        <span className="text-xs font-black" style={{ color: cardTheme.accent }}>{currentMembership.endDate}</span>
+        <span className="text-xs font-black whitespace-nowrap" style={{ color: cardTheme.accent }}>{formatDay(currentMembership.endDate)}</span>
       </div>
-      {membershipData?.membershipEndDate && membershipData.membershipEndDate !== currentMembership.endDate && (
-        <>
-          <div className="h-8 w-px" style={{ background: cardTheme.border }}></div>
-          <div>
-            <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Gồm gói chờ kích hoạt</span>
-            <span className="text-xs font-black" style={{ color: cardTheme.accent }}>{membershipData.membershipEndDate}</span>
-          </div>
-        </>
-      )}
     </div>
   ) : null;
 
   // Chỉ hiện đơn còn trong thời gian giữ; hết giờ thì tự biến mất.
   const livePendingCheckouts = pendingCheckouts.filter((item) => item.deadline > now);
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col justify-between">
-      <Header forceWhite />
+  // Chưa ghi danh lớp nào thì thay Lịch học và Đơn hỗ trợ bằng tab đăng ký khóa học.
+  const sidebarItems = useMemo(() => {
+    if (loading) return SIDEBAR_ITEMS.filter((item) => item.key === 'overview' || item.key === 'history');
+    const enrolled = myClasses.length > 0;
+    const items = enrolled
+      ? [...SIDEBAR_ITEMS]
+      : SIDEBAR_ITEMS.flatMap((item) => {
+          if (item.key === 'classes') return [REGISTER_TAB];
+          if (MEMBER_ONLY_TABS.has(item.key)) return [];
+          return [item];
+        });
+    if (enrolled) {
+      const classIndex = items.findIndex((item) => item.key === 'classes');
+      items.splice(classIndex === -1 ? 1 : classIndex + 1, 0, COURSE_PLAN_TAB);
+    }
+    return items;
+  }, [loading, myClasses.length]);
 
-      <main className="flex-1 pt-20 sm:pt-24 pb-16">
-        {/* BANNER ALERTS */}
+  const selectTab = (key) => {
+    const item = sidebarItems.find((entry) => entry.key === key);
+    if (item?.href) {
+      navigate(item.href);
+      return;
+    }
+    // Trong lúc trang đang cuộn tới mục vừa bấm thì giữ nguyên mục đó, kẻo mục cuối trang chiếm mất khi không cuộn thêm được.
+    spyLockUntil.current = Date.now() + 900;
+    setActiveTab(key);
+    window.history.replaceState(null, '', `#${key}`);
+    document.getElementById(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Sidebar chỉ dẫn nhanh: mục nào đang ở gần đỉnh màn hình thì được tô sáng; cuộn tới cuối trang thì tô mục cuối.
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      if (Date.now() < spyLockUntil.current) return;
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+      let current = sidebarItems[0].key;
+      for (const item of sidebarItems) {
+        const element = document.getElementById(item.key);
+        if (element && element.getBoundingClientRect().top <= SPY_OFFSET) current = item.key;
+      }
+      setActiveTab(atBottom ? sidebarItems[sidebarItems.length - 1].key : current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [sidebarItems]);
+
+  // Vào bằng đường dẫn có #mục (ví dụ #schedule) thì cuộn tới mục đó.
+  useEffect(() => {
+    const key = window.location.hash.replace('#', '');
+    if (!sidebarItems.some((item) => item.key === key && !item.href)) return undefined;
+    const timer = setTimeout(() => document.getElementById(key)?.scrollIntoView({ block: 'start' }), 400);
+    return () => clearTimeout(timer);
+  }, [sidebarItems]);
+
+  const currentItem = sidebarItems.find((item) => item.key === activeTab);
+
+  return (
+    <WorkspaceShell
+      role="Học viên"
+      homeTo="/hoc-vien-dashboard"
+      items={sidebarItems.map((item) => ({ id: item.key, label: item.label, to: item.href }))}
+      activeId={activeTab}
+      onSelect={selectTab}
+      breadcrumb={[{ label: 'Học viên' }, { label: currentItem?.label || 'Tổng quan' }]}
+      headerExtra={<NotificationBell />}
+    >
+        {isProcessing && <p className="text-sm font-semibold text-slate-500">Đang xác nhận thanh toán...</p>}
         {notice.msg && (
           <div
-            className={`max-w-6xl mx-auto mt-4 px-6 py-4 rounded-2xl text-xs font-bold border shadow-sm flex items-center justify-between ${
+            className={`mt-4 flex items-center justify-between rounded-2xl border px-6 py-4 text-xs font-bold ${
               notice.type === 'success'
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-red-50 text-red-700 border-red-200'
             }`}
           >
             <span>{notice.msg}</span>
-            <button onClick={() => setNotice({ type: '', msg: '' })} className="font-bold text-sm cursor-pointer">
+            <button type="button" aria-label="Đóng thông báo" onClick={() => setNotice({ type: '', msg: '' })} className="font-bold text-sm">
               ✕
             </button>
           </div>
         )}
 
+        <div className="mt-6 space-y-8">
+            <div id="overview" className="scroll-mt-24 space-y-8">
         {/* BANNER XIN CHÀO */}
-        <section className="bg-white border-b border-slate-200 py-8 shadow-xs">
-          <div className="max-w-6xl mx-auto px-4 sm:px-8">
+        <section className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8">
+          <div>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <span className="inline-block bg-[#e31b23]/10 text-[#e31b23] text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full mb-2">
-                  PORTAL CÁ NHÂN HỌC VIÊN
-                </span>
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 uppercase">
-                  XIN CHÀO, <span className="text-[#e31b23]">{displayName}</span>!
+                <h1 className="text-2xl font-black text-balance text-slate-900 sm:text-3xl">
+                  Xin chào, {displayName}
                 </h1>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Quản lý gói tập hội viên, lớp học thể thao và các đơn yêu cầu hỗ trợ của bạn.
+                <p className="mt-1 text-sm text-pretty text-slate-500">
+                  {loading || myClasses.length > 0
+                    ? 'Quản lý gói tập hội viên, lớp học thể thao và các đơn yêu cầu hỗ trợ của bạn.'
+                    : 'Bạn chưa mua khóa học. Hãy đăng ký một lớp huấn luyện để xem lịch học và gửi đơn hỗ trợ.'}
                 </p>
               </div>
 
@@ -380,7 +424,6 @@ export default function HocVienDashboardPage() {
           </div>
         </section>
 
-        <div className="max-w-6xl mx-auto px-4 sm:px-8 mt-8 space-y-8">
           {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG */}
           {currentMembership && (
             <section
@@ -421,30 +464,15 @@ export default function HocVienDashboardPage() {
                     </span>
                   </div>
 
-                  {/* Chip thẻ */}
-                  <svg width="46" height="34" viewBox="0 0 46 34" aria-hidden="true">
-                    <defs>
-                      <linearGradient id="cardChip" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor={cardTheme.chip[0]} />
-                        <stop offset="100%" stopColor={cardTheme.chip[1]} />
-                      </linearGradient>
-                    </defs>
-                    <rect x="1" y="1" width="44" height="32" rx="6" fill="url(#cardChip)" />
-                    <path d="M1 12h14M1 22h14M31 12h14M31 22h14M15 1v32M31 1v32" stroke="rgba(0,0,0,0.35)" strokeWidth="1.2" fill="none" />
-                  </svg>
-
                   <div>
                     <h2
                       className="text-3xl sm:text-4xl font-black uppercase tracking-wide"
                       style={{ backgroundImage: cardTheme.titleGradient, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
                     >
-                      {currentMembership.planName || 'Gói Hội Viên'}
+                      {planTitle(currentMembership.planName)}
                     </h2>
                     <p className="mt-2 font-mono text-sm tracking-[0.2em] uppercase" style={{ color: cardTheme.subText }}>
-                      {displayName} · {profileData?.code || `ND-${String(memberUserId || '').padStart(4, '0')}`}
-                    </p>
-                    <p className="text-[11px] mt-1" style={{ color: cardTheme.subText }}>
-                      Mã hóa đơn: <span className="font-mono font-bold" style={{ color: cardTheme.accent }}>#{currentMembership.invoiceCode || 'N/A'}</span>
+                      {displayName}
                     </p>
                   </div>
 
@@ -459,7 +487,7 @@ export default function HocVienDashboardPage() {
               {highestPackage && (
                 <div className="relative z-10 mt-6 flex flex-wrap gap-3">
                   <Link
-                    to={`/dang-ky-khoa-hoc?packageId=${highestPackage.id}`}
+                    to={`/dang-ky-khoa-hoc?packageId=${highestPackage.id}&mode=renew`}
                     className="font-black text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5"
                     style={TIER_THEMES[packageTier(highestPackage)].buttonStyle}
                   >
@@ -468,7 +496,7 @@ export default function HocVienDashboardPage() {
                   {upgradePackages.map((pkg) => (
                     <Link
                       key={pkg.id}
-                      to={`/dang-ky-khoa-hoc?packageId=${pkg.id}`}
+                      to={`/dang-ky-khoa-hoc?packageId=${pkg.id}&mode=renew`}
                       className="font-black text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5"
                       style={TIER_THEMES[packageTier(pkg)].buttonStyle}
                     >
@@ -479,6 +507,34 @@ export default function HocVienDashboardPage() {
               )}
             </section>
           )}
+
+          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 text-balance">Giáo án tập với AI</h2>
+                <p className="mt-1 text-sm text-pretty text-slate-500">
+                  {currentMembership
+                    ? 'Nhập chỉ số BMI và mục tiêu để nhận giáo án, rồi lưu vào lịch tập cá nhân.'
+                    : 'Giáo án AI cần gói hội viên đang hiệu lực. Gói chỉ có khi đăng ký kèm khóa học.'}
+                </p>
+              </div>
+              {currentMembership ? (
+                <Link
+                  to="/hoc-vien/giao-an-ai"
+                  className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
+                >
+                  Mở giáo án AI
+                </Link>
+              ) : (
+                <Link
+                  to="/dang-ky-khoa-hoc"
+                  className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
+                >
+                  Đăng ký khóa học
+                </Link>
+              )}
+            </div>
+          </section>
 
           {/* ĐƠN ĐANG CHỜ THANH TOÁN */}
           {livePendingCheckouts.length > 0 && (
@@ -515,6 +571,10 @@ export default function HocVienDashboardPage() {
             </section>
           )}
 
+            </div>
+
+            {!loading && myClasses.length > 0 && (
+            <div id="classes" className="scroll-mt-24 space-y-8">
           {/* ======================================================== */}
           {/* BLOCK 1: KHÓA HỌC & LỚP ĐÃ GHI DANH */}
           {/* ======================================================== */}
@@ -604,6 +664,17 @@ export default function HocVienDashboardPage() {
             )}
           </section>
 
+            </div>
+            )}
+
+            {!loading && myClasses.length > 0 && (
+            <div id="schedule" className="scroll-mt-24">
+              <MemberSchedule />
+            </div>
+            )}
+
+            {!loading && myClasses.length > 0 && (
+            <div id="support" className="scroll-mt-24 space-y-8">
           {/* ======================================================== */}
           {/* BLOCK 3: TRẠNG THÁI ĐƠN HỖ TRỢ CỦA BẠN */}
           {/* ======================================================== */}
@@ -684,109 +755,13 @@ export default function HocVienDashboardPage() {
             )}
           </section>
 
-          {/* LỊCH SỬ DÙNG GÓI */}
-          {historyList.length > 0 && (
-            <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-              <h2 className="text-lg font-black text-slate-900 uppercase mb-4">
-                LỊCH SỬ DÙNG GÓI HỘI VIÊN
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
-                      <th className="p-3">Gói tập</th>
-                      <th className="p-3">Hóa đơn</th>
-                      <th className="p-3">Tạo lúc</th>
-                      <th className="p-3">Thời hạn</th>
-                      <th className="p-3">Đã thanh toán</th>
-                      <th className="p-3">Trạng thái</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
-                    {historyList.map((hItem) => (
-                      <tr key={hItem.id}>
-                        <td className="p-3 font-bold text-slate-900">{hItem.planName}</td>
-                        <td className="p-3 font-mono text-slate-500">#{hItem.invoiceCode}</td>
-                        <td className="p-3 text-slate-600 whitespace-nowrap">
-                          {hItem.createdAt ? new Date(hItem.createdAt).toLocaleString('vi-VN') : '—'}
-                        </td>
-                        <td className="p-3 text-slate-600">{hItem.startDate} ~ {hItem.endDate}</td>
-                        <td className="p-3 font-bold text-emerald-600">{hItem.amountPaid?.toLocaleString('vi-VN')}đ</td>
-                        <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${historyStatus(hItem.status).className}`}>
-                            {historyStatus(hItem.status).label}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-        </div>
-      </main>
-
-      <Footer />
-
-      {/* MODAL POPUP THANH TOÁN PAYOS */}
-      {checkoutInfo && selectedPackage && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-fadeIn text-center">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-sm font-black text-slate-900 uppercase">
-                THANH TOÁN PAYOS GIA HẠN GÓI
-              </h3>
-              <button
-                onClick={() => setCheckoutInfo(null)}
-                className="text-slate-400 hover:text-slate-700 font-bold text-base p-1 cursor-pointer"
-              >
-                ✕
-              </button>
             </div>
-
-            <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-400 uppercase">Mã hóa đơn</span>
-              <p className="text-base font-mono font-black text-[#e31b23]">
-                #{checkoutInfo.invoiceCode}
-              </p>
-              <p className="text-xl font-black text-slate-900">
-                {checkoutInfo.amount?.toLocaleString('vi-VN')} VNĐ
-              </p>
-            </div>
-
-            {checkoutInfo.qrCode ? (
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 inline-block">
-                <img src={checkoutInfo.qrCode} alt="PayOS QR Code" className="w-48 h-48 mx-auto object-contain" />
-                <p className="text-[11px] font-bold text-slate-500 mt-2">Mở app Ngân hàng / ví để Quét mã QR</p>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500">
-                Vui lòng bấm nút bên dưới để chuyển hướng sang cổng thanh toán an toàn PayOS.
-              </p>
             )}
 
-            <div className="space-y-2 pt-2">
-              <a
-                href={checkoutInfo.checkoutUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="block w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer"
-              >
-                Mở Cổng Thanh Toán PayOS →
-              </a>
-
-              <button
-                onClick={() => handleConfirmPayment(checkoutInfo.paymentId)}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-2.5 rounded-xl cursor-pointer"
-              >
-                🔄 Tôi đã hoàn tất thanh toán
-              </button>
+            <div id="history" className="scroll-mt-24">
+              <PaymentHistory />
             </div>
-          </div>
         </div>
-      )}
-    </div>
+    </WorkspaceShell>
   );
 }
