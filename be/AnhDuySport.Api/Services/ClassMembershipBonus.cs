@@ -45,8 +45,7 @@ public static class ClassMembershipBonus
         return (package, price);
     }
 
-    // Gói cao nhất học viên đang có: đang dùng hoặc chờ kích hoạt, còn hạn.
-    // Hạng gói = phí trung bình mỗi tháng (MembershipDuration.MonthlyRate) vì gói có thể nhiều tháng.
+    // Gói cao nhất (theo giá) học viên đang có: đang dùng hoặc chờ kích hoạt, còn hạn.
     public static Task<MembershipPackage?> HighestOwnedPackageAsync(AppDbContext db, int userId, DateOnly today) =>
         db.Memberships
             .AsNoTracking()
@@ -55,15 +54,14 @@ public static class ClassMembershipBonus
                 && item.EndDate >= today
                 && item.Package != null)
             .Select(item => item.Package!)
-            .OrderByDescending(package => package.Fee / package.ValidityMonths)
+            .OrderByDescending(package => package.Fee)
             .FirstOrDefaultAsync();
 
     // Đang có gói cao hơn thì không cho mua gói thấp hơn (có Vàng chỉ mua Vàng; có Bạc mua Bạc hoặc Vàng).
-    // Chỉ áp dụng cho gói lên cấp mua kèm lớp. Mua gói riêng (MemberMembershipFlowService) thì gói thấp hơn được xếp nối tiếp.
     public static async Task EnsureNotDowngradeAsync(AppDbContext db, int userId, MembershipPackage package, DateOnly today)
     {
         var highest = await HighestOwnedPackageAsync(db, userId, today);
-        if (highest is not null && MembershipDuration.MonthlyRate(package) < MembershipDuration.MonthlyRate(highest))
+        if (highest is not null && package.Fee < highest.Fee)
         {
             throw new RegistrationException(
                 $"Bạn đang có {highest.PackageName} nên chỉ được gia hạn {highest.PackageName} hoặc nâng cấp lên hạng cao hơn.");
@@ -156,7 +154,7 @@ public static class ClassMembershipBonus
             MembershipPackageId = package.MembershipPackageId,
             PlanName = isFree ? $"{package.PackageName} (tặng kèm lớp)" : $"{package.PackageName} (ưu đãi kèm lớp)",
             StartDate = start,
-            EndDate = MembershipDuration.EndFrom(start, package.ValidityMonths), // 1 tháng = 30 ngày
+            EndDate = start.AddMonths(package.ValidityMonths).AddDays(-1),
             Status = start <= today ? "active" : "scheduled",
         });
     }
