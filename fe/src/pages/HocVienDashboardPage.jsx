@@ -14,6 +14,7 @@ import {
   getClassRegistrationStatus,
   refreshClassCheckout,
 } from '../api/managementApi';
+import { readSupportRequestType } from '../api/supportRequestType';
 import MemberSchedule from '../components/member/MemberSchedule';
 import PaymentHistory from '../components/member/PaymentHistory';
 import goldDragonImg from '../assets/membership/gold-dragon.jpg';
@@ -757,7 +758,9 @@ export default function HocVienDashboardPage() {
               </div>
             ) : supportRequests.length > 0 ? (
               <div className="space-y-4">
-                {supportRequests.map((req) => (
+                {supportRequests.map((req) => {
+                  const requestType = readSupportRequestType(req.classificationReason);
+                  return (
                   <div
                     key={req.id}
                     className="bg-slate-50 hover:bg-slate-100/80 rounded-2xl p-5 border border-slate-200 transition-all space-y-3"
@@ -766,9 +769,9 @@ export default function HocVienDashboardPage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-mono text-slate-400 font-bold">#{req.id?.slice(-6)}</span>
-                          {req.receptionistCategory || req.systemCategory ? (
-                            <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded">
-                              {req.receptionistCategory || req.systemCategory}
+                          {requestType ? (
+                            <span className="text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200 px-2 py-0.5 rounded">
+                              {requestType}
                             </span>
                           ) : null}
                         </div>
@@ -806,7 +809,8 @@ export default function HocVienDashboardPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="py-6 text-center text-xs text-slate-400 font-medium bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
