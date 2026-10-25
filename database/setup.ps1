@@ -1,4 +1,5 @@
-# Dung lai database AnhDuySport tu dau: 01_schema.sql, 02_seed.sql roi 03_seed_extra_coaches.sql (khong con file migration rieng).
+# Dung lai database AnhDuySport tu dau: 01_schema.sql, 02_seed.sql, 03_seed_extra_coaches.sql, 04_seed_extra_members.sql
+# roi 05_membership_email_change.sql (bang doi email OTP, goi nhieu thang, 1 don goi cho thanh toan).
 # CANH BAO: 01_schema.sql XOA database cu, du lieu se mat.
 #   powershell -ExecutionPolicy Bypass -File database\setup.ps1
 #   powershell -ExecutionPolicy Bypass -File database\setup.ps1 -Server "localhost"
@@ -7,7 +8,7 @@ param([string]$Server)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 
-foreach ($script in '01_schema.sql', '02_seed.sql', '03_seed_extra_coaches.sql', '04_seed_extra_members.sql') {
+foreach ($script in '01_schema.sql', '02_seed.sql', '03_seed_extra_coaches.sql', '04_seed_extra_members.sql', '05_membership_email_change.sql') {
     if (-not (Test-Path (Join-Path $root $script))) { throw "Thieu file $script trong $root" }
 }
 
@@ -55,5 +56,6 @@ Invoke-SqlFile '01_schema.sql' $null
 Invoke-SqlFile '02_seed.sql' 'AnhDuySport'
 Invoke-SqlFile '03_seed_extra_coaches.sql' 'AnhDuySport'
 Invoke-SqlFile '04_seed_extra_members.sql' 'AnhDuySport'
+Invoke-SqlFile '05_membership_email_change.sql' 'AnhDuySport'
 
 Write-Output "AnhDuySport san sang tren $Server"
