@@ -375,8 +375,10 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
     {
         var result = new List<(DateTime IssuedAt, PendingCheckoutDto Item)>();
 
-        var classPayments = await LiveHolds()
-            .Where(payment => payment.UserId == memberUserId)
+        // Đơn lễ tân tạo giúp vẫn hiện cho học viên trả sau, kể cả khi đã quá 3 phút giữ chỗ.
+        var classPayments = await db.Payments
+            .AsNoTracking()
+            .Where(payment => payment.UserId == memberUserId && payment.ClassId != null && payment.Status == "pending")
             .Select(payment => new
             {
                 payment.PaymentId,
@@ -448,10 +450,67 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
 
         return result
-            .Where(row => row.Item.ExpiresInSeconds > 0)
+            .Where(row => row.Item.Kind == "class" || row.Item.ExpiresInSeconds > 0)
             .OrderByDescending(row => row.IssuedAt)
             .Select(row => row.Item)
             .ToList();
+    }
+
+    // Mã payOS hết hạn thì phát hành lại, giữ nguyên đơn pending để học viên vẫn trả được đơn lễ tân đã tạo.
+    public async Task<PendingCheckoutDto> RefreshClassCheckoutAsync(string paymentId, int memberId)
+    {
+        if (!int.TryParse(paymentId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
+        }
+
+        var payment = await db.Payments
+            .Include(item => item.Invoice)
+            .Include(item => item.Class)
+            .FirstOrDefaultAsync(item => item.PaymentId == id && item.UserId == memberId && item.ClassId != null && item.Status == "pending")
+            ?? throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
+
+        if (payment.Invoice is null)
+        {
+            throw new RegistrationException("Đơn đăng ký thiếu hóa đơn.");
+        }
+
+        if (PaymentTimeout.SecondsLeft(payment.Invoice.IssuedAt) == 0 || string.IsNullOrWhiteSpace(payment.QrCode))
+        {
+            payment.Invoice.IssuedAt = DateTime.Now;
+            payment.CheckoutUrl = null;
+            payment.QrCode = null;
+            payment.PaymentLinkId = null;
+            payment.PayosOrderCode = null;
+            await db.SaveChangesAsync();
+        }
+
+        var linked = await payOs.EnsureRegistrationLinkAsync(payment.PaymentId, PaymentTimeout.ExpiresAt(payment.Invoice.IssuedAt))
+            ?? throw new RegistrationException("Chưa tạo lại được mã thanh toán. Nhờ lễ tân tạo đơn mới.");
+        if (string.IsNullOrWhiteSpace(linked.QrCode))
+        {
+            throw new RegistrationException("Chưa tạo lại được mã thanh toán. Nhờ lễ tân tạo đơn mới.");
+        }
+
+        var packageName = linked.UpgradePackageId is int packageId
+            ? await db.MembershipPackages.AsNoTracking()
+                .Where(item => item.MembershipPackageId == packageId)
+                .Select(item => item.PackageName)
+                .FirstOrDefaultAsync()
+            : null;
+        return new PendingCheckoutDto(
+            "class",
+            linked.PaymentId.ToString(),
+            payment.Invoice.InvoiceCode,
+            linked.Amount,
+            linked.ClassId?.ToString(),
+            payment.Class?.ClassName,
+            linked.UpgradePackageId?.ToString(),
+            packageName,
+            linked.CheckoutUrl ?? "",
+            linked.QrCode ?? "",
+            PayOsQrImage.ToDataUrl(linked.QrCode),
+            PaymentTimeout.SecondsLeft(payment.Invoice.IssuedAt));
     }
 
     // Học viên xem các lớp mình đã ghi danh (enrolled), mới đăng ký nhất lên đầu.
@@ -459,7 +518,10 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
     {
         var rows = await db.ClassEnrollments
             .AsNoTracking()
-            .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled")
+            .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled"
+                && db.Payments.Any(payment => payment.UserId == memberUserId
+                    && payment.ClassId == enrollment.ClassId
+                    && payment.Status == "paid"))
             .Join(db.Classes, enrollment => enrollment.ClassId, item => item.ClassId, (enrollment, item) => new
             {
                 enrollment.EnrolledAt,
