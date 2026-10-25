@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnhDuySport.Api.Controllers;
 
-[Authorize(Roles = "MEMBER")]
+[Authorize]
 [ApiController]
 [Route("api/members/{memberUserId}")]
 public class MemberMembershipController(MemberMembershipFlowService flow, CurrentActor actor) : ControllerBase
 {
+    [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
     [HttpGet("profile")]
     [EndpointSummary("Access System: xem hồ sơ học viên")]
     public async Task<ActionResult<MemberProfileDto>> AccessSystem(string memberUserId)
@@ -25,6 +26,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
     [HttpPut("profile")]
     [EndpointSummary("Edit personal information: học viên sửa thông tin cá nhân")]
     [EndpointDescription("gender: Nam, Nữ hoặc Khác. dateOfBirth không bắt buộc (yyyy-MM-dd; gửi null hoặc \"\" thì giữ nguyên ngày sinh đang có). email không bắt buộc; gửi email khác email hiện tại thì báo lỗi, đổi email dùng POST profile/email/otp rồi profile/email/confirm. Hệ thống kiểm tra rồi cập nhật database và ghi nhật ký.")]
@@ -41,6 +43,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
     [HttpPost("profile/avatar")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(3 * 1024 * 1024)]
@@ -59,6 +62,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpPost("profile/email/otp")]
     [EndpointSummary("Edit personal information: đổi email bước 1 – gửi mã OTP tới email mới")]
     [EndpointDescription("Body: { \"newEmail\": \"...\", \"currentPassword\": \"...\" }. Cần đúng mật khẩu hiện tại. Mã OTP 6 số có hiệu lực 3 phút, đợi 1 phút mới gửi lại được.")]
@@ -75,6 +79,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpPost("profile/email/confirm")]
     [EndpointSummary("Edit personal information: đổi email bước 2 – nhập mã OTP")]
     [EndpointDescription("Body: { \"code\": \"123456\" }. Sai 5 lần thì mã bị hủy, phải gửi lại. Đổi xong hệ thống báo cho email cũ.")]
@@ -91,6 +96,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpGet("membership")]
     [EndpointSummary("View membership management: gói đang dùng, lịch sử và các gói đang bán")]
     public async Task<ActionResult<MembershipManagementDto>> ViewMembershipManagement(string memberUserId)
@@ -106,6 +112,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpGet("consultation-contact")]
     [EndpointSummary("Need Consultation? = Yes: hiển thị số chăm sóc khách hàng của trung tâm")]
     public async Task<ActionResult<ConsultationContactDto>> AccessConsultationContact(string memberUserId)
@@ -121,6 +128,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpPost("membership/renewals")]
     [EndpointSummary("Select Membership Package: chọn gói và tạo link thanh toán payOS")]
     [EndpointDescription("Tạo hóa đơn, payment pending và membership pending, trả checkoutUrl / qrCode payOS. Membership chỉ có hiệu lực sau khi thanh toán. renewalType: Đăng ký mới, Gia hạn, Nâng cấp (gói cao hơn chạy ngay, ngày còn lại của gói cũ dùng tiếp sau đó) hoặc Đăng ký nối tiếp (gói thấp hơn bắt đầu sau khi gói hiện tại hết).")]
@@ -137,6 +145,7 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         }
     }
 
+    [Authorize(Roles = "MEMBER")]
     [HttpPost("membership/renewals/{paymentId}/confirm")]
     [EndpointSummary("Process Payment → Update Membership Expiry: kiểm tra thanh toán payOS")]
     [EndpointDescription("Gọi sau khi payOS chuyển về trang kết quả. Đã thanh toán thì cập nhật hạn gói và trả thông tin mới. Gọi lại nhiều lần không bị cộng hạn hai lần.")]
