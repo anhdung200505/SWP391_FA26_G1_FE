@@ -12,7 +12,7 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     [AllowAnonymous]
     [HttpPost]
     [EndpointSummary("Học viên tạo yêu cầu hỗ trợ")]
-    [EndpointDescription("Mọi yêu cầu của học viên vào hàng chờ lễ tân. Lễ tân xử lý tư vấn và sự cố tài khoản. Việc ngoài phạm vi do lễ tân chuyển lên quản trị trung tâm.")]
+    [EndpointDescription("requestType là chữ học viên tự nhập, không còn danh sách consultation, account, financial, discount. Tối đa 80 ký tự. Ví dụ: { \"memberUserId\": \"11\", \"requestType\": \"Đổi lịch học\", \"subject\": \"Đổi buổi thứ 3\", \"content\": \"Xin chuyển sang thứ 5.\" }. Loại này hiện trên đơn lễ tân và quản lý. Không nhận giảm giá, khuyến mãi hoặc ưu đãi. Mọi đơn vào hàng chờ lễ tân.")]
     public async Task<ActionResult<SupportRequestCreatedDto>> Create(CreateSupportRequest request)
     {
         try
@@ -89,9 +89,32 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     [Authorize(Roles = "RECEPTIONIST")]
     [HttpGet("service")]
     [EndpointSummary("Lễ tân xem đơn support request của học viên")]
-    [EndpointDescription("Đơn học viên tạo qua POST /api/support-requests. Không gồm tư vấn ghi danh.")]
+    [EndpointDescription("Đơn học viên tạo qua POST /api/support-requests. classificationReason bắt đầu bằng 'Loại:' là loại học viên tự nhập. Không gồm tư vấn ghi danh.")]
     public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> AccessServiceRequests() =>
         Ok(await flow.AccessServiceRequestsAsync());
+
+    [Authorize(Roles = "ADMIN")]
+    [HttpGet("enrollment/manager")]
+    [EndpointSummary("Quản lý trung tâm xem đơn tư vấn ghi danh lễ tân chuyển lên")]
+    [EndpointDescription("Đơn tư vấn ghi danh đang chờ quản lý, và đơn quản lý đã chấp nhận hoặc từ chối. Quyết định dùng POST /api/support-requests/{id}/decision.")]
+    public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> AccessManagerEnrollment() =>
+        Ok(await flow.AccessManagerEnrollmentConsultationsAsync());
+
+    [Authorize(Roles = "RECEPTIONIST")]
+    [HttpPost("enrollment/{requestId}/escalate")]
+    [EndpointSummary("Lễ tân chuyển đơn tư vấn ghi danh lên quản lý trung tâm")]
+    [EndpointDescription("Chỉ đơn tư vấn ghi danh đang chờ lễ tân. reason là lý do chuyển. Đơn sang trạng thái pending_manager và hiện ở tab Tư vấn ghi danh của quản lý.")]
+    public async Task<ActionResult<SupportRequestDto>> EscalateEnrollment(string requestId, EscalateSupportRequest request)
+    {
+        try
+        {
+            return Ok(await flow.EscalateEnrollmentConsultationAsync(requestId, request));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
 
     [Authorize(Roles = "RECEPTIONIST")]
     [HttpGet("enrollment")]
@@ -119,7 +142,7 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     [Authorize(Roles = "RECEPTIONIST")]
     [HttpPost("{requestId}/handle")]
     [EndpointSummary("Lễ tân xử lý đơn của học viên")]
-    [EndpointDescription("Một API cho mọi cách lễ tân xử lý đơn học viên. action: resolve lưu kết quả, escalate chuyển quản trị, classify phân loại. note là kết quả hoặc lý do chuyển. category khi resolve hoặc classify: account_issue hoặc consultation. Đơn tư vấn ghi danh dùng PUT enrollment/{id}. Đơn tài chính chỉ escalate.")]
+    [EndpointDescription("Một API cho mọi cách lễ tân xử lý đơn học viên. action: resolve lưu kết quả, escalate chuyển quản trị, classify phân loại. note là kết quả hoặc lý do chuyển. category khi resolve hoặc classify: account_issue hoặc consultation. Đơn tư vấn ghi danh dùng PUT enrollment/{id}. Đơn cũ thuộc nhóm tài chính hoặc giảm giá chỉ được chuyển lên quản trị. Loại học viên tự nhập vẫn nằm trong classificationReason.")]
     public async Task<ActionResult<SupportRequestDto>> HandleMember(string requestId, HandleMemberSupportRequest request)
     {
         try
