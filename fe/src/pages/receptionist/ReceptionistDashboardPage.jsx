@@ -16,7 +16,6 @@ const TABS = [
   { id: 'schedule', label: 'Lịch buổi học' },
   { id: 'checkin', label: 'Check-in học viên' },
   { id: 'members', label: 'Tra cứu học viên' },
-  { id: 'settings', label: 'Cài đặt' },
 ];
 
 export default function ReceptionistDashboardPage() {
