@@ -239,7 +239,19 @@ public class ComboPayOsPaymentService(
             .AsNoTracking()
             .Include(item => item.Invoice)
             .FirstOrDefaultAsync(item => item.PayosOrderCode == data.OrderCode);
-        if (payment is null || payment.ClassId is null || payment.Status == "paid")
+        if (payment is null)
+        {
+            return;
+        }
+
+        // Đơn gói hội viên (class_id NULL): giao cho MemberMembershipFlowService ghi paid và kích hoạt gói.
+        if (payment.ClassId is null)
+        {
+            await services.GetRequiredService<MemberMembershipFlowService>().HandlePayOsPaidAsync(payment.PaymentId, data.Amount);
+            return;
+        }
+
+        if (payment.Status == "paid")
         {
             return;
         }

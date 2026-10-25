@@ -126,9 +126,10 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
             throw new InvalidOperationException("Phí gói phải lớn hơn 0 và không quá 100.000.000đ.");
         }
 
-        if (validityMonths != 1)
+        // Gói bao nhiêu tháng cũng được (1 tháng = 30 ngày); chặn trên chỉ để không tràn ngày.
+        if (validityMonths < 1 || validityMonths > MembershipDuration.MaxMonths)
         {
-            throw new InvalidOperationException("Gói hội viên chỉ có thời hạn 1 tháng.");
+            throw new InvalidOperationException($"Thời hạn gói phải từ 1 đến {MembershipDuration.MaxMonths} tháng.");
         }
 
         if (benefits.Count is < 1 or > 12 || benefits.Any(benefit => benefit.Length > 200))
