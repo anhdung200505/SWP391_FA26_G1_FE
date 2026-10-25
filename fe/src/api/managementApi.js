@@ -296,6 +296,10 @@ export function getPendingCheckouts() {
   return request('/class-registrations/pending');
 }
 
+export function refreshClassCheckout(paymentId) {
+  return request(`/class-registrations/${paymentId}/refresh`, { method: 'POST' });
+}
+
 export function payRegistration(payload) {
   return request('/registrations/pay', {
     method: 'POST',
