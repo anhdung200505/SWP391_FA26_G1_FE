@@ -44,14 +44,31 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         return rows.FirstOrDefault() ?? throw new KeyNotFoundException("Không tìm thấy buổi học.");
     }
 
-    // Lịch học của học viên: các buổi chưa hủy của những lớp đang ghi danh.
+    // Lịch học của học viên: mọi buổi (kể cả đã hủy) của những lớp đang ghi danh, kèm điểm danh của học viên.
     public async Task<IReadOnlyList<SessionDto>> AccessMemberSessionsAsync(int memberUserId, DateOnly? from, DateOnly? to)
     {
         var classIds = db.ClassEnrollments
             .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled")
             .Select(enrollment => enrollment.ClassId);
         var query = db.ClassSessions.AsNoTracking()
-            .Where(session => classIds.Contains(session.ClassId) && session.Status != "cancelled");
+            .Where(session => classIds.Contains(session.ClassId));
+        var rows = await ProjectAsync(FilterDates(query, from, to));
+
+        // Buổi đã hủy vẫn hiện (kèm lý do ở note) để học viên biết mà không đến; kèm trạng thái điểm danh của riêng học viên.
+        var sessionIds = rows.Select(row => int.Parse(row.Id)).ToList();
+        var attendance = await db.ClassAttendances.AsNoTracking()
+            .Where(item => item.UserId == memberUserId && sessionIds.Contains(item.SessionId))
+            .ToDictionaryAsync(item => item.SessionId, item => item.Status);
+        return rows
+            .Select(row => row with { AttendanceStatus = attendance.GetValueOrDefault(int.Parse(row.Id)) })
+            .ToList();
+    }
+
+    // Lịch dạy của HLV theo HLV của từng buổi (session.coach_user_id), không theo HLV của lớp, vì HLV có thể được đổi cho riêng một buổi.
+    public async Task<IReadOnlyList<SessionDto>> AccessCoachSessionsAsync(int coachUserId, DateOnly? from, DateOnly? to)
+    {
+        var query = db.ClassSessions.AsNoTracking()
+            .Where(session => session.CoachUserId == coachUserId && session.Status != "cancelled");
         return await ProjectAsync(FilterDates(query, from, to));
     }
 
@@ -219,9 +236,14 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         EnsureEditable(session);
 
         var reason = NormalizeNote(request.Reason) ?? throw new RegistrationException("Nhập lý do hủy buổi học.");
+        if (await db.ClassAttendances.AnyAsync(row => row.SessionId == session.SessionId))
+        {
+            throw new RegistrationException("Buổi học đã có điểm danh, không thể hủy.");
+        }
+
         session.Status = "cancelled";
         session.Note = reason;
-        await NotifyMembersAsync(session, $"Hủy buổi học lớp {session.Class!.ClassName}", $"{When(session)} bị hủy. Lý do: {reason}.");
+        await NotifyMembersAsync(session, $"Hủy buổi học lớp {session.Class!.ClassName}", $"{When(session)} bị hủy. Lý do: {TextFormat.Sentence(reason)}");
         AddLog("Hủy buổi học", session, reason);
         await SaveAsync();
         return await SelectSessionAsync(sessionId);
@@ -253,6 +275,12 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         if (session.SessionDate < DateOnly.FromDateTime(DateTime.Now))
         {
             throw new RegistrationException("Buổi học đã qua ngày, không thể thay đổi.");
+        }
+
+        var now = DateTime.Now;
+        if (session.SessionDate == DateOnly.FromDateTime(now) && session.EndTime <= TimeOnly.FromDateTime(now))
+        {
+            throw new RegistrationException("Buổi học đã kết thúc, không thể thay đổi.");
         }
     }
 
@@ -340,7 +368,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
     private static string When(ClassSession session) =>
         $"{ClassSessionPlanner.SessionTitle(session.SessionNo)} ngày {session.SessionDate:dd/MM/yyyy} {session.StartTime:HH\\:mm}-{session.EndTime:HH\\:mm}";
 
-    private static string NoteSuffix(string? note) => string.IsNullOrWhiteSpace(note) ? "" : $" Ghi chú: {note}.";
+    private static string NoteSuffix(string? note) => string.IsNullOrWhiteSpace(note) ? "" : $" Ghi chú: {TextFormat.Sentence(note)}";
 
     private static string? NormalizeNote(string? note)
     {
@@ -353,7 +381,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
     private static int ParseId(string sessionId) =>
         int.TryParse(sessionId, out var id) ? id : throw new KeyNotFoundException("Không tìm thấy buổi học.");
 
-    private static IQueryable<ClassSession> FilterDates(IQueryable<ClassSession> query, DateOnly? from, DateOnly? to)
+    internal static IQueryable<ClassSession> FilterDates(IQueryable<ClassSession> query, DateOnly? from, DateOnly? to)
     {
         if (from is { } start && to is { } end && end < start)
         {
@@ -365,7 +393,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         return to is { } until ? query.Where(session => session.SessionDate <= until) : query;
     }
 
-    private async Task<List<SessionDto>> ProjectAsync(IQueryable<ClassSession> query)
+    internal async Task<List<SessionDto>> ProjectAsync(IQueryable<ClassSession> query)
     {
         var rows = await query
             .OrderBy(session => session.SessionDate)

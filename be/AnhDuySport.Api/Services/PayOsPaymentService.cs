@@ -123,20 +123,7 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
         var payment = await db.Payments
             .Include(item => item.Invoice)
             .FirstOrDefaultAsync(item => item.PayosOrderCode == data.OrderCode);
-        if (payment is null)
-        {
-            return;
-        }
-
-        // Đơn gói hội viên (class_id NULL): MemberMembershipFlowService ghi paid và kích hoạt gói trong cùng một bước,
-        // kể cả khi payment đã paid mà gói chưa kích hoạt, hoặc đơn đã hủy mà vẫn nhận tiền.
-        if (payment.ClassId is null)
-        {
-            await services.GetRequiredService<MemberMembershipFlowService>().HandlePayOsPaidAsync(payment.PaymentId, data.Amount);
-            return;
-        }
-
-        if (payment.Status == "paid")
+        if (payment is null || payment.Status == "paid")
         {
             return;
         }

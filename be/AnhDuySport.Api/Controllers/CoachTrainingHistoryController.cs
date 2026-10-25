@@ -14,7 +14,7 @@ public class CoachTrainingHistoryController(WorkoutRecommendationFlowService flo
 {
     [HttpGet]
     [EndpointSummary("Coach xem lớp và lịch sử tập đã nhập")]
-    [EndpointDescription("Trả về các lớp coach đang dạy, học viên trong lớp, và các lịch sử tập coach đã ghi. Dùng classId và memberUserId ở đây cho bước nhập.")]
+    [EndpointDescription("Trả về các lớp coach phụ trách, kể cả lớp chưa có học viên ghi danh, học viên đang học trong lớp, và lịch sử tập coach đã ghi. Dùng classId và memberUserId ở đây cho bước nhập.")]
     public async Task<ActionResult<CoachTrainingHistoryListDto>> List(string coachUserId)
     {
         try
