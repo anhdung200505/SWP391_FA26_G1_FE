@@ -34,7 +34,7 @@ namespace AnhDuySport.Api.Services;
 //   Gói cao cấp hơn        → Nâng cấp:         gói mới chạy ngay hôm nay; số ngày còn lại của gói cũ
 //                                               được tách thành dòng "scheduled" chạy tiếp sau khi gói mới hết.
 //   Gói thấp hơn           → Đăng ký nối tiếp: gói cũ dùng tiếp đến hết, gói mới "scheduled" bắt đầu sau đó.
-public class MemberMembershipFlowService(AppDbContext db, IConfiguration configuration, IServiceProvider services)
+public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration configuration, IServiceProvider services)
 {
     // Giá trị theo dữ liệu có sẵn trong 02_seed.sql
     private static readonly string[] Genders = ["Nam", "Nữ", "Khác"];
