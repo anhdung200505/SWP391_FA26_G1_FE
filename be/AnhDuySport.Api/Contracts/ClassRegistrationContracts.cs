@@ -105,6 +105,32 @@ public sealed record RegisteredByDto(
     string? FullName,
     string Role);
 
+public sealed class PayRegistrationRequest
+{
+    public string ClassId { get; set; } = "";
+    // Id buổi học (session) của lớp; bắt buộc khi GroupStudy = false.
+    public string? SlotId { get; set; }
+    public bool GroupStudy { get; set; }
+    public string FullName { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public string PaymentMethod { get; set; } = "";
+    // Gói hội viên mua kèm lớp (id gói Bạc/Vàng), giá đã giảm được cộng vào hóa đơn. Bỏ trống hoặc Hạng Đồng → tặng Hạng Đồng.
+    public string? MembershipPackageId { get; set; }
+}
+
+public sealed record RegistrationPaymentResponse(
+    bool Success,
+    string Message,
+    string? ThankYou,
+    string? Commitment,
+    string? InvoiceCode,
+    string? Token,
+    AuthUserDto? User,
+    RegisteredByDto? RegisteredBy,
+    decimal Amount,
+    decimal Tuition,
+    MembershipPackageQuoteDto? MembershipPackage);
+
 // Bắt buộc chọn môn. Không chọn lớp thì hệ thống chọn lớp còn chỗ bắt đầu sớm nhất của môn đó;
 // chỉ gửi slotId (id buổi học) thì lấy lớp của buổi đó. Ghi danh lớp là học mọi buổi của lớp.
 // Các trường hồ sơ đều tùy chọn: có gửi thì ghi đè hồ sơ học viên khi tạo đơn mới.
