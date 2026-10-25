@@ -182,7 +182,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutPlanResponse(
             recommendation.RecommendationId.ToString(),
             ToPlan(recommendation),
-            AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: false),
+            $"recommendationId = {recommendation.RecommendationId}. Dùng số này ở POST .../{recommendation.RecommendationId}/decision. Giáo án do {gemini.ProviderLabel} tạo. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: false)}",
             ToLogDto(log, member.FullName));
     }
 
@@ -243,7 +243,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             return new WorkoutDecisionResponse(
                 recommendation.RecommendationId.ToString(),
                 false,
-                AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true),
+                $"Đã gọi {gemini.ProviderLabel} tạo lại giáo án lần {recommendation.Revision}. recommendationId vẫn là {recommendation.RecommendationId}. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
                 ToPlan(recommendation),
                 null,
                 ToLogDto(log, member.FullName));
@@ -312,7 +312,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutPlanResponse(
             recommendation.RecommendationId.ToString(),
             ToPlan(recommendation),
-            AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true),
+            $"Đã nhận yêu cầu tạo lại giáo án. recommendationId = {recommendation.RecommendationId}. Gọi decision với editRequired=false để lưu lịch mới. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
             ToLogDto(log, member.FullName));
     }
 
@@ -380,7 +380,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         var description = recommendation.AnalysisSummary + "\n\n" + string.Join(
             "\n",
             recommendation.Sessions.OrderBy(item => item.DayIndex)
-                .Select(item => $"{item.WeekdayName}: {StripLeadingWeekday(item.Title)} ({item.DurationMinutes} phút, {item.Intensity}). {item.Exercises}"));
+                .Select(item => $"{item.WeekdayName}: {item.Title} ({item.DurationMinutes} phút, {item.Intensity}). {item.Exercises}"));
         var trainingPlan = new TrainingPlan
         {
             CreatedByUserId = member.UserId,
@@ -791,7 +791,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 DayIndex = index + 1,
                 Weekday = (int)days[index],
                 WeekdayName = WeekdayName(days[index]),
-                Title = StripLeadingWeekday(session.Title),
+                Title = session.Title,
                 DurationMinutes = spec.SessionMinutes,
                 Intensity = session.Intensity,
                 Exercises = session.Exercises,
@@ -849,7 +849,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 ExerciseDate = placed,
                 StartTime = recommendation.PreferredStartTime,
                 EndTime = recommendation.PreferredStartTime.Add(TimeSpan.FromMinutes(session.DurationMinutes)),
-                Title = StripLeadingWeekday(session.Title),
+                Title = session.Title,
                 Detail = $"{session.Intensity}. {session.Exercises}",
                 Status = "scheduled",
             });
@@ -951,9 +951,8 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
     private static WorkoutPlanDto ToPlan(AiWorkoutRecommendation row)
     {
         var sessions = row.Sessions.OrderBy(item => item.DayIndex).ToList();
-        var titles = sessions.ToDictionary(item => item.DayIndex, item => StripLeadingWeekday(item.Title));
         var generated = $"{row.PlanName}. {row.DurationWeeks} tuần, {row.SessionsPerWeek} buổi/tuần, {row.SessionMinutes} phút/buổi, bắt đầu lúc {row.PreferredStartTime:HH:mm}. "
-            + string.Join(" ", sessions.Select(item => $"{item.WeekdayName}: {titles[item.DayIndex]} ({item.Intensity})."));
+            + string.Join(" ", sessions.Select(item => $"{item.WeekdayName}: {item.Title} ({item.Intensity})."));
         return new WorkoutPlanDto(
             row.RecommendationId.ToString(),
             ProviderOf(row.AnalysisRequest),
@@ -971,7 +970,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             sessions.Select(item => new WorkoutSessionDto(
                 item.DayIndex,
                 item.WeekdayName,
-                titles[item.DayIndex],
+                item.Title,
                 item.DurationMinutes,
                 item.Intensity,
                 item.Exercises)).ToList(),
@@ -1091,36 +1090,6 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         var end = analysisRequest.IndexOf(')', start);
         return end < 0 ? "Google Gemini" : analysisRequest[start..(end + 1)];
-    }
-
-    private static string StripLeadingWeekday(string title)
-    {
-        var value = title.Trim();
-        string[] names = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
-        var changed = true;
-        while (changed && value.Length > 0)
-        {
-            changed = false;
-            foreach (var name in names)
-            {
-                if (!value.StartsWith(name, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var rest = value[name.Length..].TrimStart(' ', '-', '–', '—', ':', '·', '.');
-                if (rest.Length == 0 || rest.Length == value.Length)
-                {
-                    continue;
-                }
-
-                value = rest;
-                changed = true;
-                break;
-            }
-        }
-
-        return value.Length == 0 ? title.Trim() : value;
     }
 
     private static string WeekdayName(DayOfWeek day) => day switch

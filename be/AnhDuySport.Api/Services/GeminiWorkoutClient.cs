@@ -167,7 +167,6 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
             {safety}
             JSON gồm analysis (2 đến 4 câu nhận xét BMI và mục tiêu), planName (tên giáo án ngắn) và sessions.
             Mỗi phần tử sessions gồm title, intensity (Thấp hoặc Trung bình hoặc Cao) và exercises (khởi động, bài chính gồm số hiệp và số lần, giãn cơ).
-            title chỉ là tên bài tập, không nhắc lại thứ hoặc ngày vì thứ đã có ở danh sách buổi.
             sessions phải có đúng {request.Weekdays.Count} phần tử, cùng thứ tự các ngày ở trên.
             Bài tập phải bổ trợ đúng môn học viên đang học và nội dung lịch sử tập coach đã nhập.
             Không kê đơn thuốc, không bài tập nguy hiểm với mức BMI đã nêu.
