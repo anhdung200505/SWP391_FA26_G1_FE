@@ -90,6 +90,7 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
             .Select(item => new GeneratedRubricItem(item.Criterion, item.MaxScore, item.Guidance))
             .ToList();
         await StoreSlotAsync(owned, "published", draft.Summary, draft.ChangeNote, sessions, exam, rubric);
+        await SyncAssignmentsAsync(owned.ClassId, sessions);
 
         var now = DateTime.Now;
         var memberIds = await db.ClassEnrollments
@@ -413,6 +414,89 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
         }
 
         await db.SaveChangesAsync();
+    }
+
+    private async Task SyncAssignmentsAsync(int classId, IReadOnlyList<GeneratedCourseSession> sessions)
+    {
+        var sessionIds = new List<int>();
+        foreach (var session in sessions)
+        {
+            if (int.TryParse(session.SessionId, out var sessionId))
+            {
+                sessionIds.Add(sessionId);
+            }
+        }
+
+        var classSessions = await db.ClassSessions
+            .Where(item => item.ClassId == classId && sessionIds.Contains(item.SessionId) && item.Status != "cancelled")
+            .ToDictionaryAsync(item => item.SessionId);
+        var existing = await db.ClassAssignments
+            .Where(item => sessionIds.Contains(item.SessionId))
+            .ToListAsync();
+        foreach (var session in sessions)
+        {
+            if (!int.TryParse(session.SessionId, out var sessionId) || !classSessions.TryGetValue(sessionId, out var classSession))
+            {
+                continue;
+            }
+
+            var title = AssignmentTitle(session.Exercises);
+            var description = AssignmentBody(session.Exercises);
+            var current = existing
+                .Where(item => item.SessionId == sessionId)
+                .OrderBy(item => item.AssignmentId)
+                .FirstOrDefault();
+            if (current is null)
+            {
+                db.ClassAssignments.Add(new ClassAssignment
+                {
+                    SessionId = sessionId,
+                    Title = title,
+                    Description = description,
+                    DueAt = classSession.SessionDate.ToDateTime(classSession.StartTime),
+                });
+                continue;
+            }
+
+            current.Title = title;
+            current.Description = description;
+        }
+    }
+
+    private static string AssignmentTitle(IReadOnlyList<GeneratedCourseExercise> exercises)
+    {
+        var title = string.Join(" · ", exercises.Select(item => item.Title.Trim()).Where(item => item.Length > 0));
+        if (title.Length == 0)
+        {
+            title = "Bài tập buổi học";
+        }
+
+        return Shorten(title, 200);
+    }
+
+    private static string AssignmentBody(IReadOnlyList<GeneratedCourseExercise> exercises)
+    {
+        var body = string.Join("\n\n", exercises.Select(item =>
+        {
+            var lines = new List<string>();
+            if (!string.IsNullOrWhiteSpace(item.Title))
+            {
+                lines.Add(item.Title.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(item.Dosage))
+            {
+                lines.Add(item.Dosage.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(item.Instructions))
+            {
+                lines.Add(item.Instructions.Trim());
+            }
+
+            return string.Join("\n", lines);
+        }));
+        return Shorten(body, 4000);
     }
 
     private async Task SaveBriefAsync(OwnedClass owned, string brief)
