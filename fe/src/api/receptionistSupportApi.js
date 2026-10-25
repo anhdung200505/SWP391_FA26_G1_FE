@@ -148,6 +148,13 @@ export function escalateSupportRequest(requestId, reason) {
   });
 }
 
+export function escalateEnrollmentConsultation(requestId, reason) {
+  return request(`/support-requests/enrollment/${requestId}/escalate`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
 // =========================================================================
 // 3. QUẢN TRỊ TRUNG TÂM PHÊ DUYỆT (ADMIN DECISION)
 // =========================================================================
