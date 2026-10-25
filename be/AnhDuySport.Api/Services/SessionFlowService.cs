@@ -47,8 +47,12 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
     // Lịch học của học viên: mọi buổi (kể cả đã hủy) của những lớp đang ghi danh, kèm điểm danh của học viên.
     public async Task<IReadOnlyList<SessionDto>> AccessMemberSessionsAsync(int memberUserId, DateOnly? from, DateOnly? to)
     {
+        // Chỉ lịch của lớp đã đóng học phí. Ghi danh khi chưa thanh toán không được hiện buổi học.
         var classIds = db.ClassEnrollments
-            .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled")
+            .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled"
+                && db.Payments.Any(payment => payment.UserId == memberUserId
+                    && payment.ClassId == enrollment.ClassId
+                    && payment.Status == "paid"))
             .Select(enrollment => enrollment.ClassId);
         var query = db.ClassSessions.AsNoTracking()
             .Where(session => classIds.Contains(session.ClassId));

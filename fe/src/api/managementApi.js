@@ -296,6 +296,10 @@ export function getPendingCheckouts() {
   return request('/class-registrations/pending');
 }
 
+export function refreshClassCheckout(paymentId) {
+  return request(`/class-registrations/${paymentId}/refresh`, { method: 'POST' });
+}
+
 export function payRegistration(payload) {
   return request('/registrations/pay', {
     method: 'POST',
@@ -459,6 +463,10 @@ export function getMySupportRequests() {
 // Quản trị trung tâm lấy danh sách các yêu cầu Lễ tân chuyển lên
 export function getEscalatedSupportRequests() {
   return request('/support-requests/financial');
+}
+
+export function getManagerEnrollmentConsultations() {
+  return request('/support-requests/enrollment/manager');
 }
 
 // Quản trị trung tâm ra quyết định phê duyệt (approved) hoặc từ chối (rejected)

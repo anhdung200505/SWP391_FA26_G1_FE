@@ -6,6 +6,7 @@ import { DiagramCaption, StatusBadge } from '../../components/management/Managem
 import { useAccountManagement } from '../../context/AccountManagementContext';
 import { formatDateTime, formatFee, getRole } from '../../data/accountManagement';
 import { getEscalatedSupportRequests, processSupportRequestDecision } from '../../api/managementApi';
+import { readEscalationReason, readSupportRequestType } from '../../api/supportRequestType';
 
 export default function ManagementDashboard() {
   const { users, packages, logs, loading, error } = useAccountManagement();
@@ -246,7 +247,10 @@ export default function ManagementDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {escalatedRequests.map((req) => (
+                {escalatedRequests.map((req) => {
+                  const requestType = readSupportRequestType(req.classificationReason);
+                  const escalationReason = readEscalationReason(req.classificationReason);
+                  return (
                   <tr key={req.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-5 py-3 align-top">
                       <p className="font-bold text-slate-900">{req.memberName || 'Học viên'}</p>
@@ -255,10 +259,15 @@ export default function ManagementDashboard() {
 
                     <td className="px-5 py-3 align-top">
                       <p className="font-bold text-slate-800">{req.title || 'Yêu cầu hỗ trợ'}</p>
+                      {requestType && (
+                        <p className="mt-1 inline-block rounded border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-800">
+                          Loại: {requestType}
+                        </p>
+                      )}
                       <p className="text-xs text-slate-600 italic mt-0.5">"{req.description || req.content}"</p>
-                      {req.classificationReason && (
+                      {escalationReason && (
                         <p className="text-[11px] text-amber-700 font-semibold bg-amber-50 p-1 rounded mt-1">
-                          Lý do Lễ tân chuyển: {req.classificationReason}
+                          Lý do Lễ tân chuyển: {escalationReason}
                         </p>
                       )}
                       {req.resolutionNote && (
@@ -302,7 +311,8 @@ export default function ManagementDashboard() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           ) : (
@@ -338,6 +348,9 @@ export default function ManagementDashboard() {
 
             <div className="bg-slate-50 p-3 rounded-2xl text-xs space-y-1">
               <p><strong>Học viên:</strong> {selectedReq.memberName} ({selectedReq.memberEmail})</p>
+              {readSupportRequestType(selectedReq.classificationReason) && (
+                <p><strong>Loại:</strong> {readSupportRequestType(selectedReq.classificationReason)}</p>
+              )}
               <p><strong>Tiêu đề:</strong> {selectedReq.title}</p>
               <p className="italic text-slate-600">"{selectedReq.description || selectedReq.content}"</p>
             </div>

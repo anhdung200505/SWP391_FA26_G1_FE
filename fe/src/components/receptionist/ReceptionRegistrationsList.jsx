@@ -1,6 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { getReceptionRegistrations } from '../../api/receptionClassRegistrationApi';
 
+const PAYMENT_STATUS = {
+  pending: { label: 'Chờ thanh toán', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  paid: { label: 'Đã thanh toán', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  failed: { label: 'Thất bại', className: 'bg-red-50 text-red-600 border-red-200' },
+  cancel: { label: 'Đã hủy', className: 'bg-slate-100 text-slate-500 border-slate-200' },
+  expired: { label: 'Hết hạn', className: 'bg-slate-100 text-slate-500 border-slate-200' },
+  refunded: { label: 'Đã hoàn tiền', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+};
+
+const METHOD = {
+  payos: 'PayOS',
+  chuyen_khoan: 'Chuyển khoản',
+  tien_mat: 'Tiền mặt',
+  cash: 'Tiền mặt',
+  transfer: 'Chuyển khoản',
+  card: 'Thẻ',
+};
+
+function enrollmentBadge(item) {
+  const enrollment = item.enrollmentStatus;
+  const payment = item.payment?.status;
+  if (enrollment === 'enrolled' || enrollment === 'completed') {
+    return { label: 'Đã ghi danh', className: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
+  }
+  if (enrollment === 'cancelled') {
+    return { label: 'Đã ra khỏi lớp', className: 'bg-slate-100 text-slate-500 border-slate-200' };
+  }
+  if (payment === 'pending') {
+    return { label: 'Chờ thanh toán', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+  }
+  if (payment === 'paid') {
+    return { label: 'Đã thanh toán, chưa vào lớp', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+  }
+  return { label: 'Chưa ghi danh', className: 'bg-slate-100 text-slate-500 border-slate-200' };
+}
+
 export default function ReceptionRegistrationsList() {
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -128,7 +164,9 @@ export default function ReceptionRegistrationsList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {registrations.map((item, idx) => (
+                {registrations.map((item, idx) => {
+                  const badge = enrollmentBadge(item);
+                  return (
                   <tr key={item.payment?.paymentId || idx} className="hover:bg-slate-50/80 transition-colors">
                     {/* HỌC VIÊN */}
                     <td className="p-4">
@@ -149,12 +187,17 @@ export default function ReceptionRegistrationsList() {
                     {/* ĐƠN THANH TOÁN */}
                     <td className="p-4">
                       <div className="font-mono font-bold text-slate-900">{item.payment?.invoiceCode}</div>
-                      <div className="text-emerald-700 font-bold">
+                      <div className="font-bold text-slate-800">
                         {item.payment?.amount?.toLocaleString('vi-VN')} VNĐ
                       </div>
-                      <span className="inline-block bg-slate-100 text-slate-600 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
-                        {item.payment?.method || 'N/A'}
+                      <span className={`mt-1 inline-block border text-[9px] px-1.5 py-0.5 rounded font-bold ${PAYMENT_STATUS[item.payment?.status]?.className || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                        {PAYMENT_STATUS[item.payment?.status]?.label || item.payment?.status || 'Chưa có đơn'}
                       </span>
+                      {item.payment?.method && (
+                        <div className="mt-1 text-[10px] text-slate-400">
+                          {METHOD[item.payment.method] || item.payment.method}
+                        </div>
+                      )}
                     </td>
 
                     {/* ĐĂNG KÝ BỞI */}
@@ -171,12 +214,13 @@ export default function ReceptionRegistrationsList() {
 
                     {/* TRẠNG THÁI GHI DANH */}
                     <td className="p-4 text-right">
-                      <span className="inline-block bg-emerald-50 text-emerald-600 border border-emerald-200 text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
-                        {item.enrollmentStatus || 'ĐÃ GHI DANH'}
+                      <span className={`inline-block border text-[10px] font-black px-2.5 py-1 rounded-full ${badge.className}`}>
+                        {badge.label}
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
