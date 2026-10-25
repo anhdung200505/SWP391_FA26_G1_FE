@@ -743,7 +743,7 @@ export default function ClassRegistrationPage() {
                           ) : classList.length > 0 ? (
                             classList.map((cls) => (
                               <option key={cls.id} value={cls.id}>
-                                {cls.name} ({formatFee(cls.tuition)})
+                                {cls.name}
                               </option>
                             ))
                           ) : (
@@ -767,6 +767,23 @@ export default function ClassRegistrationPage() {
                           <span className="text-slate-400 font-bold">Thời gian học:</span>
                           <span className="font-semibold text-slate-700">
                             {selectedClass.startDate} ~ {selectedClass.endDate}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-400 font-bold shrink-0">Lịch học hằng tuần:</span>
+                          <span className="flex flex-wrap justify-end gap-1.5">
+                            {selectedClass.schedule?.length ? (
+                              selectedClass.schedule.map((row) => (
+                                <span
+                                  key={`${row.weekday}-${row.timeSlotId}`}
+                                  className="font-mono font-bold bg-white border border-slate-200 text-slate-800 px-2 py-0.5 rounded whitespace-nowrap"
+                                >
+                                  {row.weekdayName} · {String(row.startTime).slice(0, 5)} - {String(row.endTime).slice(0, 5)}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="font-semibold text-slate-700">Đang cập nhật</span>
+                            )}
                           </span>
                         </div>
                         <div className="flex justify-between pt-1 border-t border-slate-200">

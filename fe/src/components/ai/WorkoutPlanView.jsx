@@ -11,6 +11,24 @@ function formatClock(value) {
   return String(value).slice(0, 5);
 }
 
+const WEEKDAYS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+
+function sessionTitle(title) {
+  let value = String(title || '').trim();
+  let changed = true;
+  while (changed && value) {
+    changed = false;
+    const folded = value.toLocaleLowerCase('vi');
+    const match = WEEKDAYS.find((name) => folded.startsWith(name.toLocaleLowerCase('vi')));
+    if (!match) break;
+    const rest = value.slice(match.length).replace(/^[\s\-–—:·.]+/, '');
+    if (!rest || rest.length === value.length) break;
+    value = rest;
+    changed = true;
+  }
+  return value || String(title || '').trim();
+}
+
 export default function WorkoutPlanView({ plan }) {
   if (!plan) return null;
 
@@ -59,7 +77,7 @@ export default function WorkoutPlanView({ plan }) {
             <li key={session.dayIndex} className="rounded-2xl border border-gray-200 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-black text-gray-900">
-                  <span className="tabular-nums">{session.dayIndex}.</span> {session.weekday} · {session.title}
+                  <span className="tabular-nums">{session.dayIndex}.</span> {session.weekday} · {sessionTitle(session.title)}
                 </p>
                 <p className="text-xs font-bold text-gray-500 tabular-nums">
                   {session.durationMinutes} phút · {session.intensity}
