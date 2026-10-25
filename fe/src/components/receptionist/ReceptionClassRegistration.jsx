@@ -4,8 +4,6 @@ import {
   registerGuestAccount,
   createClassRegistrationForMember,
   confirmRegistrationPayment,
-  getReceptionRegistrationStatus,
-  cancelReceptionRegistration,
 } from '../../api/receptionClassRegistrationApi';
 import {
   getPackages,
@@ -58,8 +56,8 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
   // ================= BƯỚC 3 STATE =================
   const [pendingOrder, setPendingOrder] = useState(null);
-  const [paymentStatus, setPaymentStatus] = useState(null);
-  const [now, setNow] = useState(() => Date.now());
+  const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash' | 'transfer' | 'card'
+  const [timeLeft, setTimeLeft] = useState(600); // 10 phút đếm ngược
 
   const showErr = (msg) => {
     setError(msg);
@@ -70,6 +68,18 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     setSuccess(msg);
     setTimeout(() => setSuccess(''), 4000);
   };
+
+  // Quản lý đếm ngược 10 phút khi ở Bước 3
+  useEffect(() => {
+    let timer;
+    if (step === 3 && timeLeft > 0) {
+      timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
+    } else if (timeLeft === 0 && step === 3) {
+      showErr('Đơn đăng ký giữ chỗ đã hết hạn. Vui lòng thực hiện lại.');
+      setStep(2);
+    }
+    return () => clearInterval(timer);
+  }, [step, timeLeft]);
 
   // Load danh sách Gói, Bộ môn & Gói hiện tại của Học viên khi chuyển sang Bước 2
   useEffect(() => {
@@ -138,64 +148,6 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
     loadClassesForSport();
   }, [selectedSportId, includeClass, step]);
-
-  const isPaid = paymentStatus?.paymentStatus === 'paid' || paymentStatus?.paymentStatus === 'success';
-  const qrImage = pendingOrder?.payosQrImage || '';
-  const secondsLeft = pendingOrder?.deadline
-    ? Math.max(0, Math.ceil((pendingOrder.deadline - now) / 1000))
-    : 0;
-
-  // Hỏi payOS vài giây một lần, giống màn thanh toán của học viên.
-  useEffect(() => {
-    if (step !== 3 || !pendingOrder?.paymentId || isPaid) return undefined;
-
-    const checkStatus = async () => {
-      try {
-        const status = await getReceptionRegistrationStatus(pendingOrder.paymentId);
-        setPaymentStatus(status);
-        if (status?.paymentStatus === 'paid' || status?.paymentStatus === 'success') {
-          setStep(4);
-        }
-      } catch {
-        // Giữ màn QR, lần hỏi sau sẽ thử lại.
-      }
-    };
-
-    checkStatus();
-    const interval = setInterval(checkStatus, 5000);
-    return () => clearInterval(interval);
-  }, [step, pendingOrder, isPaid]);
-
-  // Hết giờ giữ đơn: hỏi lần cuối, chưa trả thì hủy và quay lại bước chọn lớp.
-  useEffect(() => {
-    if (step !== 3 || !pendingOrder?.deadline || isPaid) return undefined;
-
-    const order = pendingOrder;
-    const tick = setInterval(async () => {
-      const current = Date.now();
-      setNow(current);
-      if (current < order.deadline) return;
-
-      clearInterval(tick);
-      try {
-        const status = await getReceptionRegistrationStatus(order.paymentId);
-        if (status?.paymentStatus === 'paid' || status?.paymentStatus === 'success') {
-          setPaymentStatus(status);
-          setStep(4);
-          return;
-        }
-      } catch {
-        // Không hỏi được thì vẫn hủy đơn.
-      }
-
-      await cancelReceptionRegistration(order.paymentId).catch(() => {});
-      setPendingOrder(null);
-      setPaymentStatus(null);
-      setStep(2);
-      showErr('Hết thời gian giữ đơn nên đơn đã bị hủy. Vui lòng tạo lại.');
-    }, 1000);
-    return () => clearInterval(tick);
-  }, [step, pendingOrder, isPaid]);
 
   // Logic tính giá Gói hội viên: CHỈ CHIẾT KHẤU KHI CÓ TÍCH ĐĂNG KÝ KÈM LỚP
   const calculatePackagePrice = (pkg) => {
@@ -287,14 +239,10 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
       };
 
       const res = await createClassRegistrationForMember(foundMember.id, payload);
-      setPaymentStatus(null);
-      setPendingOrder({
-        ...res,
-        deadline: Date.now() + (res.expiresInSeconds ?? 180) * 1000,
-      });
-      setNow(Date.now());
+      setPendingOrder(res);
+      setTimeLeft(res.expiresInSeconds || 600);
       setStep(3);
-      showSucc('Đã tạo mã VietQR. Học viên quét mã để thanh toán.');
+      showSucc('Tạo đơn giữ chỗ thành công! Đơn hiệu lực trong 10 phút.');
     } catch (err) {
       showErr(err.message || 'Đăng ký lớp thất bại.');
     } finally {
@@ -307,23 +255,15 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     if (!pendingOrder?.paymentId) return;
     setLoading(true);
     try {
-      await confirmRegistrationPayment(pendingOrder.paymentId, 'cash');
-      showSucc('Đã thu tiền mặt. Học viên được ghi danh vào lớp.');
+      await confirmRegistrationPayment(pendingOrder.paymentId, paymentMethod);
+      showSucc('Xác nhận thu tiền thành công! Học viên đã được ghi danh vào lớp.');
       setStep(4);
+      if (onRegistrationSuccess) onRegistrationSuccess();
     } catch (err) {
       showErr(err.message || 'Xác nhận thanh toán thất bại.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const backToClassStep = async () => {
-    if (pendingOrder?.paymentId && !isPaid) {
-      await cancelReceptionRegistration(pendingOrder.paymentId).catch(() => {});
-    }
-    setPendingOrder(null);
-    setPaymentStatus(null);
-    setStep(2);
   };
 
   const handleReset = () => {
@@ -332,7 +272,6 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     setFoundMember(null);
     setIsRegisteringGuest(false);
     setPendingOrder(null);
-    setPaymentStatus(null);
   };
 
   const formatCountdown = (seconds) =>
@@ -762,11 +701,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   disabled={loading || !selectedPackage}
                   className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {loading ? 'ĐANG TẠO ĐƠN...' : 'XÁC NHẬN & TẠO MÃ VIETQR →'}
+                  {loading ? 'ĐANG TẠO HÓA ĐƠN...' : 'TẠO HÓA ĐƠN & GIỮ CHỖ (10 PHÚT) →'}
                 </button>
 
                 <p className="text-[10px] text-slate-400 text-center font-medium">
-                  Học viên quét mã VietQR. Trang tự cập nhật khi thanh toán xong.
+                  Hệ thống giữ chỗ trong 10 phút để Lễ tân tiến hành thu tiền tại quầy.
                 </p>
               </div>
             </div>
@@ -774,104 +713,85 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         </div>
       )}
 
-      {/* ================= BƯỚC 3: MÃ VIETQR, GIỐNG THANH TOÁN CỦA HỌC VIÊN ================= */}
+      {/* ================= BƯỚC 3: THU TIỀN TẠI QUẦY & XÁC NHẬN ================= */}
       {step === 3 && pendingOrder && (
-        <div className="space-y-6">
-          <div className="text-center">
-            <span className="inline-flex items-center justify-center w-14 h-14 rounded-full text-2xl font-black mb-3 border bg-amber-50 text-amber-600 border-amber-200">
-              ⏳
-            </span>
-            <h3 className="text-xl font-black text-slate-900 uppercase">
-              {pendingOrder.isExisting ? 'Đơn đăng ký đã tồn tại' : 'Tạo đơn đăng ký thành công'}
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              {pendingOrder.isExisting
-                ? 'Học viên đang có một đơn chờ thanh toán cho lớp này.'
-                : 'Quét mã VietQR bằng app ngân hàng để hoàn tất thanh toán.'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-slate-50 p-6 rounded-2xl border border-slate-200">
-            <div className="space-y-3 border-b md:border-b-0 md:border-r border-slate-200 pb-6 md:pb-0 md:pr-6 text-xs">
-              <div>
-                <span className="text-slate-400 font-bold uppercase block">Mã hóa đơn</span>
-                <span className="text-base font-mono font-black text-[#e31b23]">
-                  #{pendingOrder.invoiceCode || pendingOrder.paymentId}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-bold uppercase block">Học viên</span>
-                <span className="text-sm font-bold text-slate-800">{foundMember?.fullName}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-bold uppercase block">Gói hội viên</span>
-                <span className="text-sm font-bold text-slate-800">
-                  {pendingOrder.membershipPackage?.name || selectedPackage?.name || 'Hạng Đồng (tặng kèm lớp)'}
-                </span>
-              </div>
-              {(pendingOrder.className || selectedClass?.name) && (
-                <div>
-                  <span className="text-slate-400 font-bold uppercase block">Khóa học đăng ký kèm</span>
-                  <span className="text-xs font-semibold text-slate-700">
-                    {pendingOrder.className || selectedClass?.name}
-                  </span>
-                </div>
-              )}
-              <div>
-                <span className="text-slate-400 font-bold uppercase block">Số tiền cần thanh toán</span>
-                <span className="text-xl font-black text-emerald-600">{formatFee(pendingOrder.amount)}</span>
-              </div>
+        <div className="space-y-6 text-xs">
+          {/* BANNER ĐẾM NGƯỢC */}
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="font-bold text-amber-900">⏳ Đơn giữ chỗ đang hoạt động</p>
+              <p className="text-[11px] text-amber-700">Vui lòng hoàn tất thu tiền trước khi hết thời gian giữ chỗ.</p>
             </div>
-
-            <div className="flex flex-col items-center text-center">
-              {qrImage ? (
-                <>
-                  <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200 mb-2">
-                    <img src={qrImage} alt="Mã VietQR payOS" className="w-52 h-52 object-contain" />
-                  </div>
-                  <p className="text-[11px] font-bold text-slate-600">Quét mã VietQR bằng app ngân hàng</p>
-                  <p className={`text-xs font-black mt-1 ${secondsLeft <= 30 ? 'text-[#e31b23]' : 'text-amber-600'}`}>
-                    Mã hết hạn sau {formatCountdown(secondsLeft)}
-                  </p>
-                  <p className="text-[10px] text-slate-400 mt-1">Trang tự cập nhật khi thanh toán xong.</p>
-                </>
-              ) : (
-                <p className="text-xs font-semibold text-slate-500 max-w-xs">
-                  Chưa tạo được mã QR payOS cho đơn này. Có thể thu tiền mặt tại quầy với mã hóa đơn bên cạnh.
-                </p>
-              )}
-              {pendingOrder.paymentUrl && (
-                <a
-                  href={pendingOrder.paymentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 text-[11px] font-bold text-[#e31b23] hover:underline"
-                >
-                  Mở trang thanh toán payOS
-                </a>
-              )}
+            <div className="text-right">
+              <span className="text-[10px] text-amber-600 block uppercase font-bold">Thời gian còn lại:</span>
+              <span className="text-xl font-black font-mono text-amber-900">{formatCountdown(timeLeft)}</span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            {!qrImage && (
+          {/* CHI TIẾT ĐƠN HÀNG */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 border p-5 rounded-2xl">
+            <div className="space-y-2">
+              <p><strong>Mã Hóa đơn:</strong> <span className="font-mono font-bold text-slate-900">#{pendingOrder.invoiceCode || pendingOrder.paymentId}</span></p>
+              <p><strong>Gói hội viên:</strong> {pendingOrder.membershipPackage?.name || selectedPackage?.name || 'N/A'}</p>
+              {pendingOrder.className && <p><strong>Tên Lớp học:</strong> {pendingOrder.className}</p>}
+              <p><strong>Số tiền cần thu:</strong> <span className="text-base font-black text-[#e31b23]">{formatFee(pendingOrder.amount)}</span></p>
+              <p><strong>Lễ tân thực hiện:</strong> {pendingOrder.registeredBy?.fullName || 'Lễ tân'}</p>
+            </div>
+
+            {/* PAYOS QR NẾU KHÁCH CHUYỂN KHOẢN */}
+            {(pendingOrder.payosQrImage || pendingOrder.payosQrCode) && (
+              <div className="flex flex-col items-center justify-center p-3 bg-white border rounded-xl text-center">
+                <p className="font-bold text-slate-700 text-[11px] mb-1">Mã QR Chuyển khoản ngân hàng (PayOS)</p>
+                {pendingOrder.payosQrImage ? (
+                  <img src={pendingOrder.payosQrImage} alt="PayOS QR Code" className="w-40 h-40 object-contain rounded border" />
+                ) : (
+                  <p className="font-mono text-[10px] break-all bg-slate-100 p-2 rounded">{pendingOrder.payosQrCode}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* HÌNH THỨC THU TIỀN */}
+          <div className="space-y-3">
+            <label className="block font-bold text-slate-800">Chọn phương thức thu tiền thực tế tại quầy *</label>
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
-                onClick={handleConfirmPaymentAtDesk}
-                disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase px-6 py-3 rounded-xl cursor-pointer disabled:opacity-50"
+                onClick={() => setPaymentMethod('cash')}
+                className={`p-3 rounded-xl border text-center font-bold transition-all cursor-pointer ${
+                  paymentMethod === 'cash' ? 'bg-slate-900 text-white border-slate-900 shadow' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
               >
-                {loading ? 'Đang xác nhận...' : 'Đã thu tiền mặt'}
+                💵 Tiền mặt (Cash)
               </button>
-            )}
-            <button
-              type="button"
-              onClick={backToClassStep}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs uppercase px-6 py-3 rounded-xl cursor-pointer"
-            >
-              Quay lại chọn lớp
-            </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('transfer')}
+                className={`p-3 rounded-xl border text-center font-bold transition-all cursor-pointer ${
+                  paymentMethod === 'transfer' ? 'bg-slate-900 text-white border-slate-900 shadow' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                🏦 Chuyển khoản (Transfer)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('card')}
+                className={`p-3 rounded-xl border text-center font-bold transition-all cursor-pointer ${
+                  paymentMethod === 'card' ? 'bg-slate-900 text-white border-slate-900 shadow' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                💳 Quẹt thẻ (Card)
+              </button>
+            </div>
           </div>
+
+          <button
+            onClick={handleConfirmPaymentAtDesk}
+            disabled={loading}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase py-4 rounded-xl shadow transition-all cursor-pointer disabled:opacity-50"
+          >
+            {loading ? 'ĐANG XÁC NHẬN...' : '✓ XÁC NHẬN ĐÃ THU TIỀN TẠI QUẦY & HOÀN TẤT GHI DANH'}
+          </button>
         </div>
       )}
 
@@ -888,21 +808,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
           <div className="pt-4 flex justify-center gap-3">
             <button
-              type="button"
               onClick={handleReset}
               className="bg-[#e31b23] text-white font-black text-xs uppercase px-6 py-3 rounded-xl shadow cursor-pointer"
             >
-              Đăng ký học viên tiếp theo
+              ➕ Đăng ký học viên tiếp theo
             </button>
-            {onRegistrationSuccess && (
-              <button
-                type="button"
-                onClick={onRegistrationSuccess}
-                className="bg-slate-900 text-white font-black text-xs uppercase px-6 py-3 rounded-xl cursor-pointer"
-              >
-                Xem học viên đã ghi danh
-              </button>
-            )}
           </div>
         </div>
       )}
