@@ -10,6 +10,7 @@ import {
 import WorkoutPlanView from '../components/ai/WorkoutPlanView';
 import { FlowTrail } from '../components/management/ManagementBits';
 import WorkspaceShell from '../components/workspace/WorkspaceShell';
+import NotificationBell from '../components/NotificationBell';
 import { studentWorkspaceItems, useHasClassRegistration } from '../components/workspace/studentNav';
 import { useAuth } from '../context/AuthContext';
 
@@ -277,6 +278,7 @@ export default function AiWorkoutPage() {
       homeTo="/hoc-vien-dashboard"
       items={studentWorkspaceItems(hasClass)}
       breadcrumb={[{ label: 'Học viên', to: '/hoc-vien-dashboard' }, { label: 'Giáo án AI' }]}
+      headerExtra={<NotificationBell />}
     >
         <h1 className="text-2xl font-black text-balance">Giáo án tập với AI</h1>
         <p className="mt-2 text-sm text-pretty text-gray-500">

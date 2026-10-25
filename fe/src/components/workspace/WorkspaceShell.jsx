@@ -161,6 +161,12 @@ function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
         <div className="rounded-xl bg-white/5 px-3 py-3">
           <p className="truncate text-sm font-semibold">{user?.fullName || user?.userName || 'Tài khoản'}</p>
           <p className="mt-1 truncate text-xs text-white/50">{user?.email}</p>
+          <Link
+            to="/ho-so"
+            className={`mt-3 block w-full rounded-lg bg-white/10 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-white/20 ${focusRing}`}
+          >
+            Hồ sơ & đổi mật khẩu
+          </Link>
           <button
             type="button"
             onClick={onLogout}

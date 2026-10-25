@@ -14,7 +14,7 @@ public class StaffActivityController(StaffActivityFlowService activity) : Contro
 {
     [HttpGet]
     [EndpointSummary("Xem lễ tân và quản trị vừa làm gì")]
-    [EndpointDescription("Thao tác gần đây trong nhật ký hệ thống (audit_log), mới nhất trước. Quản trị xem lễ tân và quản trị. Lễ tân chỉ xem lễ tân, kể cả khi truyền role=ADMIN. role tùy chọn với quản trị: RECEPTIONIST hoặc ADMIN. limit mặc định 40, tối đa 100.")]
+    [EndpointDescription("Thao tác gần đây trong nhật ký hệ thống (audit_log), mới nhất trước. Quản trị xem toàn bộ lễ tân và quản trị. Lễ tân xem hoạt động lễ tân và các thao tác lớp / buổi học của quản trị (thêm, sửa, xóa lớp, đổi HLV, đổi phòng, hủy buổi). role tùy chọn: RECEPTIONIST hoặc ADMIN. limit mặc định 40, tối đa 100.")]
     public async Task<ActionResult<IReadOnlyList<StaffActivityDto>>> AccessRecent([FromQuery] string? role, [FromQuery] int? limit) =>
         Ok(await activity.AccessRecentAsync(User.FindFirstValue(ClaimTypes.Role), role, limit));
 }
