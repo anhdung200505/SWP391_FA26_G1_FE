@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption } from '../../components/management/ManagementBits';
 import { checkClassAvailability, createClass, getManagementCourses, getTimeSlots } from '../../api/managementApi';
@@ -25,8 +25,6 @@ function formatDate(value) {
   const [year, month, day] = String(value).split('-');
   return `${day}/${month}/${year}`;
 }
-
-const formatTime = (value) => String(value || '').slice(0, 5);
 
 function optionLabel(option) {
   const capacity = option.capacity != null ? ` (${option.capacity} chỗ)` : '';
@@ -79,7 +77,7 @@ export default function CreateClassPage() {
   const [availability, setAvailability] = useState({ key: '', data: null, error: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [created, setCreated] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     document.title = 'Tạo lớp mới · AnhDuy Sport';
@@ -165,10 +163,9 @@ export default function CreateClassPage() {
         roomId,
         schedules: validSchedules.map((row) => ({ weekday: Number(row.weekday), timeSlotId: row.timeSlotId })),
       });
-      setCreated(result);
+      navigate('/quan-ly/lop-hoc', { state: { createdClass: result } });
     } catch (err) {
       setError(err.message || 'Tạo lớp thất bại.');
-    } finally {
       setSaving(false);
     }
   };
@@ -178,66 +175,6 @@ export default function CreateClassPage() {
     { label: 'Lớp học thể thao', to: '/quan-ly/lop-hoc' },
     { label: 'Tạo lớp mới' },
   ];
-
-  if (created) {
-    return (
-      <ManagementShell breadcrumb={breadcrumb}>
-        <section className="bg-white rounded-3xl border border-gray-200 shadow-xs p-6 sm:p-8 max-w-2xl">
-          <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
-            Đã tạo lớp
-          </span>
-          <h1 className="mt-3 text-2xl font-black uppercase text-slate-900">{created.name}</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            {created.sportName} · {created.courseName} · HLV {created.coachName} · {created.roomName}
-          </p>
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200">
-            <div>
-              <span className="text-gray-400 font-bold block">Thời gian</span>
-              <strong className="text-slate-800">
-                {formatDate(created.startDate)} ~ {formatDate(created.endDate)}
-              </strong>
-            </div>
-            <div>
-              <span className="text-gray-400 font-bold block">Số buổi</span>
-              <strong className="text-slate-800">{created.sessionCount} buổi</strong>
-            </div>
-            <div>
-              <span className="text-gray-400 font-bold block">Lịch tuần</span>
-              <strong className="text-slate-800">
-                {created.schedule.map((row) => `${row.weekdayName} ${formatTime(row.startTime)}`).join(', ')}
-              </strong>
-            </div>
-          </div>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link
-              to={`/quan-ly/lich-hoc?classId=${created.id}`}
-              className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-colors"
-            >
-              Xem lịch buổi học
-            </Link>
-            <Link
-              to="/quan-ly/lop-hoc"
-              className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-colors"
-            >
-              Về danh sách lớp
-            </Link>
-            <button
-              type="button"
-              onClick={() => {
-                setCreated(null);
-                setClassName('');
-                setCoachId('');
-                setRoomId('');
-              }}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
-            >
-              Tạo thêm lớp khác
-            </button>
-          </div>
-        </section>
-      </ManagementShell>
-    );
-  }
 
   return (
     <ManagementShell breadcrumb={breadcrumb}>
@@ -282,7 +219,7 @@ export default function CreateClassPage() {
                     <option value="">Chọn khóa học...</option>
                     {courses.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.sportName} · {item.name} ({item.level}) · {item.tuition?.toLocaleString('vi-VN')} đ
+                        {item.sportName} · {item.name} ·{item.tuition?.toLocaleString('vi-VN')} đ
                       </option>
                     ))}
                   </select>

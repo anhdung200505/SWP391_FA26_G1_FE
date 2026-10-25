@@ -14,6 +14,7 @@ import ClassRegistrationPage from './pages/ClassRegistrationPage';
 import ReceptionistDashboardPage from './pages/receptionist/ReceptionistDashboardPage'; // Import trang Lễ tân
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
+import CreateStaffAccountPage from './pages/management/CreateStaffAccountPage';
 import UserAccountPage from './pages/management/UserAccountPage';
 import PackageListPage from './pages/management/PackageListPage';
 import PackageEditorPage from './pages/management/PackageEditorPage';
@@ -21,8 +22,12 @@ import RequireAuth from './components/RequireAuth';
 import { AccountManagementProvider } from './context/AccountManagementContext';
 import { AuthProvider } from './context/AuthContext';
 import ClassListPage from './pages/management/ClassListPage';
-import SessionSchedulePage from './pages/management/SessionSchedulePage';
+import ClassSchedulePage from './pages/management/ClassSchedulePage';
 import CreateClassPage from './pages/management/CreateClassPage';
+import AiWorkoutPage from './pages/AiWorkoutPage';
+import AiQuotaPage from './pages/management/AiQuotaPage';
+import CoachCoursePage from './pages/CoachCoursePage';
+import MemberCoursePlanPage from './pages/MemberCoursePlanPage';
 
 function Protected({ children, allowedRoles }) {
   return <RequireAuth allowedRoles={allowedRoles}>{children}</RequireAuth>;
@@ -71,6 +76,35 @@ export default function App() {
               } 
             />
 
+            <Route
+              path="/hoc-vien/bai-tap-lop"
+              element={
+                <Protected allowedRoles={['MEMBER']}>
+                  <MemberCoursePlanPage />
+                </Protected>
+              }
+            />
+
+            <Route
+              path="/hoc-vien/giao-an-ai"
+              element={
+                <Protected allowedRoles={['MEMBER']}>
+                  <AiWorkoutPage />
+                </Protected>
+              }
+            />
+
+            <Route
+              path="/hlv/lop-hoc"
+              element={
+                <Protected allowedRoles={['COACH']}>
+                  <CoachCoursePage />
+                </Protected>
+              }
+            />
+
+            <Route path="/hlv/lich-su-tap" element={<Navigate to="/hlv/lop-hoc?tab=history" replace />} />
+
             {/* Route LỄ TÂN DASHBOARD (Không chứa Header/Footer chung) */}
             <Route 
               path="/le-tan" 
@@ -84,16 +118,16 @@ export default function App() {
             {/* Khai báo các route Quản lý (ADMIN) */}
             <Route path="/quan-ly" element={<Protected allowedRoles={['ADMIN']}><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected allowedRoles={['ADMIN']}><UserAccountListPage /></Protected>} />
-            
-            {/* Route chi tiết tài khoản */}
+            <Route path="/quan-ly/tai-khoan/moi" element={<Protected allowedRoles={['ADMIN']}><CreateStaffAccountPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected allowedRoles={['ADMIN']}><UserAccountPage /></Protected>} />
             
             <Route path="/quan-ly/goi" element={<Protected allowedRoles={['ADMIN']}><PackageListPage /></Protected>} />
+            <Route path="/quan-ly/han-muc-ai" element={<Protected allowedRoles={['ADMIN']}><AiQuotaPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="create" /></Protected>} />
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
             <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/moi" element={<Protected allowedRoles={['ADMIN']}><CreateClassPage /></Protected>} />
-            <Route path="/quan-ly/lich-hoc" element={<Protected allowedRoles={['ADMIN']}><SessionSchedulePage /></Protected>} />
+            <Route path="/quan-ly/lop-hoc/:classId/lich" element={<Protected allowedRoles={['ADMIN']}><ClassSchedulePage /></Protected>} />
             
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>

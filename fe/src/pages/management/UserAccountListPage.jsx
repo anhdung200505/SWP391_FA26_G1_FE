@@ -123,6 +123,7 @@ export default function UserAccountListPage() {
                     <p className="font-black">{user.fullName}</p>
                     <p className="truncate text-sm text-gray-500">{user.email}</p>
                     <p className="mt-1 text-xs font-semibold text-gray-400">{user.code}</p>
+                    <SportLine user={user} />
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -161,6 +162,7 @@ export default function UserAccountListPage() {
                           <p className="text-xs text-gray-400">
                             {user.code} · {user.unit}
                           </p>
+                          <SportLine user={user} />
                         </div>
                       </div>
                     </td>
@@ -190,6 +192,16 @@ export default function UserAccountListPage() {
         </>
       ) : null}
     </ManagementShell>
+  );
+}
+
+function SportLine({ user }) {
+  if (user.roleId !== 'COACH') return null;
+  const names = (user.sports || []).map((sport) => sport.name).filter(Boolean);
+  return (
+    <p className={`mt-1 text-xs font-semibold ${names.length ? 'text-gray-500' : 'text-amber-700'}`}>
+      {names.length ? names.join(', ') : 'Chưa gán môn'}
+    </p>
   );
 }
 
