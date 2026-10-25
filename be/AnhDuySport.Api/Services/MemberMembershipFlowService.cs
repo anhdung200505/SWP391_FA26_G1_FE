@@ -58,9 +58,13 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     // ===== Access System =====
     public async Task<MemberProfileDto> AccessSystemAsync(string memberUserId)
     {
-        var member = await FindActiveMemberAsync(memberUserId);
+        var member = await FindActiveProfileUserAsync(memberUserId);
         // Học viên trả tiền xong rồi tắt app: lần mở hồ sơ tiếp theo vẫn kích hoạt được gói.
-        await SyncPendingPaymentsAsync(member.UserId, CancellationToken.None);
+        // Lễ tân, HLV, admin không mua gói nên không cần đối chiếu.
+        if (member.Role?.RoleCode == "MEMBER")
+        {
+            await SyncPendingPaymentsAsync(member.UserId, CancellationToken.None);
+        }
         return ToProfileDto(member);
     }
 
@@ -68,7 +72,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     // Email không đổi ở đây: gửi email khác email hiện tại thì báo dùng luồng đổi email bằng OTP.
     public async Task<MemberProfileMutationResponse> InputChangesAsync(string memberUserId, UpdateMemberProfileRequest request)
     {
-        var member = await FindActiveMemberAsync(memberUserId);
+        var member = await FindActiveProfileUserAsync(memberUserId);
 
         // ---- Validate ----
         var fullName = RequireText(request.FullName, "Nhập họ tên.", 200);
@@ -298,7 +302,7 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
     // ===== Edit personal information → đổi ảnh đại diện =====
     public async Task<MemberProfileMutationResponse> UpdateAvatarAsync(string memberUserId, IFormFile? file)
     {
-        var member = await FindActiveMemberAsync(memberUserId);
+        var member = await FindActiveProfileUserAsync(memberUserId);
         var contentRoot = services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
         var oldAvatar = member.AvatarUrl;
         member.AvatarUrl = await AvatarStorage.SaveAsync(contentRoot, member.UserId, file);
@@ -1199,6 +1203,31 @@ public class MemberMembershipFlowService(AppDbContext db, IConfiguration configu
         }
 
         return package;
+    }
+
+    private static readonly string[] ProfileRoles = ["MEMBER", "RECEPTIONIST", "COACH", "ADMIN"];
+
+    private async Task<UserAccount> FindActiveProfileUserAsync(string userId)
+    {
+        if (!int.TryParse(userId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy tài khoản.");
+        }
+
+        var user = await db.UserAccounts
+            .Include(account => account.Role)
+            .FirstOrDefaultAsync(account => account.UserId == id);
+        if (user is null || user.Role is null || !ProfileRoles.Contains(user.Role.RoleCode))
+        {
+            throw new KeyNotFoundException("Không tìm thấy tài khoản.");
+        }
+
+        if (user.Status != "active")
+        {
+            throw new InvalidOperationException("Tài khoản không hoạt động.");
+        }
+
+        return user;
     }
 
     private async Task<UserAccount> FindActiveMemberAsync(string memberUserId)
