@@ -28,6 +28,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddScoped<SmtpEmailSender>();
 builder.Services.AddHostedService<PendingRegistrationCleanupService>();
+// Mỗi phút đối chiếu đơn gói hội viên với payOS (webhook không tới được máy local).
+builder.Services.AddHostedService<MembershipPaymentSyncService>();
 builder.Services.AddScoped<CurrentActor>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailNotificationService>();
