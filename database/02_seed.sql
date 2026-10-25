@@ -361,8 +361,8 @@ INSERT INTO class_registration_log (member_user_id, class_id, payment_id, action
 SELECT p.user_id, p.class_id, p.payment_id, N'register', p.user_id, N'MEMBER', p.paid_at, N'MEMBER'
 FROM payment AS p;
 
--- Mỗi lớp đã thanh toán (không kèm nâng hạng) được tặng 1 tháng (30 ngày) Hạng Đồng, gói sau nối tiếp gói trước
--- (cùng quy tắc ClassMembershipBonus.GrantAsync ở backend, 1 tháng = 30 ngày): lớp bơi -> active, lớp bóng rổ -> scheduled.
+-- Mỗi lớp đã thanh toán (không kèm nâng hạng) được tặng 1 tháng Hạng Đồng, gói sau nối tiếp gói trước
+-- (cùng quy tắc ClassMembershipBonus.GrantAsync ở backend): lớp bơi -> active, lớp bóng rổ -> scheduled.
 ;WITH gift AS (
     SELECT p.user_id, pk.membership_package_id, pk.package_name,
            ROW_NUMBER() OVER (PARTITION BY p.user_id ORDER BY p.payment_id) - 1 AS k
@@ -372,9 +372,9 @@ FROM payment AS p;
 )
 INSERT INTO membership (user_id, payment_id, plan_name, start_date, end_date, status, membership_package_id, is_free)
 SELECT g.user_id, NULL, g.package_name + N' (tặng kèm lớp)',
-       DATEADD(DAY, 30 * g.k, @registered_on),
-       DATEADD(DAY, 30 * (g.k + 1) - 1, @registered_on),
-       CASE WHEN DATEADD(DAY, 30 * g.k, @registered_on) <= @today THEN N'active' ELSE N'scheduled' END,
+       DATEADD(MONTH, g.k, @registered_on),
+       DATEADD(DAY, -1, DATEADD(MONTH, g.k + 1, @registered_on)),
+       CASE WHEN DATEADD(MONTH, g.k, @registered_on) <= @today THEN N'active' ELSE N'scheduled' END,
        g.membership_package_id, 1
 FROM gift AS g;
 

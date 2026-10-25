@@ -140,20 +140,6 @@ CREATE TABLE password_reset (
 );
 GO
 
--- Đổi email đang chờ xác thực OTP (cùng cách làm với password_reset). OTP gửi tới new_email, chỉ lưu hash.
--- ON DELETE CASCADE: học viên tự xóa tài khoản thì yêu cầu đổi email cũng mất theo.
-CREATE TABLE email_change (
-    user_id     INT           NOT NULL,
-    new_email   NVARCHAR(200) NOT NULL,
-    otp_hash    NVARCHAR(64)  NOT NULL,
-    attempts    INT           NOT NULL CONSTRAINT DF_email_change_attempts DEFAULT (0),
-    created_at  DATETIME2(0)  NOT NULL,
-    expires_at  DATETIME2(0)  NOT NULL,
-    CONSTRAINT PK_email_change PRIMARY KEY (user_id),
-    CONSTRAINT FK_email_change_user FOREIGN KEY (user_id) REFERENCES [user] (user_id) ON DELETE CASCADE
-);
-GO
-
 /* ===================== Môn, phòng, khóa học ===================== */
 
 CREATE TABLE sport (
@@ -555,6 +541,74 @@ CREATE TABLE coach_training_history (
 );
 GO
 
+/* Bài tập theo buổi, đề thi và tiêu chí do AI sinh cho đúng lớp của coach. slot: preview, draft, published. */
+CREATE TABLE coach_course_brief (
+    class_id      INT            NOT NULL,
+    coach_user_id INT            NOT NULL,
+    brief         NVARCHAR(2000) NOT NULL,
+    updated_at    DATETIME2(0)   NOT NULL,
+    CONSTRAINT PK_coach_course_brief PRIMARY KEY (class_id),
+    CONSTRAINT FK_coach_course_brief_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+    CONSTRAINT FK_coach_course_brief_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id)
+);
+GO
+
+CREATE TABLE coach_course_plan (
+    plan_id       INT IDENTITY(1,1) NOT NULL,
+    class_id      INT            NOT NULL,
+    coach_user_id INT            NOT NULL,
+    slot          NVARCHAR(20)   NOT NULL,
+    summary       NVARCHAR(1000) NULL,
+    change_note   NVARCHAR(1000) NULL,
+    created_at    DATETIME2(0)   NOT NULL,
+    CONSTRAINT PK_coach_course_plan PRIMARY KEY (plan_id),
+    CONSTRAINT UQ_coach_course_plan_slot UNIQUE (class_id, slot),
+    CONSTRAINT FK_coach_course_plan_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+    CONSTRAINT FK_coach_course_plan_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT CK_coach_course_plan_slot CHECK (slot IN (N'preview', N'draft', N'published'))
+);
+GO
+
+CREATE TABLE coach_course_exercise (
+    exercise_id  INT IDENTITY(1,1) NOT NULL,
+    plan_id      INT            NOT NULL,
+    session_id   INT            NOT NULL,
+    sort_order   INT            NOT NULL,
+    title        NVARCHAR(200)  NOT NULL,
+    dosage       NVARCHAR(120)  NOT NULL,
+    instructions NVARCHAR(2000) NOT NULL,
+    CONSTRAINT PK_coach_course_exercise PRIMARY KEY (exercise_id),
+    CONSTRAINT FK_coach_course_exercise_plan FOREIGN KEY (plan_id) REFERENCES coach_course_plan (plan_id) ON DELETE CASCADE,
+    CONSTRAINT FK_coach_course_exercise_session FOREIGN KEY (session_id) REFERENCES [session] (session_id)
+);
+GO
+
+CREATE TABLE coach_course_exam_question (
+    question_id      INT IDENTITY(1,1) NOT NULL,
+    plan_id          INT            NOT NULL,
+    sort_order       INT            NOT NULL,
+    prompt           NVARCHAR(1000) NOT NULL,
+    suggested_answer NVARCHAR(2000) NOT NULL,
+    points           DECIMAL(4,1)   NOT NULL,
+    CONSTRAINT PK_coach_course_exam_question PRIMARY KEY (question_id),
+    CONSTRAINT FK_coach_course_exam_question_plan FOREIGN KEY (plan_id) REFERENCES coach_course_plan (plan_id) ON DELETE CASCADE,
+    CONSTRAINT CK_coach_course_exam_points CHECK (points > 0 AND points <= 10)
+);
+GO
+
+CREATE TABLE coach_course_rubric (
+    rubric_id  INT IDENTITY(1,1) NOT NULL,
+    plan_id    INT            NOT NULL,
+    sort_order INT            NOT NULL,
+    criterion  NVARCHAR(200)  NOT NULL,
+    max_score  DECIMAL(4,1)   NOT NULL,
+    guidance   NVARCHAR(1000) NOT NULL,
+    CONSTRAINT PK_coach_course_rubric PRIMARY KEY (rubric_id),
+    CONSTRAINT FK_coach_course_rubric_plan FOREIGN KEY (plan_id) REFERENCES coach_course_plan (plan_id) ON DELETE CASCADE,
+    CONSTRAINT CK_coach_course_rubric_score CHECK (max_score > 0 AND max_score <= 10)
+);
+GO
+
 /* ===================== Hóa đơn, thanh toán, hội viên ===================== */
 
 CREATE TABLE invoice (
@@ -587,13 +641,16 @@ CREATE TABLE membership_package (
     created_at               DATETIME2(0)   NOT NULL CONSTRAINT DF_membership_package_created_at DEFAULT (SYSUTCDATETIME()),
     updated_at               DATETIME2(0)   NULL,
     upgrade_discount_percent DECIMAL(5,2)   NOT NULL CONSTRAINT DF_membership_package_upgrade_discount DEFAULT (0),
+    ai_regeneration_limit    INT            NOT NULL CONSTRAINT DF_membership_package_ai_regeneration DEFAULT (0),
+    ai_token_limit           INT            NOT NULL CONSTRAINT DF_membership_package_ai_token DEFAULT (0),
     CONSTRAINT PK_membership_package PRIMARY KEY (membership_package_id),
     CONSTRAINT UQ_membership_package_code UNIQUE (package_code),
     CONSTRAINT CK_membership_package_fee CHECK (fee > 0),
-    -- Gói bao nhiêu tháng cũng được (1 tháng = 30 ngày); chặn trên 1200 tháng chỉ để không tràn ngày.
-    CONSTRAINT CK_membership_package_months CHECK (validity_months >= 1 AND validity_months <= 1200),
+    CONSTRAINT CK_membership_package_months CHECK (validity_months = 1),
     CONSTRAINT CK_membership_package_status CHECK (status IN (N'active', N'inactive')),
-    CONSTRAINT CK_membership_package_upgrade_discount CHECK (upgrade_discount_percent >= 0 AND upgrade_discount_percent <= 100)
+    CONSTRAINT CK_membership_package_upgrade_discount CHECK (upgrade_discount_percent >= 0 AND upgrade_discount_percent <= 100),
+    CONSTRAINT CK_membership_package_ai_regeneration CHECK (ai_regeneration_limit >= 0),
+    CONSTRAINT CK_membership_package_ai_token CHECK (ai_token_limit >= 0)
 );
 GO
 
@@ -668,8 +725,6 @@ GO
 
 CREATE UNIQUE INDEX UX_membership_payment ON membership (payment_id) WHERE payment_id IS NOT NULL;
 CREATE UNIQUE INDEX UX_membership_one_active ON membership (user_id) WHERE status = N'active';
--- Mỗi học viên chỉ giữ 1 đơn gói chờ thanh toán (hai yêu cầu chọn gói cùng lúc không tạo được 2 đơn).
-CREATE UNIQUE INDEX UX_membership_one_pending ON membership (user_id) WHERE status = N'pending';
 GO
 
 -- Lịch sử đăng ký lớp (ai xếp học viên vào lớp, rút lớp, học lại...).
@@ -845,6 +900,25 @@ GO
 CREATE INDEX IX_personal_exercise_user_date ON personal_exercise (user_id, exercise_date);
 GO
 
+CREATE TABLE ai_token_usage (
+    ai_token_usage_id INT IDENTITY(1,1) NOT NULL,
+    user_id           INT           NOT NULL,
+    membership_id     INT           NOT NULL,
+    action            NVARCHAR(30)  NOT NULL,
+    total_tokens      INT           NOT NULL,
+    created_at        DATETIME2(0)  NOT NULL,
+    CONSTRAINT PK_ai_token_usage PRIMARY KEY (ai_token_usage_id),
+    CONSTRAINT FK_ai_token_usage_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_ai_token_usage_membership FOREIGN KEY (membership_id) REFERENCES membership (membership_id),
+    CONSTRAINT CK_ai_token_usage_action CHECK (action IN (N'generate', N'regenerate')),
+    CONSTRAINT CK_ai_token_usage_tokens CHECK (total_tokens >= 0)
+);
+GO
+
+CREATE INDEX IX_ai_token_usage_membership ON ai_token_usage (membership_id, action);
+CREATE INDEX IX_ai_token_usage_user ON ai_token_usage (user_id);
+GO
+
 /* ===================== Chỉ mục khóa ngoại ===================== */
 
 CREATE INDEX IX_role_permission_role_id ON role_permission (role_id);
@@ -869,6 +943,11 @@ CREATE INDEX IX_evaluation_assignment_id ON evaluation (assignment_id);
 CREATE INDEX IX_evaluation_evaluator ON evaluation (evaluator_user_id);
 CREATE INDEX IX_evaluation_evaluated ON evaluation (evaluated_user_id);
 CREATE INDEX IX_coach_training_history_member ON coach_training_history (member_user_id, recorded_at);
+CREATE INDEX IX_coach_course_plan_class ON coach_course_plan (class_id);
+CREATE INDEX IX_coach_course_exercise_plan ON coach_course_exercise (plan_id);
+CREATE INDEX IX_coach_course_exercise_session ON coach_course_exercise (session_id);
+CREATE INDEX IX_coach_course_exam_question_plan ON coach_course_exam_question (plan_id);
+CREATE INDEX IX_coach_course_rubric_plan ON coach_course_rubric (plan_id);
 CREATE INDEX IX_invoice_user_id ON invoice (user_id);
 CREATE INDEX IX_payment_invoice_id ON payment (invoice_id);
 CREATE INDEX IX_payment_user_id ON payment (user_id);
