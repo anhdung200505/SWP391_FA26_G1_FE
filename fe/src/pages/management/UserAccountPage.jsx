@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption, FlowTrail, RoleBadge, StatusBadge } from '../../components/management/ManagementBits';
 import { useAccountManagement } from '../../context/AccountManagementContext';
+import { getSports } from '../../api/managementApi';
 import {
   ROLES,
   formatDate,
@@ -12,10 +13,16 @@ import {
   initials,
 } from '../../data/accountManagement';
 
+function sameIds(left, right) {
+  const a = [...left].map(String).sort();
+  const b = [...right].map(String).sort();
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
 export default function UserAccountPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const { users, roles, loading, error, updateUserRole, updateAccountStatus } = useAccountManagement();
+  const { users, roles, loading, error, updateUserRole, updateAccountStatus, updateCoachSports } = useAccountManagement();
   const user = users.find((item) => item.id === userId);
   const catalog = roles.length > 0 ? roles : ROLES;
   const assignableRoles = catalog.filter((item) => item.id !== 'ADMIN');
@@ -24,6 +31,8 @@ export default function UserAccountPage() {
   const [mode, setMode] = useState('choose');
   const [draftRoleId, setDraftRoleId] = useState(user?.roleId ?? 'MEMBER');
   const [draftStatus, setDraftStatus] = useState(user?.status === 'active' ? 'inactive' : 'active');
+  const [catalogSports, setCatalogSports] = useState([]);
+  const [draftSportIds, setDraftSportIds] = useState([]);
   const [steps, setSteps] = useState([]);
   const [shown, setShown] = useState(0);
   const [logId, setLogId] = useState(null);
@@ -33,6 +42,20 @@ export default function UserAccountPage() {
   useEffect(() => {
     document.title = user ? `${user.fullName} · Tài khoản` : 'Tài khoản · AnhDuy Sport';
   }, [user]);
+
+  useEffect(() => {
+    let active = true;
+    getSports('1')
+      .then((data) => {
+        if (active) setCatalogSports(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (active) setCatalogSports([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (mode !== 'system' || shown >= steps.length) return undefined;
@@ -76,6 +99,9 @@ export default function UserAccountPage() {
   const flowStep = mode === 'system' ? 4 : mode === 'choose' ? 2 : 3;
   const roleUnchanged = draftRoleId === user.roleId;
   const statusUnchanged = draftStatus === user.status;
+  const currentSportIds = (user.sports || []).map((sport) => String(sport.id));
+  const sportsUnchanged = sameIds(draftSportIds, currentSportIds);
+  const sportNames = (user.sports || []).map((sport) => sport.name).filter(Boolean);
 
   const openRole = () => {
     setDraftRoleId(user.roleId);
@@ -85,6 +111,17 @@ export default function UserAccountPage() {
   const openStatus = () => {
     setDraftStatus(user.status === 'active' ? 'inactive' : 'active');
     setMode('status');
+  };
+
+  const openSports = () => {
+    setDraftSportIds(currentSportIds);
+    setMode('sports');
+  };
+
+  const toggleSport = (sportId) => {
+    setDraftSportIds((current) => (
+      current.includes(sportId) ? current.filter((id) => id !== sportId) : [...current, sportId]
+    ));
   };
 
   const startSystem = (nextSteps, id) => {
@@ -121,6 +158,43 @@ export default function UserAccountPage() {
       ],
       log.id,
     );
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmSports = async () => {
+    if (saving || draftSportIds.length === 0) return;
+    setSaving(true);
+    setActionError('');
+    try {
+      const log = await updateCoachSports(user.id, draftSportIds);
+      if (!log) return;
+      const chosen = catalogSports
+        .filter((sport) => draftSportIds.includes(String(sport.id)))
+        .map((sport) => sport.name)
+        .join(', ');
+      startSystem(
+        [
+          {
+            id: 'update-sports',
+            lane: 'Hệ thống',
+            diagram: 'Update Coach Sports',
+            title: 'Cập nhật môn huấn luyện viên',
+            detail: `${user.fullName} dạy: ${chosen}.`,
+          },
+          {
+            id: 'record-log',
+            lane: 'Hệ thống',
+            diagram: 'Record Log',
+            title: 'Ghi nhật ký',
+            detail: `${log.actor} đã cập nhật môn của ${user.fullName}.`,
+          },
+        ],
+        log.id,
+      );
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -212,6 +286,9 @@ export default function UserAccountPage() {
           <Info label="Email" value={user.email} />
           <Info label="Điện thoại" value={formatPhone(user.phone)} />
           <Info label="Ngày tham gia" value={formatDate(user.joinedAt)} />
+          {user.roleId === 'COACH' && (
+            <Info label="Môn dạy" value={sportNames.length ? sportNames.join(', ') : 'Chưa gán môn'} />
+          )}
         </dl>
       </section>
 
@@ -219,7 +296,7 @@ export default function UserAccountPage() {
         <section className="mt-5">
           <h2 className="text-lg font-black">Chọn danh mục quản lý</h2>
           <DiagramCaption>Select Management Category</DiagramCaption>
-          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+          <div className={`mt-3 grid gap-4 ${user.roleId === 'COACH' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
             <button
               type="button"
               onClick={openRole}
@@ -242,6 +319,21 @@ export default function UserAccountPage() {
                 Kích hoạt hoặc vô hiệu hóa. Người dùng nhận email sau khi trạng thái thay đổi.
               </p>
             </button>
+            {user.roleId === 'COACH' && (
+              <button
+                type="button"
+                onClick={openSports}
+                className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm hover:border-[#e31b23]/40"
+              >
+                <DiagramCaption>Coach Sports</DiagramCaption>
+                <p className="mt-2 text-xl font-black">Môn huấn luyện</p>
+                <p className="mt-2 text-sm leading-6 text-gray-600">
+                  {sportNames.length
+                    ? `Đang dạy ${sportNames.join(', ')}. Một huấn luyện viên có thể dạy nhiều môn.`
+                    : 'Huấn luyện viên này chưa được gán môn. Chọn một hoặc nhiều môn để có thể nhận lớp.'}
+                </p>
+              </button>
+            )}
           </div>
         </section>
       )}
@@ -311,6 +403,61 @@ export default function UserAccountPage() {
             </button>
             {roleUnchanged && <p className="text-sm text-gray-500">Đây đang là vai trò hiện tại.</p>}
             {actionError && mode === 'role' && <p className="text-sm font-semibold text-[#b1131a]">{actionError}</p>}
+          </div>
+        </section>
+      )}
+
+      {mode === 'sports' && user.roleId === 'COACH' && (
+        <section className="mt-5 rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black">Môn huấn luyện</h2>
+              <DiagramCaption>Update Coach Sports</DiagramCaption>
+            </div>
+            <button type="button" onClick={() => setMode('choose')} className="text-sm font-bold text-gray-500">
+              Quay lại
+            </button>
+          </div>
+          <p className="mt-3 text-sm text-gray-600">
+            Chọn một hoặc nhiều môn. Huấn luyện viên chỉ xuất hiện khi đổi HLV của lớp đúng môn đã gán.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {catalogSports.map((sport) => {
+              const sportId = String(sport.id);
+              const selected = draftSportIds.includes(sportId);
+              return (
+                <label
+                  key={sportId}
+                  className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 ${
+                    selected ? 'border-[#e31b23] bg-red-50' : 'border-gray-200'
+                  }`}
+                >
+                  <span className="font-bold">{sport.name}</span>
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => toggleSport(sportId)}
+                    className="h-4 w-4 accent-[#e31b23]"
+                  />
+                </label>
+              );
+            })}
+          </div>
+          {catalogSports.length === 0 && (
+            <p className="mt-4 text-sm text-gray-500">Chưa tải được danh sách môn.</p>
+          )}
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={sportsUnchanged || draftSportIds.length === 0 || saving}
+              onClick={confirmSports}
+              className="rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {saving ? 'Đang lưu...' : 'Lưu môn dạy'}
+            </button>
+            {draftSportIds.length === 0 && <p className="text-sm text-gray-500">Chọn ít nhất một môn.</p>}
+            {sportsUnchanged && draftSportIds.length > 0 && <p className="text-sm text-gray-500">Đây đang là các môn hiện tại.</p>}
+            {actionError && <p className="text-sm font-semibold text-[#b1131a]">{actionError}</p>}
           </div>
         </section>
       )}
