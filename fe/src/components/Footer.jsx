@@ -248,10 +248,11 @@ export default function Footer() {
                 </h4>
                 <ul className="space-y-1.5 text-xs sm:text-sm">
                   <li><a href="/home" className="hover:text-[#e31b23] transition-colors">Trang chủ</a></li>
+                  <li><a href="#" className="hover:text-[#e31b23] transition-colors">Về chúng tôi</a></li>
                   <li><a href="#courses-section" className="hover:text-[#e31b23] transition-colors">Khóa học</a></li>
                   <li><a href="#facilities-section" className="hover:text-[#e31b23] transition-colors">Cơ sở vật chất</a></li>
                   <li><a href="#coaches-section" className="hover:text-[#e31b23] transition-colors">Liên hệ</a></li>
-                  <li><a href="/tuyen-sinh" className="hover:text-[#e31b23] transition-colors">Đăng ký khóa học</a></li>
+                  <li><a href="#" className="hover:text-[#e31b23] transition-colors">Tuyển sinh</a></li>
                 </ul>
               </div>
 

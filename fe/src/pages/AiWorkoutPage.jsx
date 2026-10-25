@@ -46,12 +46,6 @@ function formatClock(value) {
   return String(value).slice(0, 5);
 }
 
-function quotaNotice(message) {
-  const text = String(message || '').trim();
-  const index = text.indexOf('Còn ');
-  return index > 0 ? text.slice(index) : text;
-}
-
 async function readMemberWorkout(memberUserId) {
   const accessData = await getWorkoutAccess(memberUserId);
   const routineData =
@@ -187,7 +181,7 @@ export default function AiWorkoutPage() {
     run('body', async () => {
       try {
         const result = await saveBodyMetrics(memberUserId, { heightCm: height, weightKg: weight });
-        setNotice(quotaNotice(result.message));
+        setNotice(result.message);
         setEditingBody(false);
         await reload();
       } catch (error) {
@@ -216,7 +210,7 @@ export default function AiWorkoutPage() {
           sessionsPerWeek: sessions,
           sessionMinutes: minutes,
         });
-        setNotice(quotaNotice(result.message));
+        setNotice(result.message);
         setShowEdit(false);
         setChanges('');
         await reload();
@@ -245,7 +239,7 @@ export default function AiWorkoutPage() {
           changes: editRequired ? trimmedChanges : null,
         });
         const calendarNote = result.calendar?.message;
-        setNotice([quotaNotice(result.message), calendarNote].filter(Boolean).join(' '));
+        setNotice([result.message, calendarNote].filter(Boolean).join(' '));
         setShowEdit(false);
         setChanges('');
         await reload();
@@ -265,7 +259,7 @@ export default function AiWorkoutPage() {
     run('regenerate', async () => {
       try {
         const result = await regenerateWorkout(memberUserId, { changes: trimmed });
-        setNotice(quotaNotice(result.message));
+        setNotice(result.message);
         setRegenerateNote('');
         await reload();
       } catch (error) {
