@@ -6,7 +6,7 @@
     Chay sau 01..05 (setup.ps1 da goi san). Chay lai nhieu lan van an toan (chi doi dong con ten cu).
     Khong anh huong bang khac: cac bang khac tham chieu lop bang class_id, khong theo ten.
 
-    sqlcmd -S "(localdb)\MSSQLLocalDB" -E -b -I -f 65001 -d AnhDuySport -i database\05_rename_class_names.sql
+    sqlcmd -S "(localdb)\MSSQLLocalDB" -E -b -I -f 65001 -d AnhDuySport -i database\06_rename_class_names.sql
 */
 
 USE AnhDuySport;
