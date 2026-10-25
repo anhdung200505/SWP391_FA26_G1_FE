@@ -93,6 +93,29 @@ public class SupportRequestsController(CustomerServiceFlowService flow) : Contro
     public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> AccessServiceRequests() =>
         Ok(await flow.AccessServiceRequestsAsync());
 
+    [Authorize(Roles = "ADMIN")]
+    [HttpGet("enrollment/manager")]
+    [EndpointSummary("Quản lý trung tâm xem đơn tư vấn ghi danh lễ tân chuyển lên")]
+    [EndpointDescription("Đơn tư vấn ghi danh đang chờ quản lý, và đơn quản lý đã chấp nhận hoặc từ chối. Quyết định dùng POST /api/support-requests/{id}/decision.")]
+    public async Task<ActionResult<IReadOnlyList<SupportRequestDto>>> AccessManagerEnrollment() =>
+        Ok(await flow.AccessManagerEnrollmentConsultationsAsync());
+
+    [Authorize(Roles = "RECEPTIONIST")]
+    [HttpPost("enrollment/{requestId}/escalate")]
+    [EndpointSummary("Lễ tân chuyển đơn tư vấn ghi danh lên quản lý trung tâm")]
+    [EndpointDescription("Chỉ đơn tư vấn ghi danh đang chờ lễ tân. reason là lý do chuyển. Đơn sang trạng thái pending_manager và hiện ở tab Tư vấn ghi danh của quản lý.")]
+    public async Task<ActionResult<SupportRequestDto>> EscalateEnrollment(string requestId, EscalateSupportRequest request)
+    {
+        try
+        {
+            return Ok(await flow.EscalateEnrollmentConsultationAsync(requestId, request));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
     [Authorize(Roles = "RECEPTIONIST")]
     [HttpGet("enrollment")]
     [EndpointSummary("Lễ tân xem đơn tư vấn ghi danh")]

@@ -465,6 +465,10 @@ export function getEscalatedSupportRequests() {
   return request('/support-requests/financial');
 }
 
+export function getManagerEnrollmentConsultations() {
+  return request('/support-requests/enrollment/manager');
+}
+
 // Quản trị trung tâm ra quyết định phê duyệt (approved) hoặc từ chối (rejected)
 export function processSupportRequestDecision(requestId, { decision, note }) {
   return request(`/support-requests/${requestId}/decision`, {

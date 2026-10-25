@@ -306,6 +306,7 @@ public class CustomerServiceFlowService(
     {
         var ids = await db.SupportRequests
             .AsNoTracking()
+            .Where(item => item.ClassificationReason == null || !item.ClassificationReason.StartsWith(EnrollmentSource))
             .Where(item => item.Status == "pending_manager" || (item.Status == "resolved" && item.Decision != null))
             .OrderBy(item => item.Status == "resolved")
             .ThenByDescending(item => item.CreatedAt)
@@ -323,6 +324,12 @@ public class CustomerServiceFlowService(
         }
 
         var note = RequireText(request.Note, "Nhập nội dung quyết định.", 2000);
+        var item = await FindRequestAsync(requestId);
+        if (item.ClassificationReason?.StartsWith(EnrollmentSource) == true)
+        {
+            return await DecideEnrollmentConsultationAsync(item, decision, note);
+        }
+
         var verb = decision == "approved" ? "chấp nhận" : "từ chối";
         return await SaveResultAsync(
             requestId,
@@ -340,6 +347,108 @@ public class CustomerServiceFlowService(
 
     public Task<IReadOnlyList<SupportRequestDto>> AccessEnrollmentRequestsAsync() =>
         LoadReceptionistQueueAsync(enrollment: true);
+
+    // Đơn tư vấn ghi danh lễ tân đã chuyển lên, và đơn quản lý đã duyệt hoặc từ chối.
+    public async Task<IReadOnlyList<SupportRequestDto>> AccessManagerEnrollmentConsultationsAsync()
+    {
+        var ids = await db.SupportRequests
+            .AsNoTracking()
+            .Where(item => item.ClassificationReason != null && item.ClassificationReason.StartsWith(EnrollmentSource))
+            .Where(item => item.Status == "pending_manager" || (item.Status == "resolved" && item.Decision != null))
+            .OrderBy(item => item.Status == "resolved")
+            .ThenByDescending(item => item.CreatedAt)
+            .Select(item => item.SupportRequestId)
+            .ToListAsync();
+        return await LoadDtosAsync(ids);
+    }
+
+    public async Task<SupportRequestDto> EscalateEnrollmentConsultationAsync(string requestId, EscalateSupportRequest request)
+    {
+        var reason = RequireText(request.Reason, "Nhập lý do chuyển lên quản lý trung tâm.", 300);
+        var item = await FindRequestAsync(requestId);
+        EnsureEnrollment(item);
+        if (item.Status is not ("pending_receptionist" or "classified"))
+        {
+            throw new InvalidOperationException("Chỉ chuyển được đơn tư vấn đang chờ lễ tân.");
+        }
+
+        var handlerId = RequireActor();
+        var marker = $"{EnrollmentSource} Lý do chuyển quản lý: {reason}";
+        item.ClassificationReason = marker.Length <= 500 ? marker : marker[..500];
+        item.Status = "pending_manager";
+        item.ReceptionistCategory = "consultation";
+        item.AssignedToUserId = handlerId;
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = handlerId,
+            Action = "Chuyển đơn tư vấn ghi danh lên quản lý trung tâm",
+            EntityName = "support_request",
+            EntityId = item.SupportRequestId,
+            Detail = reason,
+            CreatedAt = DateTime.Now,
+        });
+        await db.SaveChangesAsync();
+        return await ToDtoAsync(item.SupportRequestId);
+    }
+
+    private async Task<SupportRequestResultDto> DecideEnrollmentConsultationAsync(SupportRequest item, string decision, string note)
+    {
+        EnsureEnrollment(item);
+        if (item.Status != "pending_manager")
+        {
+            throw new InvalidOperationException("Đơn tư vấn này không còn chờ quản lý trung tâm.");
+        }
+
+        var handlerId = RequireActor();
+        var now = DateTime.Now;
+        var verb = decision == "approved" ? "chấp nhận" : "từ chối";
+        var result = $"Quản lý trung tâm {verb} đơn tư vấn ghi danh. {note}";
+        item.Status = "resolved";
+        item.AssignedToUserId = handlerId;
+        item.Decision = decision;
+        item.ReceptionistCategory = "consultation";
+        item.ResolutionNote = result;
+        item.ResolvedAt = now;
+
+        EmailDto email;
+        if (item.Member is not null)
+        {
+            email = await TryNotifyMemberAsync(item.Member, item.Title, result, now);
+        }
+        else
+        {
+            email = await TryNotifyEnrollmentGuestAsync(item, result);
+        }
+
+        db.ActivityLogs.Add(new ActivityLog
+        {
+            ActorUserId = handlerId,
+            Action = "Quyết định đơn tư vấn ghi danh",
+            EntityName = "support_request",
+            EntityId = item.SupportRequestId,
+            Detail = result,
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        return new SupportRequestResultDto(await ToDtoAsync(item.SupportRequestId), email);
+    }
+
+    private async Task<EmailDto> TryNotifyEnrollmentGuestAsync(SupportRequest item, string result)
+    {
+        try
+        {
+            var current = ReadEnrollment(item.Description);
+            if (current.Email.Contains('@'))
+            {
+                await emailNotifications.SendGuestResultEmailAsync(current.Email, current.FullName, item.Title, result);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        return new EmailDto("", "", "");
+    }
 
     public async Task<SupportRequestDto> EscalateToManagerAsync(string requestId, EscalateSupportRequest request)
     {
@@ -539,9 +648,7 @@ public class CustomerServiceFlowService(
     {
         var ids = await db.SupportRequests
             .AsNoTracking()
-            .Where(item => enrollment
-                ? item.Status == "pending_receptionist" || item.Status == "classified" || item.Status == "resolved"
-                : item.Status == "pending_receptionist" || item.Status == "classified" || item.Status == "resolved" || item.Status == "pending_manager")
+            .Where(item => item.Status == "pending_receptionist" || item.Status == "classified" || item.Status == "resolved" || item.Status == "pending_manager")
             .Where(item => enrollment
                 ? item.ClassificationReason != null && item.ClassificationReason.StartsWith(EnrollmentSource)
                 : item.ClassificationReason == null || !item.ClassificationReason.StartsWith(EnrollmentSource))
