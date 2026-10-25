@@ -1,4 +1,5 @@
 import React from 'react';
+import { readSupportRequestType } from '../../api/supportRequestType';
 
 export default function ReceptionistTable({
   loading,
@@ -39,6 +40,7 @@ export default function ReceptionistTable({
           {filteredList.map((item) => {
             const isResolved = item.status === 'resolved' || item.status === 'RESOLVED';
             const forwarded = item.status === 'pending_manager';
+            const requestType = readSupportRequestType(item.classificationReason);
             return (
               <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                 <td className="p-4">
@@ -57,6 +59,11 @@ export default function ReceptionistTable({
 
                 <td className="p-4">
                   <div className="font-bold text-slate-800">{item.title || 'Gửi yêu cầu'}</div>
+                  {requestType && (
+                    <span className="inline-block bg-sky-50 text-sky-800 border border-sky-200 text-[10px] font-bold px-2 py-0.5 rounded mt-1">
+                      Loại: {requestType}
+                    </span>
+                  )}
                   {item.receptionistCategory && (
                     <span className="inline-block bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded mt-1">
                       {item.receptionistCategory}

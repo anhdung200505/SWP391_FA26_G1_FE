@@ -41,7 +41,7 @@ export default function Footer() {
 
   // ------------ STATE CỦA WIDGET HỖ TRỢ (MEMBER LOGGED IN) ------------
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [supportType, setSupportType] = useState('consultation'); // Mặc định khớp Enum Backend
+  const [supportType, setSupportType] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [helpLoading, setHelpLoading] = useState(false);
@@ -146,8 +146,8 @@ export default function Footer() {
     e.preventDefault();
     setHelpNotice({ type: '', msg: '' });
 
-    if (!subject.trim() || !content.trim()) {
-      setHelpNotice({ type: 'error', msg: 'Vui lòng nhập đầy đủ tiêu đề và nội dung cần hỗ trợ.' });
+    if (!supportType.trim() || !subject.trim() || !content.trim()) {
+      setHelpNotice({ type: 'error', msg: 'Vui lòng nhập loại yêu cầu, tiêu đề và nội dung cần hỗ trợ.' });
       return;
     }
 
@@ -155,7 +155,7 @@ export default function Footer() {
 
     const supportPayload = {
       memberUserId: String(user?.id || user?.userId || '0'),
-      requestType: supportType, // Chuẩn enum: "consultation", "account", "financial", "discount"
+      requestType: supportType.trim(),
       subject: subject.trim(),
       content: content.trim(),
     };
@@ -167,6 +167,7 @@ export default function Footer() {
         type: 'success',
         msg: 'Đã gửi yêu cầu tới Lễ tân thành công! Chúng tôi sẽ phản hồi bạn sớm nhất.',
       });
+      setSupportType('');
       setSubject('');
       setContent('');
       setTimeout(() => {
@@ -492,17 +493,15 @@ export default function Footer() {
 
               <form onSubmit={handleSubmitSupport} className="space-y-3 text-xs">
                 <div>
-                  <label className="block text-gray-400 font-bold mb-1">Loại yêu cầu</label>
-                  <select
+                  <label className="block text-gray-400 font-bold mb-1">Loại yêu cầu *</label>
+                  <input
+                    type="text"
                     value={supportType}
+                    maxLength={80}
                     onChange={(e) => setSupportType(e.target.value)}
-                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white outline-none focus:border-[#e31b23] cursor-pointer"
-                  >
-                    <option value="consultation">💬 Tư vấn / Góp ý / Hỏi đáp</option>
-                    <option value="account">🔑 Sự cố tài khoản & Thẻ</option>
-                    <option value="financial">💰 Vấn đề Học phí & Thanh toán</option>
-                    <option value="discount">🎟️ Ưu đãi / Khuyến mãi</option>
-                  </select>
+                    placeholder="Ví dụ: Đổi lịch học, sự cố tài khoản, học phí"
+                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 outline-none focus:border-[#e31b23]"
+                  />
                 </div>
 
                 <div>

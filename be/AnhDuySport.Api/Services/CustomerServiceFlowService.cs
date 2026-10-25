@@ -16,15 +16,14 @@ public class CustomerServiceFlowService(
         var requestType = NormalizeType(request.RequestType);
         var title = RequireText(request.Subject, "Nhập tiêu đề yêu cầu.", 200);
         var description = RequireText(request.Content, "Nhập nội dung yêu cầu.", 4000);
-        var category = Classify(requestType);
         var now = DateTime.Now;
         var item = new SupportRequest
         {
             MemberUserId = member.UserId,
             Title = title,
             Description = description,
-            SystemCategory = category,
-            ClassificationReason = $"Học viên chọn loại {TypeLabel(requestType)}.",
+            SystemCategory = "consultation_account",
+            ClassificationReason = $"Loại: {requestType}",
             Status = "pending_receptionist",
             CreatedAt = now,
         };
@@ -33,7 +32,7 @@ public class CustomerServiceFlowService(
             ActorUserId = member.UserId,
             Action = "Tạo yêu cầu hỗ trợ",
             EntityName = "support_request",
-            Detail = $"{TypeLabel(requestType)} → lễ tân",
+            Detail = $"{requestType} → lễ tân",
             CreatedAt = now,
         };
         db.SupportRequests.Add(item);
@@ -463,7 +462,7 @@ public class CustomerServiceFlowService(
         var handlerId = RequireActor();
         item.Status = "pending_manager";
         item.AssignedToUserId = handlerId;
-        item.ClassificationReason = $"Lễ tân chuyển lên vì ngoài phạm vi: {reason}";
+        item.ClassificationReason = ComposeEscalationReason(item.ClassificationReason, reason);
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = handlerId,
@@ -826,26 +825,46 @@ public class CustomerServiceFlowService(
 
     private static string NormalizeType(string? requestType)
     {
-        var value = requestType?.Trim().ToLowerInvariant() ?? "";
-        if (value is not ("financial" or "discount" or "consultation" or "account"))
+        var value = requestType?.Trim() ?? "";
+        if (value.Length == 0)
         {
-            throw new InvalidOperationException("Loại yêu cầu không hợp lệ. Chọn financial, discount, consultation hoặc account.");
+            throw new InvalidOperationException("Nhập loại yêu cầu.");
+        }
+
+        if (value.Length > 80)
+        {
+            throw new InvalidOperationException("Loại yêu cầu tối đa 80 ký tự.");
+        }
+
+        var lowered = value.ToLowerInvariant();
+        if (lowered.Contains("discount") || lowered.Contains("giảm giá") || lowered.Contains("khuyến mãi") || lowered.Contains("ưu đãi"))
+        {
+            throw new InvalidOperationException("Hiện chưa nhận yêu cầu giảm giá hoặc ưu đãi.");
         }
 
         return value;
     }
 
-    private static string Classify(string requestType) =>
-        requestType is "financial" or "discount" ? "financial_discount" : "consultation_account";
-
-    private static string TypeLabel(string requestType) => requestType switch
+    private static string? ReadStoredMemberType(string? classificationReason)
     {
-        "financial" => "Tài chính",
-        "discount" => "Giảm giá",
-        "consultation" => "Tư vấn",
-        "account" => "Tài khoản",
-        _ => requestType,
-    };
+        var line = classificationReason?.Replace("\r", "").Split('\n').FirstOrDefault(row => row.StartsWith("Loại:", StringComparison.Ordinal));
+        if (line is null)
+        {
+            return null;
+        }
+
+        var type = line["Loại:".Length..].Trim();
+        return type.Length == 0 ? null : type;
+    }
+
+    private static string ComposeEscalationReason(string? current, string reason)
+    {
+        var type = ReadStoredMemberType(current);
+        var text = type is null
+            ? $"Lễ tân chuyển lên vì ngoài phạm vi: {reason}"
+            : $"Loại: {type}\nLễ tân chuyển lên vì ngoài phạm vi: {reason}";
+        return text.Length <= 500 ? text : text[..500];
+    }
 
     private static string? BlankAsMissing(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
