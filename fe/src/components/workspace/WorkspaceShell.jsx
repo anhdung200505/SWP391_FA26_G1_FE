@@ -60,29 +60,33 @@ export default function WorkspaceShell({
   );
 
   return (
-    <div className="min-h-dvh bg-[#f4f5f7] text-gray-900">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-[#12141d] text-white lg:flex">
+    <div className="flex min-h-dvh bg-[#f4f5f7] text-gray-900">
+      {/* SIDEBAR DESKTOP - Sticky theo màn hình hoặc flex bám sát chiều cao container */}
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-[#12141d] text-white lg:flex">
         {rail}
       </aside>
 
+      {/* OVERLAY MOBILE */}
       {menuOpen && (
         <button
           type="button"
           aria-label="Đóng menu"
-          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setMenuOpen(false)}
         />
       )}
 
+      {/* SIDEBAR MOBILE */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-72 bg-[#12141d] text-white lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#12141d] text-white transition-transform duration-300 lg:hidden ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {rail}
       </aside>
 
-      <div className="lg:pl-64">
+      {/* KHU VỰC NỘI DUNG CHÍNH + FOOTER (Nằm ở bên phải Sidebar) */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
@@ -117,7 +121,8 @@ export default function WorkspaceShell({
             </Link>
           </div>
         </header>
-        <main className="w-full px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8">
+
+        <main className="w-full flex-1 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8">
           {children}
         </main>
       </div>
@@ -127,8 +132,8 @@ export default function WorkspaceShell({
 
 function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
   return (
-    <div className="flex h-full flex-col pb-[env(safe-area-inset-bottom)]">
-      <Link to={homeTo} className="flex items-center gap-3 px-5 py-5">
+    <div className="flex h-full flex-col pb-[env(safe-area-inset-bottom)] overflow-y-auto">
+      <Link to={homeTo} className="flex items-center gap-3 px-5 py-5 shrink-0">
         <img src={logoImg} alt="AnhDuy Sport" className="h-11 w-auto object-contain" />
         <span className="leading-tight">
           <span className="block text-lg font-black italic">
@@ -138,7 +143,7 @@ function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
         </span>
       </Link>
 
-      <nav aria-label={role} className="space-y-1 px-3">
+      <nav aria-label={role} className="space-y-1 px-3 flex-1">
         {items.map((item) =>
           item.to ? (
             <NavLink key={item.id} to={item.to} end={item.end} className={({ isActive }) => itemClass(isActive)}>
@@ -157,7 +162,7 @@ function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
         )}
       </nav>
 
-      <div className="mt-auto border-t border-white/10 p-4">
+      <div className="mt-auto border-t border-white/10 p-4 shrink-0">
         <div className="rounded-xl bg-white/5 px-3 py-3">
           <p className="truncate text-sm font-semibold">{user?.fullName || user?.userName || 'Tài khoản'}</p>
           <p className="mt-1 truncate text-xs text-white/50">{user?.email}</p>

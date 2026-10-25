@@ -41,7 +41,8 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
   const [sportsList, setSportsList] = useState([]);
   const [classList, setClassList] = useState([]);
 
-  const includeClass = true;
+  // Bổ sung State tự chọn Đăng ký kèm lớp (Mặc định: true)
+  const [includeClass, setIncludeClass] = useState(true);
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedClass, setSelectedClass] = useState(null);
   const [pickedPackage, setSelectedPackage] = useState(null);
@@ -145,7 +146,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     ? Math.max(0, Math.ceil((pendingOrder.deadline - now) / 1000))
     : 0;
 
-  // Hỏi payOS vài giây một lần, giống màn thanh toán của học viên.
+  // Hỏi payOS vài giây một lần
   useEffect(() => {
     if (step !== 3 || !pendingOrder?.paymentId || isPaid) return undefined;
 
@@ -157,7 +158,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
           setStep(4);
         }
       } catch {
-        // Giữ màn QR, lần hỏi sau sẽ thử lại.
+        // Ignored
       }
     };
 
@@ -166,7 +167,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     return () => clearInterval(interval);
   }, [step, pendingOrder, isPaid]);
 
-  // Hết giờ giữ đơn: hỏi lần cuối, chưa trả thì hủy và quay lại bước chọn lớp.
+  // Hết giờ giữ đơn
   useEffect(() => {
     if (step !== 3 || !pendingOrder?.deadline || isPaid) return undefined;
 
@@ -185,7 +186,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
           return;
         }
       } catch {
-        // Không hỏi được thì vẫn hủy đơn.
+        // Ignored
       }
 
       await cancelReceptionRegistration(order.paymentId).catch(() => {});
@@ -243,7 +244,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         email: searchKeyword.includes('@') ? searchKeyword : '',
         phone: !searchKeyword.includes('@') ? searchKeyword : '',
       }));
-    } finally {
+    } fontinally: {
       setLoading(false);
     }
   };
@@ -265,11 +266,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     }
   };
 
-  // 3. Submit Tạo Đơn Giữ Chỗ (Sử dụng API Lễ tân)
+  // 3. Submit Tạo Đơn Giữ Chỗ
   const handleCreatePendingRegistration = async (e) => {
     e.preventDefault();
     if (!selectedPackage?.id) return showErr('Vui lòng chọn một gói hội viên.');
-    if (!selectedClass?.id) return showErr('Vui lòng chọn lớp học. Gói hội viên chỉ mua kèm khi đăng ký lớp.');
+    if (includeClass && !selectedClass?.id) return showErr('Vui lòng chọn lớp học huấn luyện.');
 
     const isBronze = selectedPackage.name?.toLowerCase().includes('đồng') || selectedPackage.code === 'PKG-001';
 
@@ -296,7 +297,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
       setStep(3);
       showSucc('Đã tạo mã VietQR. Học viên quét mã để thanh toán.');
     } catch (err) {
-      showErr(err.message || 'Đăng ký lớp thất bại.');
+      showErr(err.message || 'Đăng ký thất bại.');
     } finally {
       setLoading(false);
     }
@@ -506,7 +507,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center text-xs">
             <div>
               <span className="text-[10px] text-slate-400 uppercase font-bold block">HỌC VIÊN ĐƯỢC CHỌN:</span>
-              <strong className="text-sm font-black text-slate-900">{foundMember?.fullName}</strong> ({foundMember?.phone} - {foundMember?.email})
+              <strong className="text-sm font-black text-slate-900">{foundMember?.fullName}</strong> ({foundMember?.phone} | {foundMember?.email})
             </div>
             <button
               type="button"
@@ -610,10 +611,21 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   </div>
                 </div>
 
-                {/* 2. ĐĂNG KÝ KÈM LỚP HUẤN LUYỆN */}
+                {/* 2. CHỌN LỚP HỌC (THÊM NÚT TICK KÈM LỚP) */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                     <h3 className="text-sm font-black text-slate-900 uppercase">2. CHỌN LỚP HỌC</h3>
+
+                    {/* Checkbox Đăng ký kèm lớp */}
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-black text-slate-700 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={includeClass}
+                        onChange={(e) => setIncludeClass(e.target.checked)}
+                        className="accent-[#e31b23] w-4 h-4 rounded cursor-pointer"
+                      />
+                      Đăng ký kèm lớp
+                    </label>
                   </div>
 
                   {includeClass ? (
@@ -691,7 +703,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                     </div>
                   ) : (
                     <p className="text-xs text-slate-400 italic">
-                      💡 Đánh dấu chọn nút trên nếu khách muốn đăng ký thêm lớp học huấn luyện để được hưởng **giảm giá gói hội viên**.
+                      Chưa chọn đăng ký kèm lớp học (chỉ bán Gói hội viên).
                     </p>
                   )}
                 </div>
@@ -759,7 +771,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                 <button
                   type="button"
                   onClick={handleCreatePendingRegistration}
-                  disabled={loading || !selectedPackage}
+                  disabled={loading || !selectedPackage || (includeClass && !selectedClass)}
                   className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
                 >
                   {loading ? 'ĐANG TẠO ĐƠN...' : 'XÁC NHẬN & TẠO MÃ VIETQR →'}
@@ -774,7 +786,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         </div>
       )}
 
-      {/* ================= BƯỚC 3: MÃ VIETQR, GIỐNG THANH TOÁN CỦA HỌC VIÊN ================= */}
+      {/* ================= BƯỚC 3: MÃ VIETQR ================= */}
       {step === 3 && pendingOrder && (
         <div className="space-y-6">
           <div className="text-center">
@@ -809,7 +821,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   {pendingOrder.membershipPackage?.name || selectedPackage?.name || 'Hạng Đồng (tặng kèm lớp)'}
                 </span>
               </div>
-              {(pendingOrder.className || selectedClass?.name) && (
+              {(pendingOrder.className || (includeClass && selectedClass?.name)) && (
                 <div>
                   <span className="text-slate-400 font-bold uppercase block">Khóa học đăng ký kèm</span>
                   <span className="text-xs font-semibold text-slate-700">

@@ -3,6 +3,12 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import WorkspaceShell from '../components/workspace/WorkspaceShell';
 import NotificationBell from '../components/NotificationBell';
+import Footer from '../components/Footer';
+import MemberSchedule from '../components/member/MemberSchedule';
+import PaymentHistory from '../components/member/PaymentHistory';
+import MembershipCard from '../components/member/MembershipCard';
+import MemberClassList from '../components/member/MemberClassList';
+import MemberSupportRequests from '../components/member/MemberSupportRequests';
 import {
   getMyClassRegistrations,
   getMemberProfile,
@@ -11,79 +17,12 @@ import {
   confirmMembershipRenewal,
   getMySupportRequests,
   getPendingCheckouts,
-  getClassRegistrationStatus,
-  refreshClassCheckout,
 } from '../api/managementApi';
-import { readSupportRequestType } from '../api/supportRequestType';
-import MemberSchedule from '../components/member/MemberSchedule';
-import PaymentHistory from '../components/member/PaymentHistory';
-import goldDragonImg from '../assets/membership/gold-dragon.jpg';
-
-// Hạng của gói theo mã hoặc tên: gold / silver / bronze
-const packageTier = (pkg, fallbackName = '') => {
-  const name = (pkg?.name || fallbackName || '').toLowerCase();
-  if (pkg?.code === 'PKG-003' || name.includes('vàng')) return 'gold';
-  if (pkg?.code === 'PKG-002' || name.includes('bạc')) return 'silver';
-  return 'bronze';
-};
-
-// Giao diện thẻ hội viên theo hạng. Vàng là "thẻ đen" có rồng vàng.
-const TIER_THEMES = {
-  bronze: {
-    label: 'Bronze Member',
-    medal: '🥉',
-    cardStyle: {
-      background:
-        'radial-gradient(120% 140% at 85% 0%, rgba(255,196,150,0.35) 0%, rgba(255,196,150,0) 45%), linear-gradient(135deg, #1a0d05 0%, #4e2810 35%, #8c4f26 55%, #3b1d0b 78%, #120803 100%)',
-    },
-    border: 'rgba(205,127,50,0.55)',
-    titleGradient: 'linear-gradient(90deg, #ffe0c2 0%, #e39a5c 45%, #b8692f 100%)',
-    accent: '#f3b07a',
-    subText: 'rgba(255,226,200,0.75)',
-    buttonStyle: { background: 'linear-gradient(135deg, #f3b07a, #b8692f)', color: '#2a1206' },
-  },
-  silver: {
-    label: 'Silver Member',
-    medal: '🥈',
-    cardStyle: {
-      background:
-        'repeating-linear-gradient(100deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 2px, transparent 2px, transparent 6px), radial-gradient(120% 140% at 85% 0%, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 45%), linear-gradient(135deg, #111418 0%, #3a4048 38%, #7d8590 56%, #2b3036 80%, #0c0e11 100%)',
-    },
-    border: 'rgba(209,213,219,0.55)',
-    titleGradient: 'linear-gradient(90deg, #ffffff 0%, #d1d5db 45%, #8e959e 100%)',
-    accent: '#e5e7eb',
-    subText: 'rgba(229,231,235,0.75)',
-    buttonStyle: { background: 'linear-gradient(135deg, #f9fafb, #9ca3af)', color: '#111827' },
-  },
-  gold: {
-    label: 'Gold · Black Card',
-    medal: '🥇',
-    dragon: true,
-    cardStyle: {
-      background:
-        'radial-gradient(90% 120% at 0% 0%, rgba(212,175,55,0.14) 0%, rgba(212,175,55,0) 50%), linear-gradient(135deg, #050505 0%, #111111 55%, #050505 100%)',
-    },
-    border: 'rgba(212,175,55,0.65)',
-    titleGradient: 'linear-gradient(90deg, #fff4c2 0%, #e8c766 40%, #b8892a 100%)',
-    accent: '#e8c766',
-    subText: 'rgba(240,222,160,0.75)',
-    buttonStyle: { background: 'linear-gradient(135deg, #fbe7a1, #c9971f)', color: '#1a1200' },
-  },
-};
-
-// Huy chương theo hạng gói: Đồng 🥉, Bạc 🥈, Vàng 🥇
-const packageMedal = (pkg) => TIER_THEMES[packageTier(pkg)].medal;
 
 const formatCountdown = (ms) => {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 };
-
-// Gói nhận kèm lớp được lưu tên "... (tặng kèm lớp)"; thẻ chỉ hiện tên hạng.
-const planTitle = (name) => String(name || 'Gói Hội Viên').replace(/\s*\(tặng kèm lớp\)\s*$/i, '');
-
-// yyyy-MM-dd -> dd/MM/yyyy
-const formatDay = (iso) => (iso ? String(iso).split('-').reverse().join('/') : '—');
 
 const SIDEBAR_ITEMS = [
   { key: 'overview', label: 'Tổng quan', icon: '🏠' },
@@ -96,8 +35,6 @@ const SIDEBAR_ITEMS = [
 const REGISTER_TAB = { key: 'register', label: 'Đăng ký khóa học', icon: '📝', href: '/dang-ky-khoa-hoc' };
 const COURSE_PLAN_TAB = { key: 'course-plan', label: 'Bài tập lớp', icon: '📋', href: '/hoc-vien/bai-tap-lop' };
 const MEMBER_ONLY_TABS = new Set(['schedule', 'support']);
-
-// Đỉnh vùng đang xem: dưới header cố định (cao khoảng 90px) một chút.
 const SPY_OFFSET = 88;
 
 export default function HocVienDashboardPage() {
@@ -115,16 +52,13 @@ export default function HocVienDashboardPage() {
   const [profileData, setProfileData] = useState(null);
   const [contactData, setContactData] = useState(null);
 
-  // State đơn hỗ trợ / yêu cầu xử lý
   const [supportRequests, setSupportRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
-
   const [isProcessing, setIsProcessing] = useState(false);
   const [notice, setNotice] = useState({ type: '', msg: '' });
 
   const memberUserId = user?.id || user?.userId;
 
-  // Đơn đang chờ thanh toán (kèm hạn chót tính theo giờ máy để đếm ngược) + lịch sử gói
   const loadPayments = useCallback(async () => {
     const [pending, memData] = await Promise.all([
       getPendingCheckouts().catch(() => []),
@@ -141,30 +75,23 @@ export default function HocVienDashboardPage() {
     setNow(loadedAt);
   }, [memberUserId]);
 
-  // Tải dữ liệu chính của Học viên qua managementApi
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-
-      // 1. Lấy danh sách lớp học đã ghi danh
       const classes = await getMyClassRegistrations().catch(() => []);
       if (Array.isArray(classes)) setMyClasses(classes);
 
-      // Đơn đang chờ thanh toán (còn trong 3 phút) và lịch sử gói hội viên
       await loadPayments();
 
-      // 2. Lấy danh sách yêu cầu hỗ trợ của bản thân
       setLoadingRequests(true);
       const requests = await getMySupportRequests().catch(() => []);
       if (Array.isArray(requests)) setSupportRequests(requests);
       setLoadingRequests(false);
 
       if (memberUserId) {
-        // 4. Lấy Hotline chăm sóc khách hàng
         const contact = await getConsultationContact(memberUserId).catch(() => null);
         if (contact) setContactData(contact);
 
-        // 5. Lấy Hồ sơ cá nhân
         const prof = await getMemberProfile(memberUserId).catch(() => null);
         if (prof) setProfileData(prof);
       }
@@ -179,8 +106,6 @@ export default function HocVienDashboardPage() {
     fetchDashboardData();
   }, [user]);
 
-  // Còn đơn đang chờ: đồng hồ chạy từng giây (đơn hết giờ tự biến mất / đổi nhãn),
-  // và tải lại ngầm mỗi 10 giây để thấy ngay khi đã thanh toán trên điện thoại.
   const hasPendingCheckouts = pendingCheckouts.some((item) => item.deadline > now);
   useEffect(() => {
     if (!hasPendingCheckouts) return undefined;
@@ -192,40 +117,6 @@ export default function HocVienDashboardPage() {
     };
   }, [hasPendingCheckouts, loadPayments]);
 
-  // Đơn lớp còn hạn: hỏi payOS vài giây một lần. Thanh toán xong thì lớp mới hiện.
-  useEffect(() => {
-    const due = pendingCheckouts.filter((item) => item.kind === 'class' && item.deadline > Date.now());
-    if (due.length === 0) return undefined;
-    const timer = setInterval(async () => {
-      for (const item of due) {
-        try {
-          const status = await getClassRegistrationStatus(item.paymentId);
-          if (status?.paymentStatus === 'paid') {
-            fetchDashboardData();
-            return;
-          }
-        } catch {
-          // Lần hỏi sau sẽ thử lại.
-        }
-      }
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [pendingCheckouts]);
-
-  const renewCheckout = async (paymentId) => {
-    try {
-      setIsProcessing(true);
-      await refreshClassCheckout(paymentId);
-      await loadPayments();
-      setNotice({ type: 'success', msg: 'Đã tạo lại mã thanh toán. Quét mã để đóng học phí.' });
-    } catch (error) {
-      setNotice({ type: 'error', msg: error.message || 'Chưa tạo lại được mã thanh toán.' });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Xử lý khi PayOS redirect về (có paymentId)
   useEffect(() => {
     const paymentId = searchParams.get('paymentId');
     if (paymentId && memberUserId) {
@@ -233,7 +124,6 @@ export default function HocVienDashboardPage() {
     }
   }, [searchParams, memberUserId]);
 
-  // Gọi API xác nhận thanh toán PayOS
   const handleConfirmPayment = async (paymentId) => {
     try {
       setIsProcessing(true);
@@ -250,79 +140,12 @@ export default function HocVienDashboardPage() {
     }
   };
 
-  // Badge hiển thị trạng thái đơn hỗ trợ
-  const renderStatusBadge = (status) => {
-    const statusUpper = status?.toUpperCase() || '';
-    switch (statusUpper) {
-      case 'RESOLVED':
-      case 'APPROVED':
-      case 'SUCCESS':
-        return (
-          <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full text-[10px] font-black uppercase">
-            ✓ Đã xử lý
-          </span>
-        );
-      case 'REJECTED':
-      case 'CANCELLED':
-        return (
-          <span className="bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-full text-[10px] font-black uppercase">
-            ✕ Từ chối
-          </span>
-        );
-      case 'IN_PROGRESS':
-      case 'PROCESSING':
-        return (
-          <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full text-[10px] font-black uppercase">
-            ⚙️ Đang xử lý
-          </span>
-        );
-      case 'PENDING':
-      default:
-        return (
-          <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full text-[10px] font-black uppercase">
-            ⏳ Chờ tiếp nhận
-          </span>
-        );
-    }
-  };
-
   const displayName = profileData?.fullName || user?.fullName || user?.userName || 'Học viên';
   const displayEmail = profileData?.email || user?.email || 'Chưa cập nhật';
   const displayPhone = profileData?.phone || user?.phone || 'Chưa cập nhật';
   const currentMembership = membershipData?.currentMembership;
-  // Gói cao nhất đang có (backend tính cả gói chờ kích hoạt): gia hạn gói này, chỉ nâng cấp lên gói đắt hơn.
-  const packageList = membershipData?.packages || [];
-  const highestPackage =
-    packageList.find((pkg) => String(pkg.id) === String(membershipData?.highestPackageId)) ||
-    packageList.find((pkg) => String(pkg.id) === String(currentMembership?.packageId)) ||
-    null;
-  const upgradePackages = highestPackage
-    ? packageList.filter((pkg) => (pkg.fee || 0) > (highestPackage.fee || 0))
-    : [];
-  // Thẻ mang giao diện của gói đang dùng
-  const currentPackage = packageList.find((pkg) => String(pkg.id) === String(currentMembership?.packageId)) || null;
-  const cardTheme = TIER_THEMES[packageTier(currentPackage, currentMembership?.planName)];
-  const membershipDates = currentMembership ? (
-    <div
-      className={`self-start ${cardTheme.dragon ? '' : 'md:self-center'} rounded-2xl p-4 border backdrop-blur-md flex items-center gap-6`}
-      style={{ borderColor: cardTheme.border, background: 'rgba(0,0,0,0.3)' }}
-    >
-      <div>
-        <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Ngày bắt đầu</span>
-        <span className="text-xs font-bold text-white whitespace-nowrap">{formatDay(currentMembership.startDate)}</span>
-      </div>
-      <div className="h-8 w-px" style={{ background: cardTheme.border }}></div>
-      <div>
-        <span className="text-[10px] font-bold uppercase block" style={{ color: cardTheme.subText }}>Hạn sử dụng đến</span>
-        <span className="text-xs font-black whitespace-nowrap" style={{ color: cardTheme.accent }}>{formatDay(currentMembership.endDate)}</span>
-      </div>
-    </div>
-  ) : null;
+  const livePendingCheckouts = pendingCheckouts.filter((item) => item.deadline > now);
 
-  // Đơn lớp lễ tân tạo giúp vẫn hiện sau khi hết giờ giữ chỗ, để học viên tạo lại mã và thanh toán.
-  const payableCheckouts = pendingCheckouts.filter((item) => item.kind === 'class' || item.deadline > now);
-
-  // Chưa ghi danh lớp nào thì thay Lịch học và Đơn hỗ trợ bằng tab đăng ký khóa học.
   const sidebarItems = useMemo(() => {
     if (loading) return SIDEBAR_ITEMS.filter((item) => item.key === 'overview' || item.key === 'history');
     const enrolled = myClasses.length > 0;
@@ -346,14 +169,12 @@ export default function HocVienDashboardPage() {
       navigate(item.href);
       return;
     }
-    // Trong lúc trang đang cuộn tới mục vừa bấm thì giữ nguyên mục đó, kẻo mục cuối trang chiếm mất khi không cuộn thêm được.
     spyLockUntil.current = Date.now() + 900;
     setActiveTab(key);
     window.history.replaceState(null, '', `#${key}`);
     document.getElementById(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Sidebar chỉ dẫn nhanh: mục nào đang ở gần đỉnh màn hình thì được tô sáng; cuộn tới cuối trang thì tô mục cuối.
   useEffect(() => {
     let frame = 0;
     const update = () => {
@@ -377,7 +198,6 @@ export default function HocVienDashboardPage() {
     };
   }, [sidebarItems]);
 
-  // Vào bằng đường dẫn có #mục (ví dụ #schedule) thì cuộn tới mục đó.
   useEffect(() => {
     const key = window.location.hash.replace('#', '');
     if (!sidebarItems.some((item) => item.key === key && !item.href)) return undefined;
@@ -388,15 +208,16 @@ export default function HocVienDashboardPage() {
   const currentItem = sidebarItems.find((item) => item.key === activeTab);
 
   return (
-    <WorkspaceShell
-      role="Học viên"
-      homeTo="/hoc-vien-dashboard"
-      items={sidebarItems.map((item) => ({ id: item.key, label: item.label, to: item.href }))}
-      activeId={activeTab}
-      onSelect={selectTab}
-      breadcrumb={[{ label: 'Học viên' }, { label: currentItem?.label || 'Tổng quan' }]}
-      headerExtra={<NotificationBell />}
-    >
+    <div className="flex flex-col min-h-screen bg-slate-100">
+      <WorkspaceShell
+        role="Học viên"
+        homeTo="/hoc-vien-dashboard"
+        items={sidebarItems.map((item) => ({ id: item.key, label: item.label, to: item.href }))}
+        activeId={activeTab}
+        onSelect={selectTab}
+        breadcrumb={[{ label: 'Học viên' }, { label: currentItem?.label || 'Tổng quan' }]}
+        headerExtra={<NotificationBell />}
+      >
         {isProcessing && <p className="text-sm font-semibold text-slate-500">Đang xác nhận thanh toán...</p>}
         {notice.msg && (
           <div
@@ -413,419 +234,156 @@ export default function HocVienDashboardPage() {
           </div>
         )}
 
-        <div className="mt-6 space-y-8">
-            <div id="overview" className="scroll-mt-24 space-y-8">
-        {/* BANNER XIN CHÀO */}
-        <section className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8">
-          <div>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="mt-6 space-y-8 mb-12">
+          {/* MỤC TỔNG QUAN */}
+          <div id="overview" className="scroll-mt-24 space-y-8">
+            {/* BANNER XIN CHÀO */}
+            <section className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8">
               <div>
-                <h1 className="text-2xl font-black text-balance text-slate-900 sm:text-3xl">
-                  Xin chào, {displayName}
-                </h1>
-                <p className="mt-1 text-sm text-pretty text-slate-500">
-                  {loading || myClasses.length > 0
-                    ? 'Quản lý gói tập hội viên, lớp học thể thao và các đơn yêu cầu hỗ trợ của bạn.'
-                    : 'Bạn chưa mua khóa học. Hãy đăng ký một lớp huấn luyện để xem lịch học và gửi đơn hỗ trợ.'}
-                </p>
-              </div>
-
-              <Link
-                to="/ho-so"
-                className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-[#e31b23] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer self-start md:self-auto"
-              >
-                <span>⚙️ Chỉnh sửa hồ sơ</span>
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-1">EMAIL ĐĂNG KÝ</span>
-                <span className="text-xs font-bold text-slate-800 truncate block">{displayEmail}</span>
-              </div>
-
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-1">SỐ ĐIỆN THOẠI</span>
-                <span className="text-xs font-bold text-slate-800 block">{displayPhone}</span>
-              </div>
-
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-1">TRẠNG THÁI HỘI VIÊN</span>
-                <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  {currentMembership ? 'Đang kích hoạt' : 'Chưa có gói tập'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-          {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG */}
-          {currentMembership && (
-            <section
-              className="relative overflow-hidden rounded-3xl p-6 sm:p-8 shadow-2xl border text-white"
-              style={{ ...cardTheme.cardStyle, borderColor: cardTheme.border }}
-            >
-              {/* Thẻ Vàng: rồng vàng chìm trên nền đen */}
-              {cardTheme.dragon && (
-                <>
-                  <img
-                    src={goldDragonImg}
-                    alt=""
-                    className="pointer-events-none select-none absolute inset-y-0 right-0 h-full w-auto max-w-none opacity-90 mix-blend-screen"
-                  />
-                  <div
-                    className="pointer-events-none absolute inset-0"
-                    style={{ background: 'linear-gradient(90deg, #050505 0%, rgba(5,5,5,0.85) 30%, rgba(5,5,5,0) 55%)' }}
-                  ></div>
-                </>
-              )}
-              {/* Vệt sáng kim loại */}
-              <div
-                className="pointer-events-none absolute -top-1/2 left-1/4 w-1/3 h-[200%] rotate-[20deg]"
-                style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.09), transparent)' }}
-              ></div>
-
-              <div className="relative z-10 flex flex-col md:flex-row md:items-stretch justify-between gap-6">
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.25em] px-3 py-1 rounded-full border"
-                      style={{ color: cardTheme.accent, borderColor: cardTheme.border, background: 'rgba(0,0,0,0.25)' }}
-                    >
-                      {cardTheme.medal} {cardTheme.label}
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: cardTheme.subText }}>
-                      AnhDuy Sport
-                    </span>
-                  </div>
-
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <h2
-                      className="text-3xl sm:text-4xl font-black uppercase tracking-wide"
-                      style={{ backgroundImage: cardTheme.titleGradient, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
-                    >
-                      {planTitle(currentMembership.planName)}
-                    </h2>
-                    <p className="mt-2 font-mono text-sm tracking-[0.2em] uppercase" style={{ color: cardTheme.subText }}>
-                      {displayName}
+                    <h1 className="text-2xl font-black text-balance text-slate-900 sm:text-3xl">
+                      Xin chào, {displayName}
+                    </h1>
+                    <p className="mt-1 text-sm text-pretty text-slate-500">
+                      {loading || myClasses.length > 0
+                        ? 'Quản lý gói tập hội viên, lớp học thể thao và các đơn yêu cầu hỗ trợ của bạn.'
+                        : 'Bạn chưa mua khóa học. Hãy đăng ký một lớp huấn luyện để xem lịch học và gửi đơn hỗ trợ.'}
                     </p>
                   </div>
 
-                  {/* Thẻ Vàng: ngày nằm bên trái để không che rồng */}
-                  {cardTheme.dragon && membershipDates}
-                </div>
-
-                {!cardTheme.dragon && membershipDates}
-              </div>
-
-              {/* GIA HẠN (luôn có) / NÂNG CẤP (chỉ khi đang Đồng hoặc Bạc), mỗi nút mang màu hạng của nó */}
-              {highestPackage && (
-                <div className="relative z-10 mt-6 flex flex-wrap gap-3">
                   <Link
-                    to={`/dang-ky-khoa-hoc?packageId=${highestPackage.id}&mode=renew`}
-                    className="font-black text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5"
-                    style={TIER_THEMES[packageTier(highestPackage)].buttonStyle}
+                    to="/ho-so"
+                    className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-[#e31b23] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer self-start md:self-auto"
                   >
-                    {packageMedal(highestPackage)} Gia hạn {highestPackage.name}
+                    <span>⚙️ Chỉnh sửa hồ sơ</span>
                   </Link>
-                  {upgradePackages.map((pkg) => (
-                    <Link
-                      key={pkg.id}
-                      to={`/dang-ky-khoa-hoc?packageId=${pkg.id}&mode=renew`}
-                      className="font-black text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5"
-                      style={TIER_THEMES[packageTier(pkg)].buttonStyle}
-                    >
-                      {packageMedal(pkg)} Nâng cấp lên {pkg.name}
-                    </Link>
-                  ))}
                 </div>
-              )}
-            </section>
-          )}
 
-          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 text-balance">Giáo án tập với AI</h2>
-                <p className="mt-1 text-sm text-pretty text-slate-500">
-                  {currentMembership
-                    ? 'Nhập chỉ số BMI và mục tiêu để nhận giáo án, rồi lưu vào lịch tập cá nhân.'
-                    : 'Giáo án AI cần gói hội viên đang hiệu lực. Gói chỉ có khi đăng ký kèm khóa học.'}
-                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-1">EMAIL ĐĂNG KÝ</span>
+                    <span className="text-xs font-bold text-slate-800 truncate block">{displayEmail}</span>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-1">SỐ ĐIỆN THOẠI</span>
+                    <span className="text-xs font-bold text-slate-800 block">{displayPhone}</span>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-1">TRẠNG THÁI HỘI VIÊN</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      {currentMembership ? 'Đang kích hoạt' : 'Chưa có gói tập'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              {currentMembership ? (
-                <Link
-                  to="/hoc-vien/giao-an-ai"
-                  className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
-                >
-                  Mở giáo án AI
-                </Link>
-              ) : (
-                <Link
-                  to="/dang-ky-khoa-hoc"
-                  className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
-                >
-                  Đăng ký khóa học
-                </Link>
-              )}
-            </div>
-          </section>
+            </section>
 
-          {/* THANH TOÁN ĐƠN LỄ TÂN TẠO GIÚP HOẶC ĐƠN HỌC VIÊN CHƯA TRẢ */}
-          {payableCheckouts.length > 0 && (
-            <section id="payment" className="scroll-mt-24 bg-white rounded-3xl p-6 sm:p-8 border border-amber-200 shadow-xs">
-              <h2 className="text-lg font-black text-slate-900 uppercase mb-1">Thanh toán lớp học</h2>
-              <p className="text-xs text-slate-500 mb-4">
-                Lễ tân đã ghi danh giúp hoặc bạn đã tạo đơn nhưng chưa đóng tiền. Quét mã để thanh toán. Lớp và lịch học chỉ hiện sau khi thanh toán thành công.
-              </p>
-              <div className="space-y-4">
-                {payableCheckouts.map((item) => {
-                  const secondsLeft = Math.max(0, Math.ceil((item.deadline - now) / 1000));
-                  const expired = secondsLeft <= 0;
-                  return (
-                    <div key={item.paymentId} className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                      <div className="space-y-2 text-xs">
+            {/* GÓI HỘI VIÊN ĐANG SỬ DỤNG */}
+            <MembershipCard
+              currentMembership={currentMembership}
+              membershipData={membershipData}
+              displayName={displayName}
+            />
+
+            {/* GIÁO ÁN TẬP VỚI AI */}
+            <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 text-balance">Giáo án tập với AI</h2>
+                  <p className="mt-1 text-sm text-pretty text-slate-500">
+                    {currentMembership
+                      ? 'Nhập chỉ số BMI và mục tiêu để nhận giáo án, rồi lưu vào lịch tập cá nhân.'
+                      : 'Giáo án AI cần gói hội viên đang hiệu lực. Gói chỉ có khi đăng ký kèm khóa học.'}
+                  </p>
+                </div>
+                {currentMembership ? (
+                  <Link
+                    to="/hoc-vien/giao-an-ai"
+                    className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
+                  >
+                    Mở giáo án AI
+                  </Link>
+                ) : (
+                  <Link
+                    to="/dang-ky-khoa-hoc"
+                    className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
+                  >
+                    Đăng ký khóa học
+                  </Link>
+                )}
+              </div>
+            </section>
+
+            {/* ĐƠN ĐANG CHỜ THANH TOÁN */}
+            {livePendingCheckouts.length > 0 && (
+              <section className="bg-amber-50 rounded-3xl p-6 sm:p-8 border border-amber-200 shadow-xs">
+                <h2 className="text-lg font-black text-slate-900 uppercase mb-1">ĐƠN ĐANG CHỜ THANH TOÁN</h2>
+                <p className="text-xs text-slate-500 mb-4">
+                  Mỗi đơn chỉ giữ 3 phút. Quá thời gian chưa thanh toán thì đơn tự hủy và bạn cần đăng ký lại.
+                </p>
+                <div className="space-y-3">
+                  {livePendingCheckouts.map((item) => (
+                    <div
+                      key={item.paymentId}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white rounded-2xl p-4 border border-amber-200"
+                    >
+                      <div className="text-xs space-y-0.5">
                         <p className="font-black text-slate-900 text-sm">
                           {item.kind === 'class'
                             ? `Đăng ký lớp ${item.className || ''}${item.packageName ? ` + Gói ${item.packageName}` : ''}`
                             : `Mua gói ${item.packageName || ''}`}
                         </p>
                         <p className="font-mono text-slate-500">#{item.invoiceCode}</p>
-                        <p className="text-lg font-black text-emerald-600">{item.amount?.toLocaleString('vi-VN')}đ</p>
-                        <p className={`font-bold ${expired ? 'text-[#e31b23]' : 'text-amber-700'}`}>
-                          {expired ? 'Mã thanh toán đã hết hạn.' : `Còn ${formatCountdown(secondsLeft * 1000)}`}
-                        </p>
-                        {expired && item.kind === 'class' && (
-                          <button
-                            type="button"
-                            onClick={() => renewCheckout(item.paymentId)}
-                            className="mt-2 bg-[#e31b23] text-white font-bold text-xs uppercase px-4 py-2.5 rounded-xl"
-                          >
-                            Tạo lại mã thanh toán
-                          </button>
-                        )}
-                        {!expired && item.paymentUrl && (
-                          <a href={item.paymentUrl} target="_blank" rel="noreferrer" className="inline-block font-bold text-[#e31b23] hover:underline">
-                            Mở trang thanh toán payOS
-                          </a>
-                        )}
+                        <p className="font-bold text-emerald-600">{item.amount?.toLocaleString('vi-VN')}đ</p>
+                        <p className="font-bold text-amber-700">Còn {formatCountdown(item.deadline - now)}</p>
                       </div>
-                      <div className="flex flex-col items-center text-center">
-                        {!expired && item.payosQrImage ? (
-                          <>
-                            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                              <img src={item.payosQrImage} alt="Mã VietQR payOS" className="h-52 w-52 object-contain" />
-                            </div>
-                            <p className="mt-2 text-[11px] font-bold text-slate-600">Quét mã VietQR bằng app ngân hàng</p>
-                          </>
-                        ) : (
-                          <p className="text-xs font-semibold text-slate-500">
-                            {expired ? 'Tạo lại mã để quét và đóng học phí.' : 'Chưa có mã QR cho đơn này.'}
-                          </p>
-                        )}
-                      </div>
+                      <Link
+                        to="/dang-ky-khoa-hoc"
+                        className="text-center bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow transition-all"
+                      >
+                        Tiếp tục thanh toán →
+                      </Link>
                     </div>
-                  );
-                })}
-              </div>
-            </section>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* MỤC LỚP HỌC */}
+          {!loading && myClasses.length > 0 && (
+            <div id="classes" className="scroll-mt-24 space-y-8">
+              <MemberClassList loading={loading} myClasses={myClasses} />
+            </div>
           )}
 
-            </div>
-
-            {!loading && myClasses.length > 0 && (
-            <div id="classes" className="scroll-mt-24 space-y-8">
-          {/* ======================================================== */}
-          {/* BLOCK 1: KHÓA HỌC & LỚP ĐÃ GHI DANH */}
-          {/* ======================================================== */}
-          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 uppercase">
-                  KHÓA HỌC & LỚP ĐÃ GHI DANH
-                </h2>
-                <p className="text-xs text-slate-400 font-medium mt-0.5">
-                  Danh sách các lớp thể thao bạn đã đăng ký tham gia
-                </p>
-              </div>
-
-              <Link to="/tuyen-sinh" className="text-xs font-extrabold text-[#e31b23] hover:underline">
-                + Đăng ký khóa học mới
-              </Link>
-            </div>
-
-            {loading ? (
-              <div className="py-12 text-center">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#e31b23] border-t-transparent mb-2"></div>
-                <p className="text-xs font-bold text-slate-400">Đang tải danh sách lớp học...</p>
-              </div>
-            ) : myClasses.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {myClasses.map((cls, idx) => (
-                  <div
-                    key={cls.classId || idx}
-                    className="bg-slate-50 hover:bg-slate-100/80 rounded-2xl p-5 border border-slate-200 transition-all space-y-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] font-black uppercase text-[#e31b23] bg-red-50 border border-red-100 px-2.5 py-0.5 rounded-md">
-                          {cls.sportName || 'Thể thao'}
-                        </span>
-                        <h3 className="text-base font-black text-slate-900 mt-1.5">
-                          {cls.className || cls.courseName}
-                        </h3>
-                      </div>
-
-                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 uppercase">
-                        ✓ Đã ghi danh
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-200/60">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400 font-medium">Cấp độ:</span>
-                        <span className="font-bold text-slate-800">{cls.level || 'Cơ bản'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400 font-medium">HLV Phụ trách:</span>
-                        <span className="font-bold text-slate-800">{cls.coachName || 'Đang cập nhật'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400 font-medium">Thời gian học:</span>
-                        <span className="font-bold text-slate-800">
-                          {cls.startDate} ~ {cls.endDate}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-12 px-4 text-center max-w-md mx-auto space-y-4">
-                <div className="w-16 h-16 bg-red-50 text-[#e31b23] rounded-full flex items-center justify-center mx-auto text-2xl font-black">
-                  🏋️
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 uppercase">
-                    BẠN CHƯA ĐĂNG KÝ LỚP HỌC NÀO
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium mt-1">
-                    Hãy khám phá danh sách các khóa học thể thao đa dạng tại AnhDuy Sport để bắt đầu rèn luyện!
-                  </p>
-                </div>
-
-                <Link
-                  to="/tuyen-sinh"
-                  className="inline-block bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase px-8 py-3.5 rounded-xl shadow-md transition-all cursor-pointer"
-                >
-                  KHÁM PHÁ CÁC KHÓA HỌC →
-                </Link>
-              </div>
-            )}
-          </section>
-
-            </div>
-            )}
-
-            {!loading && myClasses.length > 0 && (
+          {/* MỤC LỊCH HỌC */}
+          {!loading && myClasses.length > 0 && (
             <div id="schedule" className="scroll-mt-24">
               <MemberSchedule />
             </div>
-            )}
+          )}
 
-            {!loading && myClasses.length > 0 && (
+          {/* MỤC ĐƠN HỖ TRỢ */}
+          {!loading && myClasses.length > 0 && (
             <div id="support" className="scroll-mt-24 space-y-8">
-          {/* ======================================================== */}
-          {/* BLOCK 3: TRẠNG THÁI ĐƠN HỖ TRỢ CỦA BẠN */}
-          {/* ======================================================== */}
-          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-              <div>
-                <span className="inline-block bg-sky-50 text-sky-700 text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full mb-1">
-                  YÊU CẦU & KHIẾU NẠI
-                </span>
-                <h2 className="text-lg font-black text-slate-900 uppercase">
-                  TRẠNG THÁI ĐƠN HỖ TRỢ CỦA BẠN
-                </h2>
-              </div>
+              <MemberSupportRequests loadingRequests={loadingRequests} supportRequests={supportRequests} />
             </div>
+          )}
 
-            {loadingRequests ? (
-              <div className="py-8 text-center">
-                <div className="inline-block animate-spin rounded-full h-7 w-7 border-4 border-[#e31b23] border-t-transparent mb-2"></div>
-                <p className="text-xs font-bold text-slate-400">Đang kiểm tra danh sách đơn hỗ trợ...</p>
-              </div>
-            ) : supportRequests.length > 0 ? (
-              <div className="space-y-4">
-                {supportRequests.map((req) => {
-                  const requestType = readSupportRequestType(req.classificationReason);
-                  return (
-                  <div
-                    key={req.id}
-                    className="bg-slate-50 hover:bg-slate-100/80 rounded-2xl p-5 border border-slate-200 transition-all space-y-3"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/60">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-slate-400 font-bold">#{req.id?.slice(-6)}</span>
-                          {requestType ? (
-                            <span className="text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200 px-2 py-0.5 rounded">
-                              {requestType}
-                            </span>
-                          ) : null}
-                        </div>
-                        <h3 className="text-sm font-black text-slate-900 mt-1">{req.title}</h3>
-                      </div>
-                      <div>{renderStatusBadge(req.status)}</div>
-                    </div>
-
-                    <p className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 italic">
-                      "{req.description}"
-                    </p>
-
-                    {/* KẾT QUẢ XỬ LÝ (NẾU CÓ) */}
-                    {(req.decision || req.resolutionNote) && (
-                      <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 text-xs space-y-1">
-                        <div className="flex items-center justify-between text-emerald-800 font-black">
-                          <span>📌 Kết quả xử lý từ Trung Tâm:</span>
-                          {req.assigneeName && (
-                            <span className="text-[11px] font-normal text-emerald-700">HLV/Người xử lý: {req.assigneeName}</span>
-                          )}
-                        </div>
-                        {req.decision && (
-                          <p className="font-bold text-emerald-900">Quyết định: {req.decision}</p>
-                        )}
-                        {req.resolutionNote && (
-                          <p className="text-slate-700">{req.resolutionNote}</p>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium pt-1">
-                      <span>Tạo ngày: {req.createdAt ? new Date(req.createdAt).toLocaleString('vi-VN') : 'N/A'}</span>
-                      {req.resolvedAt && (
-                        <span>Hoàn tất: {new Date(req.resolvedAt).toLocaleString('vi-VN')}</span>
-                      )}
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="py-6 text-center text-xs text-slate-400 font-medium bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                Bạn chưa gửi yêu cầu hỗ trợ hoặc khiếu nại nào.
-              </div>
-            )}
-          </section>
-
-            </div>
-            )}
-
-            <div id="history" className="scroll-mt-24">
-              <PaymentHistory />
-            </div>
+          {/* MỤC LỊCH SỬ THANH TOÁN */}
+          <div id="history" className="scroll-mt-24">
+            <PaymentHistory />
+          </div>
         </div>
-    </WorkspaceShell>
+      </WorkspaceShell>
+
+      {/* FOOTER */}
+      <Footer />
+    </div>
   );
 }

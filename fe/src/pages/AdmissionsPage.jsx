@@ -63,18 +63,17 @@ const sportsList = [
 
 export default function AdmissionsPage() {
   const navigate = useNavigate();
-  const { user } = useAuth(); // Lấy thông tin user hiện tại
+  const { user } = useAuth();
 
   const [activeStep, setActiveStep] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMemberOnlyModalOpen, setIsMemberOnlyModalOpen] = useState(false); // Popup giới hạn thành viên
+  const [isMemberOnlyModalOpen, setIsMemberOnlyModalOpen] = useState(false);
   const [modalPackageName, setModalPackageName] = useState('');
 
-  // State danh sách gói huấn luyện từ API
   const [packages, setPackages] = useState([]);
   const [loadingPackages, setLoadingPackages] = useState(true);
 
-  // State Form Đăng Ký Tư Vấn
+  // Form State
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -82,6 +81,7 @@ export default function AdmissionsPage() {
   const [studentAge, setStudentAge] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [isConsultSuccess, setIsConsultSuccess] = useState(false);
 
   const processSectionRef = useRef(null);
   const packagesSectionRef = useRef(null);
@@ -90,13 +90,11 @@ export default function AdmissionsPage() {
     document.title = 'Tuyển sinh & Đăng ký - AnhDuy Sport';
     window.scrollTo(0, 0);
 
-    // Fetch danh sách gói hội viên từ API và sắp xếp cho Gói Vàng ở giữa
     const fetchPackages = async () => {
       try {
         setLoadingPackages(true);
         const data = await getPackages();
         if (Array.isArray(data)) {
-          // Lọc tìm gói Vàng, Đồng, Bạc để sắp xếp thứ tự: Đồng -> Vàng -> Bạc
           const goldPkg = data.find((p) => p.name?.toLowerCase().includes('vàng') || p.code === 'PKG-003');
           const bronzePkg = data.find((p) => p.name?.toLowerCase().includes('đồng') || p.code === 'PKG-001');
           const silverPkg = data.find((p) => p.name?.toLowerCase().includes('bạc') || p.code === 'PKG-002');
@@ -105,7 +103,7 @@ export default function AdmissionsPage() {
 
           const reordered = [];
           if (bronzePkg) reordered.push(bronzePkg);
-          if (goldPkg) reordered.push(goldPkg); // Đưa Gói Vàng vào giữa
+          if (goldPkg) reordered.push(goldPkg);
           if (silverPkg) reordered.push(silverPkg);
           reordered.push(...remaining);
 
@@ -121,7 +119,6 @@ export default function AdmissionsPage() {
     fetchPackages();
   }, []);
 
-  // IntersectionObserver cho hiệu ứng xuất hiện khi cuộn
   useEffect(() => {
     const observerOptions = { threshold: 0.15 };
     const observer = new IntersectionObserver((entries) => {
@@ -139,36 +136,61 @@ export default function AdmissionsPage() {
     return () => observer.disconnect();
   }, [loadingPackages]);
 
-  // Xử lý khi bấm Đăng ký gói
-  const handleRegisterPackageClick = (pkg) => {
-    const userRole = user?.role?.toUpperCase() || user?.roleName?.toUpperCase();
-    
-    // Nếu là MEMBER -> Chuyển hướng tới page /dang-ky-khoa-hoc
-    if (user && (userRole === 'MEMBER' || userRole === 'HỌC VIÊN')) {
-      navigate(`/dang-ky-khoa-hoc?packageId=${pkg.id}`);
-    } else {
-      // Role khác hoặc chưa đăng nhập -> Hiện popup thông báo
-      setIsMemberOnlyModalOpen(true);
-    }
-  };
-
   const openModal = (packageName = '') => {
     setFormError('');
+    setIsConsultSuccess(false);
     setModalPackageName(packageName);
+    if (user) {
+      setFullName(user.fullName || user.userName || '');
+      setPhone(user.phone || '');
+      setEmail(user.email || '');
+    }
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
+    setIsConsultSuccess(false);
+  };
+
+  const handleRegisterPackageClick = (pkg) => {
+    const userRole = (user?.role || user?.roleName || '').toUpperCase();
+    
+    if (user && (userRole === 'MEMBER' || userRole === 'HỌC VIÊN')) {
+      navigate(`/dang-ky-khoa-hoc?packageId=${pkg.id}`);
+    } else if (!user) {
+      openModal(pkg.name);
+    } else {
+      setIsMemberOnlyModalOpen(true);
+    }
   };
 
   const handleSubmitConsult = async (e) => {
     e.preventDefault();
     setFormError('');
+
     if (!fullName.trim() || !phone.trim() || !email.trim()) {
-      setFormError('Vui lòng nhập họ tên, số điện thoại và email.');
+      setFormError('Vui lòng nhập đầy đủ Họ tên, Số điện thoại và Email.');
       return;
     }
+
+    const phoneRegex = /^(0[3|5|7|8|9])+([0-9]{8})$/;
+    if (!phoneRegex.test(phone.trim())) {
+      setFormError('Số điện thoại không hợp lệ (gồm 10 chữ số).');
+      return;
+    }
+
+    if (!studentAge || String(studentAge).trim() === '') {
+      setFormError('Vui lòng nhập độ tuổi học viên.');
+      return;
+    }
+
+    const ageNum = Number(studentAge);
+    if (isNaN(ageNum) || ageNum < 1 || ageNum > 99) {
+      setFormError('Độ tuổi học viên phải từ 1 đến 99.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       await createEnrollmentConsultation({
@@ -176,19 +198,14 @@ export default function AdmissionsPage() {
         phone: phone.trim(),
         email: email.trim(),
         sports: selectedSport,
-        age: studentAge ? Number(studentAge) : null,
-        title: 'Đăng ký tư vấn gói hội viên',
-        note: modalPackageName ? `Gói quan tâm: ${modalPackageName}` : '',
+        age: ageNum,
+        title: 'Đăng ký tư vấn tuyển sinh',
+        note: modalPackageName ? `Khách quan tâm gói: ${modalPackageName}` : 'Khách gửi tư vấn từ trang Tuyển sinh',
       });
-      closeModal();
-      setFullName('');
-      setPhone('');
-      setEmail('');
-      setStudentAge('');
-      setFormError('');
-      window.alert('Đăng ký tư vấn đã được ghi nhận. Lễ tân sẽ liên hệ bạn.');
+
+      setIsConsultSuccess(true);
     } catch (requestError) {
-      setFormError(requestError.message);
+      setFormError(requestError.message || 'Gửi yêu cầu thất bại. Vui lòng thử lại sau.');
     } finally {
       setSubmitting(false);
     }
@@ -341,7 +358,7 @@ export default function AdmissionsPage() {
         </div>
       </section>
 
-      {/* 4. SECTION CÁC GÓI HUẤN LUYỆN (GÓI VÀNG NẰM Ở GIỮA, CHỈ GÓI VÀNG CÓ TAG "GÓI KHUYÊN DÙNG") */}
+      {/* 4. SECTION CÁC GÓI HUẤN LUYỆN */}
       <section
         ref={packagesSectionRef}
         className="opacity-0 translate-y-12 transition-all duration-700 ease-out relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 py-16 border-t border-gray-800"
@@ -366,7 +383,6 @@ export default function AdmissionsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
             {packages.map((pkg, idx) => {
-              // CHỈ ĐÁNH DẤU GÓI VÀNG LÀ GÓI KHUYÊN DÙNG
               const isGold = pkg.name?.toLowerCase().includes('vàng') || pkg.code === 'PKG-003';
 
               return (
@@ -378,7 +394,6 @@ export default function AdmissionsPage() {
                       : 'bg-[#151926] border border-gray-800/80 hover:border-gray-600'
                   }`}
                 >
-                  {/* CHỈ GÓI VÀNG MỚI HIỂN THỊ TAG GÓI KHUYÊN DÙNG */}
                   {isGold && (
                     <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#e31b23] text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-sm shadow-lg z-10 whitespace-nowrap">
                       🔥 GÓI KHUYÊN DÙNG
@@ -465,131 +480,175 @@ export default function AdmissionsPage() {
         )}
       </section>
 
-      {/* 5. POPUP THÔNG BÁO GIỚI HẠN DÀNH CHO THÀNH VIÊN (ROLE KHÁC MEMBER HOẶC CHƯA LOGGED IN) */}
+      {/* 5. POPUP THÔNG BÁO DÀNH CHO ROLE NHÂN VIÊN / HLV */}
       {isMemberOnlyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="relative bg-[#181d2a] border border-gray-700 text-white rounded-2xl p-6 sm:p-8 w-full max-w-md shadow-2xl text-center">
-            <div className="w-14 h-14 rounded-full bg-[#e31b23]/20 border border-[#e31b23]/40 flex items-center justify-center mx-auto mb-4">
+          <div className="relative bg-white text-gray-900 border border-gray-200 rounded-2xl p-6 sm:p-8 w-full max-w-md shadow-2xl text-center">
+            <div className="w-14 h-14 rounded-full bg-red-100 border border-red-200 flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl">🔒</span>
             </div>
 
-            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">
-              Khu vực dành cho Thành viên
+            <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">
+              Khu vực dành cho Học viên
             </h3>
 
-            <p className="text-xs sm:text-sm text-gray-300 font-medium leading-relaxed mb-6">
-              Chức năng đăng ký gói hội viên chỉ dành cho tài khoản học viên. Vui lòng đăng nhập với tư cách **Học viên** để tiếp tục.
+            <p className="text-xs sm:text-sm text-gray-600 font-medium leading-relaxed mb-6">
+              Tài khoản hiện tại của bạn không có quyền mua gói hội viên trực tuyến. Tính năng này chỉ dành riêng cho tài khoản học viên.
             </p>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => setIsMemberOnlyModalOpen(false)}
-                className="flex-1 py-3 bg-[#202736] hover:bg-[#2a3447] text-gray-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-              >
-                Đóng
-              </button>
-              <button
-                onClick={() => navigate('/dang-nhap')}
-                className="flex-1 py-3 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all cursor-pointer"
-              >
-                Đăng nhập ngay →
-              </button>
-            </div>
+            <button
+              onClick={() => setIsMemberOnlyModalOpen(false)}
+              className="w-full py-3 bg-[#e31b23] hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all cursor-pointer"
+            >
+              Đóng thông báo
+            </button>
           </div>
         </div>
       )}
 
-      {/* 6. POPUP MODAL ĐĂNG KÝ TƯ VẤN (DÀNH CHO NÚT BƯỚC TUYỂN SINH) */}
+      {/* 6. POPUP MODAL ĐĂNG KÝ TƯ VẤN (NỀN TRẮNG CHUẨN) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="relative bg-white text-gray-900 rounded-lg p-6 sm:p-8 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="relative bg-white text-gray-900 rounded-2xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-gray-100">
             <button
               onClick={closeModal}
-              className="absolute top-4 right-4 w-7 h-7 rounded-sm bg-[#e31b23] text-white font-bold text-xs flex items-center justify-center hover:bg-red-700 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 text-gray-500 font-bold text-sm flex items-center justify-center hover:bg-[#e31b23] hover:text-white transition-colors cursor-pointer"
             >
               ✕
             </button>
 
-            <h3 className="text-2xl font-black text-[#e31b23] uppercase tracking-tight text-center mb-1">
+            <h3 className="text-2xl sm:text-3xl font-black text-[#e31b23] uppercase tracking-tight text-center mb-1">
               ĐĂNG KÝ TƯ VẤN
             </h3>
-            <p className="text-xs text-gray-600 text-center font-medium mb-6">
-              Để lại thông tin, chúng tôi sẽ liên hệ bạn sớm nhất
+            <p className="text-xs text-gray-500 text-center font-medium mb-6">
+              Để lại thông tin, đội ngũ AnhDuy Sport sẽ liên hệ với bạn sớm nhất
               {modalPackageName && <span className="text-[#e31b23] font-bold block mt-0.5">({modalPackageName})</span>}
             </p>
 
-            <form onSubmit={handleSubmitConsult} className="space-y-3.5">
-              {formError && (
-                <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-[#e31b23]">{formError}</p>
-              )}
-              <div>
-                <input
-                  type="text"
-                  required
-                  placeholder="Họ và tên *"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#e31b23] transition-all"
-                />
-              </div>
-
-              <div>
-                <input
-                  type="tel"
-                  required
-                  placeholder="Số điện thoại *"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#e31b23] transition-all"
-                />
-              </div>
-
-              <div>
-                <input
-                  type="email"
-                  placeholder="Email *"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#e31b23] transition-all"
-                />
-              </div>
-
-              <div>
-                <select
-                  value={selectedSport}
-                  onChange={(e) => setSelectedSport(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-800 outline-none focus:border-[#e31b23] transition-all cursor-pointer"
+            {isConsultSuccess ? (
+              <div className="bg-[#eaf7f0] border-l-4 border-[#00b050] text-[#1e2022] p-6 flex flex-col items-center text-center shadow-md rounded-sm my-2 transition-all duration-300">
+                <div className="w-12 h-12 rounded-full bg-[#00b050]/15 flex items-center justify-center mb-3">
+                  <svg className="w-7 h-7 text-[#00b050]" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h4 className="font-black text-[#008000] text-base sm:text-lg uppercase tracking-tight mb-1">
+                  ĐĂNG KÝ THÀNH CÔNG!
+                </h4>
+                <p className="text-xs sm:text-sm text-gray-700 font-medium leading-relaxed">
+                  Thông tin của bạn đã được tiếp nhận. Lễ tân sẽ gọi điện tư vấn trong thời gian sớm nhất.
+                </p>
+                <button
+                  onClick={() => {
+                    setIsConsultSuccess(false);
+                    setFullName(user?.fullName || user?.userName || '');
+                    setPhone(user?.phone || '');
+                    setEmail(user?.email || '');
+                    setStudentAge('');
+                  }}
+                  className="mt-5 text-xs font-bold text-[#e31b23] underline hover:text-black transition-colors cursor-pointer"
                 >
-                  {sportsList.map((sp, idx) => (
-                    <option key={idx} value={sp} className="text-gray-900">
-                      Chọn bộ môn quan tâm: {sp}
-                    </option>
-                  ))}
-                </select>
+                  Gửi đăng ký mới
+                </button>
               </div>
+            ) : (
+              <form onSubmit={handleSubmitConsult} className="space-y-3.5">
+                {formError && (
+                  <div className="bg-red-50 border border-red-200 text-[#e31b23] px-3.5 py-2.5 rounded-lg text-xs font-bold text-center">
+                    ⚠️ {formError}
+                  </div>
+                )}
 
-              <div>
-                <input
-                  type="text"
-                  placeholder="Độ tuổi học viên"
-                  value={studentAge}
-                  onChange={(e) => setStudentAge(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#e31b23] transition-all"
-                />
-              </div>
+                <div>
+                  <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
+                    HỌ VÀ TÊN <span className="text-[#e31b23]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nguyễn Văn A"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:bg-white focus:border-[#e31b23] font-semibold transition-all"
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full py-3.5 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider rounded-md shadow-md cursor-pointer disabled:opacity-50 transition-all mt-2 active:scale-95"
-              >
-                {submitting ? 'ĐANG GỬI...' : 'GỬI ĐĂNG KÝ →'}
-              </button>
+                <div>
+                  <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
+                    SỐ ĐIỆN THOẠI <span className="text-[#e31b23]">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="0902 824 820"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:bg-white focus:border-[#e31b23] font-semibold transition-all"
+                  />
+                </div>
 
-              <p className="text-[10px] text-gray-400 text-center font-semibold pt-1">
-                Thông tin của bạn được bảo mật hoàn toàn
-              </p>
-            </form>
+                <div>
+                  <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
+                    EMAIL <span className="text-[#e31b23]">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="email@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:bg-white focus:border-[#e31b23] font-semibold transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
+                    BỘ MÔN QUAN TÂM <span className="text-[#e31b23]">*</span>
+                  </label>
+                  <select
+                    value={selectedSport}
+                    onChange={(e) => setSelectedSport(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 outline-none focus:bg-white focus:border-[#e31b23] font-semibold cursor-pointer transition-all"
+                  >
+                    {sportsList.map((sp, idx) => (
+                      <option key={idx} value={sp} className="text-gray-900">
+                        {sp}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
+                    ĐỘ TUỔI HỌC VIÊN <span className="text-[#e31b23]">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    max="99"
+                    placeholder="VD: 18"
+                    value={studentAge}
+                    onChange={(e) => setStudentAge(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:bg-white focus:border-[#e31b23] font-semibold transition-all"
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full py-3.5 bg-[#e31b23] hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-lg shadow-lg cursor-pointer disabled:opacity-50 transition-all hover:scale-[1.01]"
+                  >
+                    {submitting ? 'ĐANG GỬI THÔNG TIN...' : 'GỬI ĐĂNG KÝ NGAY →'}
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-gray-400 text-center font-semibold pt-1">
+                  🔒 Thông tin của bạn được bảo mật hoàn toàn
+                </p>
+              </form>
+            )}
           </div>
         </div>
       )}
