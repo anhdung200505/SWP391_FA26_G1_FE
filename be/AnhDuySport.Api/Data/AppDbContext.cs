@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<PendingRegistration> PendingRegistrations => Set<PendingRegistration>();
     public DbSet<PasswordReset> PasswordResets => Set<PasswordReset>();
+    public DbSet<EmailChange> EmailChanges => Set<EmailChange>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<MembershipPackage> MembershipPackages => Set<MembershipPackage>();

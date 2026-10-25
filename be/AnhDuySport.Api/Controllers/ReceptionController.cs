@@ -34,26 +34,6 @@ public class ReceptionController(ReceptionFlowService reception) : ControllerBas
     public async Task<ActionResult<ClassRegistrationDto>> RegisterForMember(string memberUserId, CreateClassRegistrationRequest request) =>
         Ok(await reception.RegisterForMemberAsync(memberUserId, request));
 
-    [HttpGet("class-registrations/{paymentId}")]
-    [EndpointSummary("Lễ tân xem trạng thái đơn đăng ký và hỏi payOS")]
-    [EndpointDescription("Đơn đăng ký lớp. Nếu payOS báo đã thanh toán thì ghi danh và cấp gói, giống học viên xem trạng thái đơn của mình.")]
-    public async Task<ActionResult<RegistrationStatusDto>> RegistrationStatus(string paymentId) =>
-        Ok(await reception.AccessRegistrationStatusAsync(paymentId));
-
-    [HttpPost("class-registrations/{paymentId}/cancel")]
-    [EndpointSummary("Lễ tân hủy đơn chờ thanh toán hết giờ")]
-    public async Task<IActionResult> CancelRegistration(string paymentId)
-    {
-        await reception.CancelRegistrationAsync(paymentId);
-        return NoContent();
-    }
-
-    [HttpPost("check-ins")]
-    [EndpointSummary("Lễ tân check-in học viên vào buổi học hôm nay")]
-    [EndpointDescription("Nhập mã học viên, email hoặc số điện thoại. Ghi present cho buổi đang diễn ra, hoặc buổi sắp tới trong ngày nếu chưa tới giờ. Buổi đã kết thúc hoặc không có lịch hôm nay thì trả 400.")]
-    public async Task<ActionResult<ReceptionCheckInDto>> CheckIn(ReceptionCheckInRequest request) =>
-        Ok(await reception.CheckInAsync(request.Keyword));
-
     [HttpPost("class-registrations/{paymentId}/confirm-payment")]
     [EndpointSummary("Lễ tân xác nhận đã thu học phí tại quầy")]
     [EndpointDescription("paymentMethod: cash, transfer hoặc card. Chỉ đơn pending còn hạn giữ chỗ. Thành công thì học viên được ghi danh vào lớp.")]
