@@ -20,10 +20,11 @@ const courseCategories = [
 
 const navItems = [
   { name: 'TRANG CHỦ', path: '/home' },
+  { name: 'VỀ CHÚNG TÔI', path: '#', hasDropdown: false },
   { name: 'KHÓA HỌC', path: '/khoa-hoc', hasDropdown: true },
   { name: 'HUẤN LUYỆN VIÊN', path: '/hlv' },
   { name: 'CƠ SỞ VẬT CHẤT', path: '/co-so-vat-chat' },
-  { name: 'ĐĂNG KÝ KHÓA HỌC', path: '/tuyen-sinh' },
+  { name: 'TUYỂN SINH', path: '/tuyen-sinh' },
 ];
 
 export default function Header({ forceWhite = false }) {

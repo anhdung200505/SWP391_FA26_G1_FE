@@ -7,23 +7,6 @@ public sealed record ReceptionMemberDto(
     string Phone,
     string Status);
 
-// keyword: mã học viên (user id), email hoặc số điện thoại 10 số.
-public sealed record ReceptionCheckInRequest(string? Keyword);
-
-public sealed record ReceptionCheckInDto(
-    string MemberUserId,
-    string FullName,
-    string Phone,
-    string ClassId,
-    string ClassName,
-    string SessionId,
-    string SessionLabel,
-    string StartTime,
-    string EndTime,
-    DateTime CheckInAt,
-    bool AlreadyCheckedIn,
-    string Message);
-
 // paymentMethod: cash, transfer hoặc card.
 public sealed record ConfirmCounterPaymentRequest(string PaymentMethod);
 

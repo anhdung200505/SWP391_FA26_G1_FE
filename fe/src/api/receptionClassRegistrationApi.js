@@ -84,23 +84,6 @@ export function confirmRegistrationPayment(paymentId, paymentMethod) {
   });
 }
 
-export function getReceptionRegistrationStatus(paymentId) {
-  return request(`/reception/class-registrations/${paymentId}`);
-}
-
-export function cancelReceptionRegistration(paymentId) {
-  return request(`/reception/class-registrations/${paymentId}/cancel`, {
-    method: 'POST',
-  });
-}
-
-export function checkInMember(keyword) {
-  return request('/reception/check-ins', {
-    method: 'POST',
-    body: JSON.stringify({ keyword }),
-  });
-}
-
 /**
  * 5. Lễ tân xem danh sách học viên đã đăng ký
  * GET /api/reception/registrations
