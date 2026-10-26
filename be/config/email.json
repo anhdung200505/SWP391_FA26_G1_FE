@@ -1,0 +1,9 @@
+{
+  "Email": {
+    "Host": "smtp.gmail.com",
+    "Port": 587,
+    "User": "duyngy24@gmail.com",
+    "Password": "syzn hrki ppre zlrw",
+    "From": "duyngy24@gmail.com"
+  }
+}
