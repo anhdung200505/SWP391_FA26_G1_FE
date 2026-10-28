@@ -20,4 +20,8 @@
     <Folder Include="mailbox\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Assets\email-logo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -90,7 +90,7 @@ export function BellItem({ highlighted, badge, heading, title, body, time, onCli
           </span>
         )}
         <span className={`block text-xs text-gray-900 ${badge || heading ? 'mt-1' : ''} ${highlighted ? 'font-black' : 'font-bold'}`}>{title}</span>
-        {body && <span className="block mt-0.5 text-xs text-gray-600 leading-5 break-words line-clamp-2">{body}</span>}
+        {body && <span className="block mt-0.5 text-xs text-gray-600 leading-5 break-words whitespace-pre-line line-clamp-3">{body}</span>}
         <span className="block mt-1 text-[10px] font-bold text-gray-400">
           🕒 {formatFull(time)} · {timeAgo(time)}
         </span>

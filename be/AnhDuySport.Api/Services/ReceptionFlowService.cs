@@ -190,7 +190,7 @@ public class ReceptionFlowService(
         {
             UserId = memberId,
             Title = $"Bạn đã được cho ra khỏi lớp {className}",
-            Content = $"Lý do: {TextFormat.Sentence(reason)} Khi muốn học tiếp, hãy liên hệ lễ tân AnhDuy Sport để đăng ký học lại.",
+            Content = $"Lý do: {TextFormat.Sentence(reason)}\nKhi muốn học tiếp, hãy liên hệ lễ tân AnhDuy Sport để đăng ký học lại.",
             IsRead = false,
             CreatedAt = now,
         });
@@ -282,6 +282,11 @@ public class ReceptionFlowService(
             throw new RegistrationException("Lớp đã hết chỗ.");
         }
 
+        await db.Database
+            .SqlQuery<int>($"SELECT user_id AS [Value] FROM [user] WITH (UPDLOCK, HOLDLOCK) WHERE user_id = {memberId}")
+            .ToListAsync();
+        await MemberScheduleConflict.EnsureNoneAsync(db, memberId, targetId, now.AddMinutes(-PaymentTimeout.Minutes));
+
         var enrollment = targetId == sourceId
             ? source
             : await db.ClassEnrollments.FirstOrDefaultAsync(item => item.ClassId == targetId && item.UserId == memberId);
@@ -302,7 +307,7 @@ public class ReceptionFlowService(
         {
             UserId = memberId,
             Title = $"Bạn đã được đăng ký học lại lớp {target.ClassName}",
-            Content = $"Lễ tân AnhDuy Sport đã đăng ký học lại cho bạn. Lý do: {TextFormat.Sentence(reason)}",
+            Content = $"Lễ tân AnhDuy Sport đã đăng ký học lại cho bạn.\nLý do: {TextFormat.Sentence(reason)}",
             IsRead = false,
             CreatedAt = now,
         });
