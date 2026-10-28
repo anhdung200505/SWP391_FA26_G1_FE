@@ -26,7 +26,11 @@ public sealed record SessionDto(
     int EnrolledCount,
     int? Capacity,
     // Chỉ điền ở lịch của học viên: present, late, absent, null = chưa điểm danh.
-    string? AttendanceStatus = null);
+    string? AttendanceStatus = null,
+    // HLV phụ trách lớp. IsSubstituteCoach = true: buổi này do HLV khác dạy thay (CoachName là HLV thay thế).
+    string? ClassCoachUserId = null,
+    string? ClassCoachName = null,
+    bool IsSubstituteCoach = false);
 
 // Khung giờ cố định. Kind: group (3 giờ) hoặc private (90 phút).
 public sealed record TimeSlotDto(
