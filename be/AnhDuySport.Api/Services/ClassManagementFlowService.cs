@@ -468,7 +468,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             }
         }
 
-        var change = $"HLV {oldCoach} → {newCoach} từ ngày {first:dd/MM/yyyy} ({remaining.Count} buổi còn lại).";
+        var change = $"HLV thay thế: {newCoach} (thay HLV {oldCoach}) từ ngày {first:dd/MM/yyyy}, {remaining.Count} buổi còn lại.";
         var memberIds = await db.ClassEnrollments
             .Where(enrollment => enrollment.ClassId == item.ClassId && enrollment.Status == "enrolled")
             .Select(enrollment => enrollment.UserId)
@@ -479,7 +479,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             {
                 UserId = memberId,
                 Title = Shorten($"Đổi huấn luyện viên lớp {item.ClassName}", 200),
-                Content = $"Lớp {item.ClassName} đổi {change}" + (string.IsNullOrEmpty(note) ? "" : $" Lý do: {TextFormat.Sentence(note)}"),
+                Content = $"Lớp {item.ClassName}:\n{change}" + (string.IsNullOrEmpty(note) ? "" : $"\nLý do: {TextFormat.Sentence(note)}"),
                 IsRead = false,
                 CreatedAt = now,
             });
@@ -491,7 +491,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             Action = Shorten($"Đổi HLV lớp {item.ClassName}", 100),
             EntityName = "class",
             EntityId = item.ClassId,
-            Detail = $"{change} Đã thông báo {memberIds.Count} học viên." + (string.IsNullOrEmpty(note) ? "" : $" Lý do: {TextFormat.Sentence(note)}"),
+            Detail = $"{change}\nĐã thông báo {memberIds.Count} học viên." + (string.IsNullOrEmpty(note) ? "" : $"\nLý do: {TextFormat.Sentence(note)}"),
             CreatedAt = now,
         });
 
