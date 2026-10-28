@@ -3,6 +3,7 @@ import { CancelSessionModal, EditSessionModal } from '../sessions/SessionSchedul
 import { CLASS_STATUS, formatDate } from './classUtils';
 import { getSessions } from '../../api/managementApi';
 import WeekSlotTable, { formatClock, mondayOf, weekContaining } from '../schedule/WeekSlotTable';
+import SessionCoachLine from '../schedule/SessionCoachLine';
 
 const SESSION_STATUS = {
   upcoming: { label: 'Sắp học', className: 'bg-sky-50 text-sky-700 border-sky-200' },
@@ -191,11 +192,11 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
                         {formatClock(session.startTime)}–{formatClock(session.endTime)}
                       </p>
                       <p className="text-xs text-gray-500">{session.roomName}</p>
-                      <p className="text-xs text-gray-500">{session.coachName}</p>
+                      <SessionCoachLine session={session} />
                       <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
                         {badge.label}
                       </span>
-                      {session.note && <p className="mt-1 text-xs text-pretty text-gray-600">{session.note}</p>}
+                      {session.note && <p className="mt-1 text-xs text-pretty whitespace-pre-line text-gray-600">{session.note}</p>}
                       {editable && (
                         <div className="mt-2 flex gap-2">
                           <button type="button" onClick={() => setEditing(session)} className="text-xs font-semibold text-gray-700 underline">

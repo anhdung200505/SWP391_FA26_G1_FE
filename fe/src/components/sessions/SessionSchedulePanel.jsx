@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import SessionCoachLine from '../schedule/SessionCoachLine';
 import {
   cancelSession,
   changeSessionCoach,
@@ -245,7 +246,9 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
                         </span>
                         <span className="ml-1.5 text-[10px] font-bold text-slate-400">Buổi {session.sessionNo}</span>
                       </td>
-                      <td className="p-4 min-w-[130px] font-bold text-slate-800">👤 {session.coachName}</td>
+                      <td className="p-4 min-w-[130px]">
+                        <SessionCoachLine session={session} className="text-sm font-bold text-slate-800" />
+                      </td>
                       <td className="p-4 min-w-[120px] text-slate-600">📍 {session.roomName}</td>
                       <td className="p-4 whitespace-nowrap">
                         <span className="font-bold text-slate-900">
@@ -283,7 +286,7 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
                       </td>
                       <td className="p-4 min-w-[160px] max-w-[220px]">
                         {session.note ? (
-                          <p className="text-[11px] font-semibold text-slate-600 leading-5 break-words">{session.note}</p>
+                          <p className="text-[11px] font-semibold text-slate-600 leading-5 break-words whitespace-pre-line">{session.note}</p>
                         ) : (
                           <span className="text-[11px] text-slate-300">—</span>
                         )}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatDate, formatTime } from './coachUi';
 import WeekSlotTable, { formatClock, toIso, weekContaining } from '../schedule/WeekSlotTable';
+import SessionCoachLine from '../schedule/SessionCoachLine';
 
 const BADGES = {
   cancelled: { label: 'Đã hủy', className: 'border-red-200 bg-red-50 text-[#e31b23]' },
@@ -91,12 +92,13 @@ export default function ClassInfoPanel({ detail }) {
               </p>
               <p className="text-xs text-gray-500">{detail.roomName || 'Chưa xếp phòng'}</p>
               {session.sessionNo ? <p className="text-xs text-gray-500 tabular-nums">Buổi {session.sessionNo}</p> : null}
+              {session.isSubstituteCoach && <SessionCoachLine session={session} />}
               {badge && (
                 <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
                   {badge.label}
                 </span>
               )}
-              {session.note && <p className="mt-1 text-xs text-pretty text-gray-600">{session.note}</p>}
+              {session.note && <p className="mt-1 text-xs text-pretty whitespace-pre-line text-gray-600">{session.note}</p>}
             </div>
           );
         }}

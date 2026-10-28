@@ -21,6 +21,7 @@ export default function WorkspaceShell({
   onSelect,
   breadcrumb = [],
   headerExtra = null,
+  footer = null,
   children,
 }) {
   const location = useLocation();
@@ -125,6 +126,8 @@ export default function WorkspaceShell({
         <main className="w-full flex-1 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8">
           {children}
         </main>
+        {/* Footer nằm trong cột phải để thanh bên (sticky) luôn kéo dài tới đáy trang, nút Đăng xuất không bị đẩy lên */}
+        {footer}
       </div>
     </div>
   );
