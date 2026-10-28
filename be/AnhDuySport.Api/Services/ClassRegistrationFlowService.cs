@@ -828,6 +828,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             throw new InvalidOperationException("Bạn đã ghi danh lớp này.");
         }
 
+        await MemberScheduleConflict.EnsureNoneAsync(db, user.UserId, trainingClass.ClassId, HoldSince());
+
         user.FullName = fullName;
         user.Phone = phone;
         if (trainingClass.Room is not null)
@@ -1060,6 +1062,12 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         {
             throw new RegistrationException("Lớp đã hết chỗ (đang có người giữ chỗ chờ thanh toán). Vui lòng thử lại sau ít phút.");
         }
+
+        // Khóa dòng học viên để hai đơn ở hai lớp khác nhau gửi cùng lúc không cùng qua bước kiểm tra trùng.
+        await db.Database
+            .SqlQuery<int>($"SELECT user_id AS [Value] FROM [user] WITH (UPDLOCK, HOLDLOCK) WHERE user_id = {userId}")
+            .ToListAsync();
+        await MemberScheduleConflict.EnsureNoneAsync(db, userId, classId, HoldSince());
 
         // Đơn pending cũ của chính học viên đã quá hạn giữ chỗ: hủy để chỉ mục UX_payment_pending_per_class cho tạo đơn mới.
         var holdSince = HoldSince();

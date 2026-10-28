@@ -29,6 +29,11 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
 
+  // Mở từ trang khác (đang cuộn giữa trang) thì vẫn bắt đầu từ đầu hồ sơ.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   useEffect(() => {
     document.title = 'Hồ sơ cá nhân · AnhDuy Sport';
     if (user?.id) {

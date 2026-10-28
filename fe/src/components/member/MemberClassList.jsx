@@ -14,7 +14,7 @@ export default function MemberClassList({ loading, myClasses }) {
           </p>
         </div>
 
-        <Link to="/tuyen-sinh" className="text-xs font-extrabold text-[#e31b23] hover:underline">
+        <Link to="/dang-ky-khoa-hoc" className="text-xs font-extrabold text-[#e31b23] hover:underline">
           + Đăng ký khóa học mới
         </Link>
       </div>
