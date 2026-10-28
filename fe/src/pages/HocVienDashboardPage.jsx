@@ -217,6 +217,7 @@ export default function HocVienDashboardPage() {
         onSelect={selectTab}
         breadcrumb={[{ label: 'Học viên' }, { label: currentItem?.label || 'Tổng quan' }]}
         headerExtra={<NotificationBell />}
+        footer={<Footer />}
       >
         {isProcessing && <p className="text-sm font-semibold text-slate-500">Đang xác nhận thanh toán...</p>}
         {notice.msg && (
@@ -381,9 +382,6 @@ export default function HocVienDashboardPage() {
           </div>
         </div>
       </WorkspaceShell>
-
-      {/* FOOTER */}
-      <Footer />
     </div>
   );
 }

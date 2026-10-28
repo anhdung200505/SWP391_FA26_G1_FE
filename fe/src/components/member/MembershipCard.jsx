@@ -53,7 +53,7 @@ const packageTier = (pkg, fallbackName = '') => {
 };
 
 const packageMedal = (pkg) => TIER_THEMES[packageTier(pkg)].medal;
-const planTitle = (name) => String(name || 'Gói Hội Viên').replace(/\s*\(tặng kèm lớp\)\s*$/i, '');
+const planTitle = (name) => String(name || 'Gói Hội Viên').replace(/\s*\((tặng|ưu đãi) kèm lớp\)\s*$/i, '');
 const formatDay = (iso) => (iso ? String(iso).split('-').reverse().join('/') : '—');
 
 export default function MembershipCard({ currentMembership, membershipData, displayName }) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getMySessions } from '../../api/managementApi';
 import WeekSlotTable, { addDays, mondayOf, toIso, formatClock } from '../schedule/WeekSlotTable';
+import SessionCoachLine from '../schedule/SessionCoachLine';
 
 const BADGES = {
   cancelled: { label: 'Đã hủy', className: 'border-red-200 bg-red-50 text-[#e31b23]' },
@@ -77,13 +78,13 @@ export default function MemberSchedule() {
                   {formatClock(session.startTime)}–{formatClock(session.endTime)}
                 </p>
                 <p className="text-xs text-gray-500">{session.roomName}</p>
-                <p className="text-xs text-gray-500">{session.coachName}</p>
+                <SessionCoachLine session={session} />
                 {badge && (
                   <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
                     {badge.label}
                   </span>
                 )}
-                {session.note && <p className="mt-1 text-xs text-pretty text-gray-600">{session.note}</p>}
+                {session.note && <p className="mt-1 text-xs text-pretty whitespace-pre-line text-gray-600">{session.note}</p>}
               </div>
             );
           }}
