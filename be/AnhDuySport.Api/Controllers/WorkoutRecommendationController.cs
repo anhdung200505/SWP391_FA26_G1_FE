@@ -15,7 +15,7 @@ public class WorkoutRecommendationController(WorkoutRecommendationFlowService fl
 {
     [HttpGet("access")]
     [EndpointSummary("Access AI Recommendation")]
-    [EndpointDescription("Mở luồng gợi ý giáo án. Chỉ học viên có hội viên đang hiệu lực từ Hạng Đồng trở lên. Response có quota: Đồng 5 lượt tạo lại và 50000 token, Bạc 10 lượt và 100000 token, Vàng 25 lượt và 250000 token.")]
+    [EndpointDescription("Mở luồng gợi ý tập cá nhân của học viên, không phải giáo án lớp. Chỉ học viên có hội viên đang hiệu lực từ Hạng Đồng trở lên. Response có quota: Đồng 5 lượt tạo lại và 50000 token, Bạc 10 lượt và 100000 token, Vàng 25 lượt và 250000 token.")]
     public async Task<ActionResult<AiRecommendationAccessDto>> Access(string memberUserId)
     {
         try
@@ -60,7 +60,7 @@ public class WorkoutRecommendationController(WorkoutRecommendationFlowService fl
 
     [HttpPost("{recommendationId:int}/decision")]
     [EndpointSummary("Edit Required?")]
-    [EndpointDescription("recommendationId lấy từ response của Input Personal Goals. Yes: { \"editRequired\": true, \"changes\": \"Tập nhẹ hơn vào buổi sáng và bớt 1 buổi\" } gọi lại Google Gemini và tính 1 lượt tạo lại. No: { \"editRequired\": false } lưu giáo án và đồng bộ lịch, không tính lượt tạo lại.")]
+    [EndpointDescription("recommendationId lấy từ response của Input Personal Goals. Yes: { \"editRequired\": true, \"changes\": \"Tập nhẹ hơn vào buổi sáng và bớt 1 buổi\" } gọi lại Google Gemini và tính 1 lượt tạo lại. No: { \"editRequired\": false } lưu gợi ý tập và đồng bộ lịch, không tính lượt tạo lại.")]
     public async Task<ActionResult<WorkoutDecisionResponse>> Decide(string memberUserId, int recommendationId, WorkoutDecisionRequest request)
     {
         try
@@ -74,8 +74,8 @@ public class WorkoutRecommendationController(WorkoutRecommendationFlowService fl
     }
 
     [HttpPost("regenerate")]
-    [EndpointSummary("Member yêu cầu tạo lại giáo án")]
-    [EndpointDescription("Tạo lại giáo án đã có, kể cả giáo án đã lưu. Mỗi lần tính 1 lượt tạo lại và cộng token Gemini. Hết lượt hoặc hết token thì từ chối. Ví dụ: { \"changes\": \"Bổ trợ môn bơi theo lịch sử tập coach đã nhập, tránh ngày có buổi học\" }.")]
+    [EndpointSummary("Học viên yêu cầu tạo lại gợi ý tập")]
+    [EndpointDescription("Tạo lại gợi ý tập cá nhân đã có, kể cả gợi ý đã lưu. Mỗi lần tính 1 lượt tạo lại và cộng token Gemini. Hết lượt hoặc hết token thì từ chối. Ví dụ: { \"changes\": \"Bổ trợ môn bơi theo lịch sử tập coach đã nhập, tránh ngày có buổi học\" }.")]
     public async Task<ActionResult<WorkoutPlanResponse>> Regenerate(string memberUserId, RegenerateWorkoutRequest request)
     {
         try
