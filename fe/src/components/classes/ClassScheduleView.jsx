@@ -27,7 +27,7 @@ function sessionStatusKey(session, today) {
   return session.status;
 }
 
-// mode = 'admin': đổi HLV/phòng, hủy buổi và sửa điểm danh. mode = 'reception': chỉ đổi HLV. loadClasses trả danh sách lớp để tìm lớp theo id.
+// mode = 'admin': đổi HLV/phòng, hủy buổi và sửa điểm danh (từ hôm nay về quá khứ, không sửa buổi tương lai). mode = 'reception': chỉ đổi HLV. loadClasses trả danh sách lớp để tìm lớp theo id.
 export default function ClassScheduleView({ classId, mode = 'admin', loadClasses, back }) {
   const isAdmin = mode === 'admin';
   const today = todayIso();
@@ -200,7 +200,7 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
                         {badge.label}
                       </span>
                       {session.note && <p className="mt-1 text-xs text-pretty whitespace-pre-line text-gray-600">{session.note}</p>}
-                      {isAdmin && !cancelled && (
+                      {isAdmin && !cancelled && String(session.date).slice(0, 10) <= today && (
                         <button type="button" onClick={() => setAttending(session)} className="mt-2 block text-xs font-semibold text-emerald-700 underline">
                           Điểm danh
                         </button>
