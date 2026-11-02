@@ -65,8 +65,8 @@ public class SessionsController(SessionFlowService sessions, CurrentActor actor)
     [Authorize(Roles = "ADMIN")]
     [HttpPost("{sessionId}/cancel")]
     [EndpointSummary("Quản trị hủy một buổi học")]
-    [EndpointDescription("Bắt buộc có lý do, lưu vào ghi chú của buổi. Chỉ buổi chưa diễn ra. Học viên của lớp nhận thông báo.")]
-    public async Task<ActionResult<SessionDto>> CancelSession(string sessionId, CancelSessionRequest request) =>
+    [EndpointDescription("Bắt buộc có lý do, lưu vào ghi chú của buổi. Chỉ buổi hôm nay chưa kết thúc hoặc buổi sắp tới. Tự thêm một buổi bù cùng thứ, cùng giờ vào tuần sau; nếu tuần đó lớp, huấn luyện viên hoặc phòng đã kín thì dời sang tuần cùng thứ còn trống. Học viên của lớp nhận thông báo.")]
+    public async Task<ActionResult<CancelSessionResult>> CancelSession(string sessionId, CancelSessionRequest request) =>
         Ok(await sessions.CancelSessionAsync(sessionId, request));
 
     [AllowAnonymous]

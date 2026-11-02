@@ -203,7 +203,7 @@ export default function MemberTokenUsageTable() {
         <div>
           <h2 className="text-lg font-black text-balance text-slate-900">Tổng sử dụng token</h2>
           <p className="mt-1 text-sm text-pretty text-gray-500">
-            Token và lượt tạo lại của từng học viên đang có hội viên hiệu lực.
+            Token và lượt tạo lại gợi ý tập cá nhân của từng học viên đang có hội viên hiệu lực.
           </p>
         </div>
         <Link to="/quan-ly/han-muc-ai" className="text-sm font-bold text-[#e31b23]">

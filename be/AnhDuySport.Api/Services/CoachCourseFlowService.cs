@@ -108,6 +108,13 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
             throw new RegistrationException("Buổi đã hủy nên không điểm danh.");
         }
 
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        if (session.SessionDate > today)
+        {
+            throw new RegistrationException(
+                $"Buổi học ngày {session.SessionDate:dd/MM/yyyy} chưa tới nên chưa điểm danh được.");
+        }
+
         var roster = await db.ClassEnrollments
             .Where(enrollment => enrollment.ClassId == owned.ClassId && enrollment.Status == "enrolled")
             .Select(enrollment => enrollment.UserId)

@@ -69,7 +69,7 @@ public static class AiMembershipQuota
         if (regenerating && allowance.RegenerationsUsed >= allowance.RegenerationLimit)
         {
             throw new InvalidOperationException(
-                $"Bạn đã dùng hết {allowance.RegenerationLimit} lượt tạo lại giáo án của {allowance.PackageName}.");
+                $"Bạn đã dùng hết {allowance.RegenerationLimit} lượt tạo lại gợi ý tập của {allowance.PackageName}.");
         }
 
         if (allowance.TokensUsed >= allowance.TokenLimit)
@@ -97,7 +97,7 @@ public static class AiMembershipQuota
         var tokensUsed = allowance.TokensUsed + Math.Max(1, justUsedTokens);
         var regenerationsLeft = Math.Max(0, allowance.RegenerationLimit - regenerationsUsed);
         var tokensLeft = Math.Max(0, allowance.TokenLimit - tokensUsed);
-        return $"Còn {regenerationsLeft}/{allowance.RegenerationLimit} lượt tạo lại giáo án và {Format(tokensLeft)}/{Format(allowance.TokenLimit)} token AI của {allowance.PackageName}.";
+        return $"Còn {regenerationsLeft}/{allowance.RegenerationLimit} lượt tạo lại gợi ý tập và {Format(tokensLeft)}/{Format(allowance.TokenLimit)} token AI của {allowance.PackageName}.";
     }
 
     public static int Clamp(long value) => value >= int.MaxValue ? int.MaxValue : (int)value;

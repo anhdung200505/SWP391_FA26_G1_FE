@@ -129,7 +129,7 @@ export default function ProfilePage() {
                 to="/hoc-vien/giao-an-ai"
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg"
               >
-                Giáo án AI
+                Gợi ý tập
               </Link>
               )}
             </div>

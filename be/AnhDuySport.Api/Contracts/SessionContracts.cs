@@ -54,6 +54,9 @@ public sealed record ChangeSessionCoachRequest(
 public sealed record CancelSessionRequest(
     [Required, StringLength(500, MinimumLength = 1)] string Reason);
 
+// Quản trị hủy buổi hôm nay hoặc buổi sắp tới: buổi gốc chuyển cancelled, MakeupSession là buổi bù cùng thứ, cùng giờ.
+public sealed record CancelSessionResult(SessionDto Session, SessionDto MakeupSession);
+
 // Lựa chọn HLV hoặc phòng cho một buổi. IsBusy = true: trùng giờ với buổi khác hoặc phòng không đủ sức chứa (BusyReason).
 public sealed record SessionOptionDto(
     string Id,
