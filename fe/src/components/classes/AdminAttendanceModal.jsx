@@ -10,7 +10,7 @@ const MARKS = [
 
 const formatTime = (value) => String(value || '').slice(0, 5);
 
-// Quản trị xem và sửa điểm danh một buổi, mọi thời điểm (coach chỉ sửa được từ giờ bắt đầu đến hết ngày hôm đó).
+// Quản trị xem và sửa điểm danh một buổi từ hôm nay về quá khứ (coach chỉ sửa được từ giờ bắt đầu đến hết ngày hôm đó).
 export default function AdminAttendanceModal({ classId, session, onClose, onSaved }) {
   const [sheet, setSheet] = useState(null);
   const [marks, setMarks] = useState({});
@@ -74,7 +74,7 @@ export default function AdminAttendanceModal({ classId, session, onClose, onSave
             <p className="mt-1 text-xs font-bold text-slate-500">
               {session.className} · {formatDate(session.date)} · {formatTime(session.startTime)}-{formatTime(session.endTime)}
             </p>
-            <p className="mt-1 text-[11px] text-slate-400">Quản trị sửa được mọi thời điểm, kể cả sau khi coach đã bị khóa.</p>
+            <p className="mt-1 text-[11px] text-slate-400">Quản trị sửa được buổi từ hôm nay về quá khứ, kể cả sau khi coach đã bị khóa. Không sửa buổi tương lai.</p>
           </div>
           <button type="button" onClick={onClose} className="cursor-pointer p-1 text-lg font-bold text-slate-400 hover:text-slate-700">
             ✕
