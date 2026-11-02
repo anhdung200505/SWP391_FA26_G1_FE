@@ -129,6 +129,9 @@ public class ReceptionFlowService(
                 : $"Đã check-in {member.FullName} vào {target.Class?.ClassName}.");
     }
 
+    public async Task<IReadOnlyList<ClassRegistrationBlockDto>> BlockedClassesAsync(string memberUserId) =>
+        await registrations.BlockedClassesAsync(ParseId(memberUserId, "Không tìm thấy học viên."));
+
     public async Task<ClassRegistrationDto> RegisterForMemberAsync(string memberUserId, CreateClassRegistrationRequest request)
     {
         var performer = await PerformerAsync();

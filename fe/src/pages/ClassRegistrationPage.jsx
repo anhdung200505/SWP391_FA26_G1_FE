@@ -7,9 +7,9 @@ import { studentWorkspaceItems, useHasClassRegistration } from '../components/wo
 import {
   getClassDetail,
   getClasses,
-  getMyClassRegistrations,
   getSports,
   registerClass,
+  getBlockedClasses,
   getClassRegistrationStatus,
   getPackages,
   cancelPayment,
@@ -47,7 +47,7 @@ export default function ClassRegistrationPage() {
   const [sportsList, setSportsList] = useState([]);
   const [classList, setClassList] = useState([]);
   // Lớp học viên đã ghi danh: không cho chọn lại (backend cũng chặn trùng lớp, trùng khóa và trùng lịch).
-  const [enrolledClassIds, setEnrolledClassIds] = useState(() => new Set());
+  const [blockedClasses, setBlockedClasses] = useState(() => new Map());
   const [packages, setPackages] = useState([]);
 
   // mode=renew: chỉ mua gói, không chọn lớp.
@@ -141,16 +141,22 @@ export default function ClassRegistrationPage() {
     async function loadClassesForSport() {
       try {
         setLoadingClasses(true);
-        const [classesData, mine] = await Promise.all([
+        const [classesData, blocks] = await Promise.all([
           getClasses('1', selectedSportId),
-          user?.id ? getMyClassRegistrations().catch(() => []) : Promise.resolve([]),
+          user?.id ? getBlockedClasses().catch(() => []) : Promise.resolve([]),
         ]);
-        const enrolled = new Set((Array.isArray(mine) ? mine : []).map((item) => String(item.classId)));
-        setEnrolledClassIds(enrolled);
-        if (Array.isArray(classesData) && classesData.length > 0) {
-          setClassList(classesData);
-          if (!selectedClass || selectedClass.sportId !== selectedSportId || enrolled.has(String(selectedClass.id))) {
-            setSelectedClass(classesData.find((cls) => !enrolled.has(String(cls.id))) || classesData[0]);
+        const blocked = new Map(
+          (Array.isArray(blocks) ? blocks : []).map((item) => [String(item.classId), item.reason]),
+        );
+        setBlockedClasses(blocked);
+        const unique = Array.isArray(classesData)
+          ? classesData.filter((item, index, list) => list.findIndex((other) => String(other.id) === String(item.id)) === index)
+          : [];
+        if (unique.length > 0) {
+          setClassList(unique);
+          const open = unique.find((cls) => !blocked.has(String(cls.id)));
+          if (!selectedClass || selectedClass.sportId !== selectedSportId || blocked.has(String(selectedClass.id))) {
+            setSelectedClass(open || null);
           }
         } else {
           setClassList([]);
@@ -340,6 +346,11 @@ export default function ClassRegistrationPage() {
 
     if (includeClass && !selectedClass?.id) {
       setError('Vui lòng chọn lớp học huấn luyện.');
+      return;
+    }
+
+    if (includeClass && blockedClasses.has(String(selectedClass.id))) {
+      setError(blockedClasses.get(String(selectedClass.id)));
       return;
     }
 
@@ -550,11 +561,17 @@ export default function ClassRegistrationPage() {
                       {loadingClasses ? (
                         <option value="">Đang tải lớp...</option>
                       ) : classList.length > 0 ? (
-                        classList.map((item) => (
-                          <option key={item.id} value={item.id} disabled={enrolledClassIds.has(String(item.id))}>
-                            {item.name} ({formatFee(item.tuition)}){enrolledClassIds.has(String(item.id)) ? ' · đã đăng ký' : ''}
-                          </option>
-                        ))
+                        <>
+                          {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
+                          {classList.map((item) => {
+                            const reason = blockedClasses.get(String(item.id));
+                            return (
+                              <option key={item.id} value={item.id} disabled={Boolean(reason)}>
+                                {item.name} ({formatFee(item.tuition)}){reason ? ` · ${reason}` : ''}
+                              </option>
+                            );
+                          })}
+                        </>
                       ) : (
                         <option value="">Chưa có lớp mở cho môn này</option>
                       )}
@@ -581,7 +598,11 @@ export default function ClassRegistrationPage() {
                     </div>
                   </dl>
                 ) : (
-                  <p className="mt-4 text-sm text-gray-500">Môn này chưa có lớp đang mở.</p>
+                  <p className="mt-4 text-sm text-gray-500">
+                    {classList.length > 0
+                      ? 'Các lớp của môn này trùng lớp đã đăng ký, cùng khóa hoặc trùng lịch.'
+                      : 'Môn này chưa có lớp đang mở.'}
+                  </p>
                 )}
               </section>
             )}

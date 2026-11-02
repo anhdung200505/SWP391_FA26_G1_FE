@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   lookupMember,
+  getMemberBlockedClasses,
   registerGuestAccount,
   createClassRegistrationForMember,
   confirmRegistrationPayment,
@@ -40,6 +41,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
   const [packages, setPackages] = useState([]);
   const [sportsList, setSportsList] = useState([]);
   const [classList, setClassList] = useState([]);
+  const [blockedClasses, setBlockedClasses] = useState(() => new Map());
 
   // Bổ sung State tự chọn Đăng ký kèm lớp (Mặc định: true)
   const [includeClass, setIncludeClass] = useState(true);
@@ -120,10 +122,20 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     async function loadClassesForSport() {
       try {
         setLoadingClasses(true);
-        const classesData = await getClasses('1', selectedSportId);
-        if (Array.isArray(classesData) && classesData.length > 0) {
-          setClassList(classesData);
-          setSelectedClass(classesData[0]);
+        const [classesData, blocks] = await Promise.all([
+          getClasses('1', selectedSportId),
+          foundMember?.id ? getMemberBlockedClasses(foundMember.id).catch(() => []) : Promise.resolve([]),
+        ]);
+        const blocked = new Map(
+          (Array.isArray(blocks) ? blocks : []).map((item) => [String(item.classId), item.reason]),
+        );
+        setBlockedClasses(blocked);
+        const unique = Array.isArray(classesData)
+          ? classesData.filter((item, index, list) => list.findIndex((other) => String(other.id) === String(item.id)) === index)
+          : [];
+        if (unique.length > 0) {
+          setClassList(unique);
+          setSelectedClass(unique.find((cls) => !blocked.has(String(cls.id))) || null);
         } else {
           setClassList([]);
           setSelectedClass(null);
@@ -138,7 +150,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     }
 
     loadClassesForSport();
-  }, [selectedSportId, includeClass, step]);
+  }, [selectedSportId, includeClass, step, foundMember?.id]);
 
   const isPaid = paymentStatus?.paymentStatus === 'paid' || paymentStatus?.paymentStatus === 'success';
   const qrImage = pendingOrder?.payosQrImage || '';
@@ -271,6 +283,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     e.preventDefault();
     if (!selectedPackage?.id) return showErr('Vui lòng chọn một gói hội viên.');
     if (includeClass && !selectedClass?.id) return showErr('Vui lòng chọn lớp học huấn luyện.');
+    if (includeClass && blockedClasses.has(String(selectedClass.id))) {
+      return showErr(blockedClasses.get(String(selectedClass.id)));
+    }
 
     const isBronze = selectedPackage.name?.toLowerCase().includes('đồng') || selectedPackage.code === 'PKG-001';
 
@@ -679,11 +694,17 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                             {loadingClasses ? (
                               <option value="">Đang tải lớp...</option>
                             ) : classList.length > 0 ? (
-                              classList.map((cls) => (
-                                <option key={cls.id} value={cls.id}>
-                                  {cls.name} ({formatFee(cls.tuition)})
-                                </option>
-                              ))
+                              <>
+                                {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
+                                {classList.map((cls) => {
+                                  const reason = blockedClasses.get(String(cls.id));
+                                  return (
+                                    <option key={cls.id} value={cls.id} disabled={Boolean(reason)}>
+                                      {cls.name} ({formatFee(cls.tuition)}){reason ? ` · ${reason}` : ''}
+                                    </option>
+                                  );
+                                })}
+                              </>
                             ) : (
                               <option value="">Chưa có lớp mở cho môn này</option>
                             )}
