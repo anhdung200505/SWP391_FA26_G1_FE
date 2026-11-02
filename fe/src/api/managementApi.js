@@ -238,6 +238,19 @@ export function changeSessionCoach(sessionId, payload) {
   });
 }
 
+// Quản trị xem và sửa điểm danh một buổi của lớp bất kỳ, mọi thời điểm. Trả { rows, canEdit, lockReason, ... }.
+export function getAdminAttendance(classId, sessionId) {
+  return request(`/management/classes/${classId}/sessions/${sessionId}/attendance`);
+}
+
+// marks: [{ memberUserId, status: present | late | absent }], phải đủ học viên đang học của lớp.
+export function saveAdminAttendance(classId, sessionId, marks) {
+  return request(`/management/classes/${classId}/sessions/${sessionId}/attendance`, {
+    method: 'PUT',
+    body: JSON.stringify({ marks }),
+  });
+}
+
 export function cancelSession(sessionId, reason) {
   return request(`/sessions/${sessionId}/cancel`, {
     method: 'POST',
