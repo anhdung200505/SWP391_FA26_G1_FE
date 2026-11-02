@@ -27,6 +27,7 @@ import CreateClassPage from './pages/management/CreateClassPage';
 import AiWorkoutPage from './pages/AiWorkoutPage';
 import AiQuotaPage from './pages/management/AiQuotaPage';
 import EnrollmentConsultationsPage from './pages/management/EnrollmentConsultationsPage';
+import CenterCheckInPage from './pages/management/CenterCheckInPage';
 import CoachCoursePage from './pages/CoachCoursePage';
 import MemberCoursePlanPage from './pages/MemberCoursePlanPage';
 
@@ -127,6 +128,7 @@ export default function App() {
             <Route path="/quan-ly/goi/moi" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="create" /></Protected>} />
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
             <Route path="/quan-ly/tu-van-ghi-danh" element={<Protected allowedRoles={['ADMIN']}><EnrollmentConsultationsPage /></Protected>} />
+            <Route path="/quan-ly/check-in" element={<Protected allowedRoles={['ADMIN']}><CenterCheckInPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/moi" element={<Protected allowedRoles={['ADMIN']}><CreateClassPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/:classId/lich" element={<Protected allowedRoles={['ADMIN']}><ClassSchedulePage /></Protected>} />
