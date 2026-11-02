@@ -437,8 +437,8 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
     private static AttendanceSheetDto ToSheet(ClassSession session, IReadOnlyList<AttendanceRowDto> rows, string? lockReason) =>
         new(session.SessionId.ToString(), session.SessionDate, session.StartTime, session.EndTime, session.Status, rows, lockReason is null, lockReason);
 
-    // Lý do không điểm danh được, null = được. Buổi đã hủy không điểm danh với mọi vai trò;
-    // coach chỉ điểm danh từ giờ bắt đầu buổi đến 23:59 cùng ngày; quản trị không bị giới hạn giờ.
+    // Lý do không điểm danh được, null = được. Buổi đã hủy không điểm danh với mọi vai trò; buổi tương lai thì không ai điểm danh được;
+    // coach chỉ điểm danh từ giờ bắt đầu buổi đến 23:59 cùng ngày; quản trị sửa được mọi buổi từ hôm nay về quá khứ (không giới hạn giờ).
     private static string? AttendanceLock(ClassSession session, DateTime now, bool asAdmin)
     {
         if (session.Status == "cancelled")
@@ -446,12 +446,12 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
             return "Buổi đã hủy nên không điểm danh.";
         }
 
+        var today = DateOnly.FromDateTime(now);
         if (asAdmin)
         {
-            return null;
+            return session.SessionDate > today ? "Buổi học ở tương lai nên chưa thể điểm danh." : null;
         }
 
-        var today = DateOnly.FromDateTime(now);
         if (session.SessionDate > today || (session.SessionDate == today && TimeOnly.FromDateTime(now) < session.StartTime))
         {
             return $"Chưa tới giờ bắt đầu buổi học ({session.StartTime:HH\\:mm} {session.SessionDate:dd/MM/yyyy}), coach chỉ điểm danh được từ lúc đó.";
