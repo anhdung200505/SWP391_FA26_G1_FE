@@ -5,7 +5,7 @@ const links = [
   { id: 'home', to: '/quan-ly', label: 'Bảng điều khiển', end: true },
   { id: 'accounts', to: '/quan-ly/tai-khoan', label: 'Tài khoản người dùng' },
   { id: 'packages', to: '/quan-ly/goi', label: 'Gói hội viên' },
-  { id: 'ai', to: '/quan-ly/han-muc-ai', label: 'Hạn mức AI' },
+  { id: 'ai', to: '/quan-ly/han-muc-ai', label: 'Hạn mức gợi ý tập' },
   { id: 'classes', to: '/quan-ly/lop-hoc', label: 'Lớp học' },
   { id: 'enrollment', to: '/quan-ly/tu-van-ghi-danh', label: 'Tư vấn ghi danh' },
 ];

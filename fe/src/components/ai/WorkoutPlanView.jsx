@@ -3,7 +3,7 @@ const PIPELINE = [
   ['trainingHistory', 'Lịch sử tập'],
   ['sendAnalysisRequest', 'Yêu cầu phân tích'],
   ['analyzeHealthMetricAndBmi', 'Phân tích BMI'],
-  ['generatePersonalizedWorkoutPlan', 'Giáo án được tạo'],
+  ['generatePersonalizedWorkoutPlan', 'Gợi ý tập được tạo'],
 ];
 
 function formatClock(value) {
@@ -21,7 +21,7 @@ export default function WorkoutPlanView({ plan }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold text-[#e31b23]">
-            {saved ? 'Giáo án đã lưu' : 'Giáo án chờ xác nhận'} · lần {plan.revision}
+            {saved ? 'Gợi ý đã lưu' : 'Gợi ý chờ xác nhận'} · lần {plan.revision}
           </p>
           <h2 className="mt-1 text-xl font-black text-balance text-gray-900">{plan.title}</h2>
         </div>
@@ -70,12 +70,12 @@ export default function WorkoutPlanView({ plan }) {
           ))}
         </ol>
       ) : (
-        <p className="mt-5 text-sm text-gray-500">Giáo án chưa có buổi tập.</p>
+        <p className="mt-5 text-sm text-gray-500">Gợi ý tập chưa có buổi tập.</p>
       )}
 
       {plan.pipeline && (
         <details className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-          <summary className="cursor-pointer text-sm font-bold text-gray-800">Cách hệ thống lập giáo án</summary>
+          <summary className="cursor-pointer text-sm font-bold text-gray-800">Cách hệ thống lập gợi ý tập</summary>
           <dl className="mt-3 space-y-3">
             {PIPELINE.map(([key, label]) =>
               plan.pipeline[key] ? (

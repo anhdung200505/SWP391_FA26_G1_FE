@@ -135,9 +135,9 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
       <section className="rounded-3xl border border-gray-200 bg-white p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black">Mô tả khóa</h2>
+            <h2 className="text-lg font-black">Giáo án và bài tập của lớp</h2>
             <p className="mt-1 max-w-2xl text-sm text-gray-500">
-              AI chỉ đọc mô tả này và lịch sử tập bạn đã ghi cho đúng lớp. Hiện có {workspace?.historyCount ?? 0} ghi chú.
+              Đây là giáo án huấn luyện viên soạn cho cả lớp. Học viên xem ở mục Bài tập lớp sau khi bạn phát hành. Không phải gợi ý tập cá nhân của từng học viên. AI chỉ đọc mô tả khóa và lịch sử tập bạn đã ghi. Hiện có {workspace?.historyCount ?? 0} ghi chú.
             </p>
           </div>
           <button type="button" onClick={onOpenHistory} className="text-sm font-bold text-[#e31b23]">

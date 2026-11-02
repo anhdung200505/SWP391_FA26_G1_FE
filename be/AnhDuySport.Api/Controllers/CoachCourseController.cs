@@ -30,7 +30,7 @@ public class CoachCourseController(CoachCourseFlowService courses, CoachCourseAi
 
     [HttpPut("{classId}/sessions/{sessionId}/attendance")]
     [EndpointSummary("Lưu điểm danh và ghi audit log")]
-    [EndpointDescription("Gửi đủ học viên đang học. status: present, late hoặc absent. Buổi đã hủy trả 400.")]
+    [EndpointDescription("Gửi đủ học viên đang học. status: present, late hoặc absent. Buổi đã hủy hoặc chưa tới ngày học trả 400.")]
     public async Task<ActionResult<AttendanceSheetDto>> SaveAttendance(string classId, string sessionId, SubmitAttendanceRequest request) =>
         Ok(await courses.SaveAttendanceAsync(classId, sessionId, request));
 

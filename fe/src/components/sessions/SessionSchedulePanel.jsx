@@ -195,7 +195,7 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
           </h2>
           <p className="text-[11px] font-bold text-slate-400">
             {isAdmin
-              ? 'Đổi HLV, phòng hoặc hủy buổi chưa diễn ra. Học viên trong lớp nhận thông báo.'
+              ? 'Đổi HLV, phòng hoặc hủy buổi chưa diễn ra. Hủy buổi hôm nay hoặc buổi sắp tới sẽ tự thêm buổi bù cùng thứ, cùng giờ. Học viên trong lớp nhận thông báo.'
               : 'Đổi HLV khi HLV phụ trách bận. Học viên trong lớp nhận thông báo.'}
           </p>
         </div>
@@ -492,8 +492,13 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
     setSaving(true);
     setError('');
     try {
-      await cancelSession(session.id, reason.trim());
-      onSaved(`Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}).`);
+      const result = await cancelSession(session.id, reason.trim());
+      const makeupDate = result?.makeupSession?.date ? formatDate(String(result.makeupSession.date).slice(0, 10)) : '';
+      onSaved(
+        makeupDate
+          ? `Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}). Buổi bù: ${makeupDate}.`
+          : `Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}).`,
+      );
     } catch (err) {
       setError(err.message || 'Hủy buổi học thất bại.');
       setSaving(false);
@@ -504,8 +509,9 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
     <ModalFrame title="Hủy buổi học" badge="Xác nhận" session={session} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
         <div className="text-xs text-slate-600 bg-red-50/50 border border-red-100 p-3.5 rounded-xl">
-          Buổi học sẽ chuyển sang <strong className="text-[#e31b23]">Đã hủy</strong> và không thể hoàn tác.{' '}
-          {session.enrolledCount} học viên trong lớp sẽ nhận thông báo kèm lý do.
+          Buổi học sẽ chuyển sang <strong className="text-[#e31b23]">Đã hủy</strong>. Hệ thống thêm một buổi bù cùng thứ, cùng giờ vào tuần sau.
+          Nếu tuần sau lớp đã có buổi này, buổi bù dời sang tuần cùng thứ còn trống.{' '}
+          {session.enrolledCount} học viên trong lớp sẽ nhận thông báo kèm lý do và ngày bù.
         </div>
         <label className="block space-y-1.5">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Lý do hủy (ghi chú)</span>

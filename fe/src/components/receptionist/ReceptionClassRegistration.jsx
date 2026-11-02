@@ -86,7 +86,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         if (Array.isArray(pkgs)) {
           setPackages(pkgs);
           if (pkgs.length > 0) {
-            const defaultPkg = pkgs.find((p) => p.name?.includes('Bạc')) || pkgs[0];
+            const defaultPkg = pkgs.find((p) => p.code === 'PKG-001' || p.name?.toLowerCase().includes('đồng')) || pkgs[0];
             setSelectedPackage(defaultPkg);
           }
         }
@@ -244,7 +244,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         email: searchKeyword.includes('@') ? searchKeyword : '',
         phone: !searchKeyword.includes('@') ? searchKeyword : '',
       }));
-    } fontinally: {
+    } finally {
       setLoading(false);
     }
   };
@@ -529,8 +529,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
               <div className="lg:col-span-7 space-y-6">
                 {/* 1. CHỌN GÓI HỘI VIÊN */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="text-sm font-black text-slate-900 uppercase">1. CHỌN GÓI HỘI VIÊN</h3>
+                  <div className="pb-2 border-b border-slate-100">
+                    <h3 className="text-sm font-black text-slate-900">Gói hội viên</h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Khi đăng ký kèm lớp, Hạng Đồng là gói bắt buộc và được tặng. Hạng Bạc hoặc Hạng Vàng là nâng hạng thay cho gói tặng.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3">
@@ -577,6 +580,18 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                               <p className="text-[11px] text-slate-500 font-medium">
                                 Thời hạn: {pkg.validityMonths || 1} tháng
                               </p>
+                              {includeClass && isBronze && (
+                                <p className="text-[11px] font-semibold text-emerald-700">
+                                  Gói bắt buộc khi đăng ký khóa học. Tặng kèm.
+                                </p>
+                              )}
+                              {Array.isArray(pkg.benefits) && pkg.benefits.length > 0 && (
+                                <ul className="mt-1 list-disc pl-4 text-[11px] text-slate-500">
+                                  {pkg.benefits.map((benefit) => (
+                                    <li key={benefit}>{benefit}</li>
+                                  ))}
+                                </ul>
+                              )}
                             </div>
                           </div>
 
@@ -584,7 +599,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                             {includeClass ? (
                               isBronze ? (
                                 <span className="text-xs font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded">
-                                  TẶNG MIỄN PHÍ (0đ)
+                                  Bắt buộc · 0đ
                                 </span>
                               ) : (
                                 <div>

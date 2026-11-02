@@ -234,7 +234,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         return await SelectSessionAsync(sessionId);
     }
 
-    public async Task<SessionDto> CancelSessionAsync(string sessionId, CancelSessionRequest request)
+    public async Task<CancelSessionResult> CancelSessionAsync(string sessionId, CancelSessionRequest request)
     {
         var session = await LoadSessionAsync(ParseId(sessionId), tracking: true);
         EnsureEditable(session);
@@ -245,13 +245,102 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
             throw new RegistrationException("Buổi học đã có điểm danh, không thể hủy.");
         }
 
+        var makeupDate = await FindMakeupDateAsync(session);
+        var nextNo = (await db.ClassSessions
+            .Where(item => item.ClassId == session.ClassId)
+            .MaxAsync(item => (int?)item.SessionNo) ?? 0) + 1;
+        var makeup = new ClassSession
+        {
+            ClassId = session.ClassId,
+            SessionNo = nextNo,
+            SessionDate = makeupDate,
+            TimeSlotId = session.TimeSlotId,
+            StartTime = session.StartTime,
+            EndTime = session.EndTime,
+            CoachUserId = session.CoachUserId,
+            RoomId = session.RoomId,
+            Status = "scheduled",
+            Note = $"Buổi bù cho buổi ngày {session.SessionDate:dd/MM/yyyy}.",
+            CreatedAt = DateTime.Now,
+        };
+        if (session.Class!.EndDate is DateOnly end && end < makeupDate)
+        {
+            session.Class.EndDate = makeupDate;
+        }
+
         session.Status = "cancelled";
         session.Note = reason;
-        await NotifyMembersAsync(session, $"Hủy buổi học lớp {session.Class!.ClassName}", $"{When(session)} bị hủy.\nLý do: {TextFormat.Sentence(reason)}");
-        AddLog("Hủy buổi học", session, reason);
+        db.ClassSessions.Add(makeup);
+        var makeupWhen = $"Buổi {nextNo} ngày {makeupDate:dd/MM/yyyy} {session.StartTime:HH\\:mm}-{session.EndTime:HH\\:mm}";
+        await NotifyMembersAsync(
+            session,
+            $"Hủy buổi học lớp {session.Class.ClassName}",
+            $"{When(session)} bị hủy.\nLý do: {TextFormat.Sentence(reason)}\nBuổi bù: {makeupWhen}.");
+        AddLog("Hủy buổi học", session, $"{reason}. Buổi bù: {makeupWhen}");
         await SaveAsync();
-        return await SelectSessionAsync(sessionId);
+        return new CancelSessionResult(
+            await SelectSessionAsync(session.SessionId.ToString()),
+            await SelectSessionAsync(makeup.SessionId.ToString()));
     }
+
+    // Cùng thứ, cùng giờ. Ưu tiên đúng tuần sau; nếu lớp đã có buổi đó hoặc HLV/phòng trùng thì tuần cùng thứ kế tiếp.
+    private async Task<DateOnly> FindMakeupDateAsync(ClassSession session)
+    {
+        const int maxWeeks = 26;
+        var from = session.SessionDate.AddDays(7);
+        var until = session.SessionDate.AddDays(7 * maxWeeks);
+        var classType = session.Class!.ClassType;
+        var roomLimit = session.Room?.PrivateConcurrency ?? 1;
+
+        var occupied = (await db.ClassSessions.AsNoTracking()
+            .Where(item => item.ClassId == session.ClassId
+                && item.TimeSlotId == session.TimeSlotId
+                && item.SessionDate >= from
+                && item.SessionDate <= until)
+            .Select(item => item.SessionDate)
+            .ToListAsync()).ToHashSet();
+
+        var overlaps = await db.ClassSessions.AsNoTracking()
+            .Where(item => item.Status != "cancelled"
+                && item.SessionDate >= from
+                && item.SessionDate <= until
+                && item.StartTime < session.EndTime
+                && item.EndTime > session.StartTime
+                && (item.CoachUserId == session.CoachUserId || item.RoomId == session.RoomId))
+            .Select(item => new MakeupOverlap(item.SessionDate, item.CoachUserId, item.RoomId, item.Class!.ClassType))
+            .ToListAsync();
+
+        for (var week = 1; week <= maxWeeks; week++)
+        {
+            var date = session.SessionDate.AddDays(7 * week);
+            if (occupied.Contains(date))
+            {
+                continue;
+            }
+
+            var sameDay = overlaps.Where(item => item.Date == date).ToList();
+            if (sameDay.Any(item => item.CoachUserId == session.CoachUserId))
+            {
+                continue;
+            }
+
+            var roomHits = sameDay.Where(item => item.RoomId == session.RoomId).ToList();
+            var roomBlocked = classType == "group"
+                ? roomHits.Count > 0
+                : roomHits.Any(item => item.ClassType == "group")
+                    || roomHits.Count(item => item.ClassType == "private") >= roomLimit;
+            if (roomBlocked)
+            {
+                continue;
+            }
+
+            return date;
+        }
+
+        throw new RegistrationException("Không xếp được buổi bù cùng thứ trong 26 tuần tới vì lịch lớp, huấn luyện viên hoặc phòng đã kín.");
+    }
+
+    private sealed record MakeupOverlap(DateOnly Date, int CoachUserId, int RoomId, string ClassType);
 
     private async Task<ClassSession> LoadSessionAsync(int id, bool tracking)
     {
