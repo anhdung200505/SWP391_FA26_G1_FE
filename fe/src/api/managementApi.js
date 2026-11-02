@@ -287,6 +287,10 @@ export function getMyClassRegistrations() {
   return request('/class-registrations/mine');
 }
 
+export function getBlockedClasses() {
+  return request('/class-registrations/blocked');
+}
+
 export function getClassRegistrationStatus(paymentId) {
   return request(`/class-registrations/${paymentId}`);
 }

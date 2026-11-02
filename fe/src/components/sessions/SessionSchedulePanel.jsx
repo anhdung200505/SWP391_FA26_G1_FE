@@ -441,14 +441,14 @@ export function EditSessionModal({ session, isAdmin, onClose, onSaved }) {
 
           <label className="block space-y-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-              {isAdmin ? 'Ghi chú (hiện ở cuối hàng)' : 'Lý do đổi HLV (ghi chú)'}
+              {isAdmin ? 'Ghi chú (hiện ở cuối hàng, xuống dòng trong thông báo)' : 'Ghi chú đổi HLV (ghi là thay thế)'}
             </span>
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={3}
               maxLength={500}
-              placeholder={isAdmin ? 'VD: HLV nghỉ phép, chuyển sang phòng 2 do bảo trì...' : 'VD: HLV phụ trách nghỉ ốm.'}
+              placeholder={isAdmin ? 'VD: HLV nghỉ phép. Khi đổi HLV, hệ thống ghi HLV thay thế rồi xuống dòng phần ghi chú này.' : 'VD: HLV phụ trách nghỉ ốm. Ghi chú này xuống dòng dưới dòng HLV thay thế.'}
               className={`${inputClass} w-full font-medium resize-none`}
             />
           </label>

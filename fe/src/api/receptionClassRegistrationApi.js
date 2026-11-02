@@ -56,6 +56,10 @@ export function registerGuestAccount(payload) {
  * 2. Tra cứu học viên theo Email hoặc SĐT (10 số)
  * GET /api/reception/members/lookup?keyword=...
  */
+export function getMemberBlockedClasses(memberUserId) {
+  return request(`/reception/members/${memberUserId}/blocked-classes`);
+}
+
 export function lookupMember(keyword) {
   return request(`/reception/members/lookup?keyword=${encodeURIComponent(keyword)}`, {
     method: 'GET',

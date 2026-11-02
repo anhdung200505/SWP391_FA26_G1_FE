@@ -129,6 +129,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             .ToListAsync();
 
         return classes
+            .GroupBy(item => item.ClassId)
+            .Select(group => group.First())
             .Select(item => new ClassSummaryDto(
                 item.ClassId.ToString(),
                 item.ClassName,
@@ -147,6 +149,35 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 item.NextSlot is null ? null : ClassSessionPlanner.ToSlotDto(item.NextSlot),
                 item.Schedule.Select(ClassSessionPlanner.ToScheduleDto).ToList()))
             .ToList();
+    }
+
+    // Lớp đang mở mà học viên này không được chọn: đã ghi danh, cùng khóa, hoặc trùng thứ và giờ.
+    public async Task<IReadOnlyList<ClassRegistrationBlockDto>> BlockedClassesAsync(int memberUserId)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var openIds = await OpenClasses(today).Select(item => item.ClassId).ToListAsync();
+        var enrolledIds = await db.ClassEnrollments.AsNoTracking()
+            .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled")
+            .Select(enrollment => enrollment.ClassId)
+            .ToListAsync();
+        var ids = openIds.Union(enrolledIds).ToList();
+        var conflicts = await MemberScheduleConflict.FindManyAsync(db, memberUserId, ids, HoldSince());
+        var blocks = new List<ClassRegistrationBlockDto>();
+        foreach (var id in ids)
+        {
+            if (enrolledIds.Contains(id))
+            {
+                blocks.Add(new ClassRegistrationBlockDto(id.ToString(), "Bạn đã đăng ký lớp này."));
+                continue;
+            }
+
+            if (conflicts.TryGetValue(id, out var reason))
+            {
+                blocks.Add(new ClassRegistrationBlockDto(id.ToString(), reason));
+            }
+        }
+
+        return blocks;
     }
 
     public async Task<ClassDetailDto> SelectClassAsync(string classId)
@@ -623,6 +654,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         var now = DateTime.Now;
         var className = payment.Class?.ClassName ?? "";
         var hasSeat = true;
+        string? scheduleBlock = null;
         if (payment.ClassId is int classId)
         {
             // Khóa dòng lớp để hai thanh toán cùng lúc cho chỗ cuối không cùng qua.
@@ -640,7 +672,13 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 .FirstOrDefaultAsync(item => item.ClassId == classId && item.UserId == payment.UserId);
 
             var alreadyEnrolled = enrollment?.Status == "enrolled";
-            hasSeat = alreadyEnrolled || capacity is null || enrolledCount < capacity;
+            await db.Database
+                .SqlQuery<int>($"SELECT user_id AS [Value] FROM [user] WITH (UPDLOCK, HOLDLOCK) WHERE user_id = {payment.UserId}")
+                .ToListAsync();
+            scheduleBlock = alreadyEnrolled
+                ? null
+                : await MemberScheduleConflict.FindAsync(db, payment.UserId, classId, HoldSince());
+            hasSeat = scheduleBlock is null && (alreadyEnrolled || capacity is null || enrolledCount < capacity);
             if (hasSeat && !alreadyEnrolled)
             {
                 if (enrollment is null)
@@ -684,10 +722,16 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             db.Notifications.Add(new AccountNotification
             {
                 UserId = payment.UserId,
-                Title = hasSeat ? "Cảm ơn bạn đã đăng ký lớp" : "Lớp đã đầy, AnhDuy Sport sẽ hoàn tiền",
+                Title = hasSeat
+                    ? "Cảm ơn bạn đã đăng ký lớp"
+                    : scheduleBlock is null
+                        ? "Lớp đã đầy, AnhDuy Sport sẽ hoàn tiền"
+                        : "Không ghi danh được vì trùng lớp",
                 Content = hasSeat
                     ? $"Cảm ơn {memberName}. AnhDuy Sport đã nhận học phí lớp {className}. Tôi, {memberName}, cam kết tham gia đúng lịch lớp {className}, đóng học phí đã thống nhất và tuân thủ nội quy trung tâm AnhDuy Sport."
-                    : $"Xin lỗi {memberName}. AnhDuy Sport đã nhận học phí nhưng lớp {className} đã đầy. Chúng tôi sẽ liên hệ để hoàn tiền cho bạn.",
+                    : scheduleBlock is null
+                        ? $"Xin lỗi {memberName}. AnhDuy Sport đã nhận học phí nhưng lớp {className} đã đầy. Chúng tôi sẽ liên hệ để hoàn tiền cho bạn."
+                        : $"Xin lỗi {memberName}. Không ghi danh lớp {className} vì {scheduleBlock} AnhDuy Sport sẽ liên hệ để hoàn tiền.",
                 IsRead = false,
                 CreatedAt = now,
             });
@@ -823,7 +867,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             throw new InvalidOperationException("Thanh toán chưa thành công vì lớp không còn chỗ. Hãy chọn lớp khác.");
         }
 
-        if (trainingClass.Enrollments.Any(item => item.UserId == user.UserId && item.Status == "enrolled"))
+        var existingEnrollment = trainingClass.Enrollments.FirstOrDefault(item => item.UserId == user.UserId);
+        if (existingEnrollment?.Status == "enrolled")
         {
             throw new InvalidOperationException("Bạn đã ghi danh lớp này.");
         }
@@ -868,13 +913,21 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         ClassRegistrationLogs.Add(
             db, user.UserId, trainingClass.ClassId, ClassRegistrationLogs.Register,
             new RegistrationActor(user.UserId, "MEMBER"), now, payment, classAssignedBy: "MEMBER");
-        db.ClassEnrollments.Add(new ClassEnrollment
+        if (existingEnrollment is null)
         {
-            ClassId = trainingClass.ClassId,
-            UserId = user.UserId,
-            EnrolledAt = now,
-            Status = "enrolled",
-        });
+            db.ClassEnrollments.Add(new ClassEnrollment
+            {
+                ClassId = trainingClass.ClassId,
+                UserId = user.UserId,
+                EnrolledAt = now,
+                Status = "enrolled",
+            });
+        }
+        else
+        {
+            existingEnrollment.Status = "enrolled";
+            existingEnrollment.EnrolledAt = now;
+        }
 
         var thankYou = $"Cảm ơn {user.FullName}. AnhDuy Sport đã nhận học phí lớp {trainingClass.ClassName}.";
         var commitment = $"Tôi, {user.FullName}, cam kết tham gia đúng lịch lớp {trainingClass.ClassName}, đóng học phí đã thống nhất và tuân thủ nội quy trung tâm AnhDuy Sport.";
@@ -1007,22 +1060,33 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 Enrolled = item.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
             })
             .ToListAsync();
+        string? blocked = null;
         foreach (var candidate in candidates)
         {
             var heldByOthers = await LiveHolds().CountAsync(hold => hold.ClassId == candidate.ClassId && hold.UserId != memberUserId);
-            if (AvailableSeats(candidate.Capacity, candidate.Enrolled + heldByOthers) is null or > 0)
+            if (AvailableSeats(candidate.Capacity, candidate.Enrolled + heldByOthers) == 0)
             {
-                return (candidate.ClassId, true);
+                continue;
             }
+
+            var conflict = await MemberScheduleConflict.FindAsync(db, memberUserId, candidate.ClassId, HoldSince());
+            if (conflict is not null)
+            {
+                blocked ??= conflict;
+                continue;
+            }
+
+            return (candidate.ClassId, true);
         }
 
         var studying = await db.Classes
             .Where(item => item.Course!.SportId == sportId)
             .SelectMany(item => item.Enrollments)
             .AnyAsync(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled");
-        throw new RegistrationException(studying && candidates.Count == 0
-            ? "Bạn đã đăng ký lớp của môn này."
-            : "Môn này hiện chưa có lớp còn chỗ.");
+        throw new RegistrationException(blocked
+            ?? (studying && candidates.Count == 0
+                ? "Bạn đã đăng ký lớp của môn này."
+                : "Môn này hiện chưa có lớp còn chỗ."));
     }
 
     // Chỉ lấy đơn pending còn hạn giữ chỗ: đơn quá hạn không được trả lại cho học viên.

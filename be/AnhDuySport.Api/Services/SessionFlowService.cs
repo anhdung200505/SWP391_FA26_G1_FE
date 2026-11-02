@@ -176,13 +176,17 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         EnsureEditable(session);
 
         var changes = new List<string>();
+        var coachChanged = false;
         if (!string.IsNullOrWhiteSpace(request.CoachUserId))
         {
             var coach = await ResolveCoachAsync(request.CoachUserId, session.Class!.Course!.SportId);
             if (coach.UserId != session.CoachUserId)
             {
-                changes.Add(CoachChange(session, coach));
+                var change = CoachChange(session, coach);
+                changes.Add(change);
                 session.CoachUserId = coach.UserId;
+                session.Note = TextFormat.SubstituteNote(change, NormalizeNote(request.Note));
+                coachChanged = true;
             }
         }
 
@@ -196,15 +200,26 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
             }
         }
 
-        if (request.Note is not null)
+        if (!coachChanged && request.Note is not null)
         {
             session.Note = NormalizeNote(request.Note);
         }
 
         if (changes.Count > 0)
         {
-            await NotifyMembersAsync(session, $"Thay đổi buổi học lớp {session.Class!.ClassName}",
-                $"{When(session)}:\n{string.Join("\n", changes)}." + NoteSuffix(session.Note));
+            var body = coachChanged
+                ? $"{When(session)}:\n{session.Note}"
+                : TextFormat.WithNote($"{When(session)}:\n{string.Join("\n", changes)}.", session.Note);
+            if (coachChanged)
+            {
+                var extra = changes.Where(item => !item.StartsWith("HLV", StringComparison.Ordinal)).ToList();
+                if (extra.Count > 0)
+                {
+                    body += "\n" + string.Join("\n", extra) + ".";
+                }
+            }
+
+            await NotifyMembersAsync(session, $"Thay đổi buổi học lớp {session.Class!.ClassName}", body);
         }
 
         AddLog("Điều chỉnh buổi học", session, changes.Count > 0 ? string.Join("; ", changes) : "Cập nhật ghi chú");
@@ -226,9 +241,9 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
 
         var change = CoachChange(session, coach);
         session.CoachUserId = coach.UserId;
-        session.Note = NormalizeNote(request.Note) ?? session.Note;
+        session.Note = TextFormat.SubstituteNote(change, NormalizeNote(request.Note));
         await NotifyMembersAsync(session, $"Đổi huấn luyện viên lớp {session.Class.ClassName}",
-            $"{When(session)}:\n{change}." + NoteSuffix(session.Note));
+            $"{When(session)}:\n{session.Note}");
         AddLog("Đổi HLV buổi học", session, change);
         await SaveAsync();
         return await SelectSessionAsync(sessionId);
@@ -275,7 +290,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         await NotifyMembersAsync(
             session,
             $"Hủy buổi học lớp {session.Class.ClassName}",
-            $"{When(session)} bị hủy.\nLý do: {TextFormat.Sentence(reason)}\nBuổi bù: {makeupWhen}.");
+            TextFormat.WithNote($"{When(session)} bị hủy.\nBuổi bù: {makeupWhen}.", reason));
         AddLog("Hủy buổi học", session, $"{reason}. Buổi bù: {makeupWhen}");
         await SaveAsync();
         return new CancelSessionResult(
@@ -461,8 +476,6 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
 
     private static string When(ClassSession session) =>
         $"{ClassSessionPlanner.SessionTitle(session.SessionNo)} ngày {session.SessionDate:dd/MM/yyyy} {session.StartTime:HH\\:mm}-{session.EndTime:HH\\:mm}";
-
-    private static string NoteSuffix(string? note) => string.IsNullOrWhiteSpace(note) ? "" : $"\nGhi chú: {TextFormat.Sentence(note)}";
 
     // HLV khác HLV phụ trách lớp là dạy thay; đổi về đúng HLV phụ trách thì ghi là dạy lại.
     private static string CoachChange(ClassSession session, UserAccount newCoach)

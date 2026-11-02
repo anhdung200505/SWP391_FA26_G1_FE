@@ -10,13 +10,40 @@ public static class MemberScheduleConflict
 {
     public static async Task EnsureNoneAsync(AppDbContext db, int memberUserId, int targetClassId, DateTime holdSince, int? ignoreClassId = null)
     {
-        var target = await LoadAsync(db, [targetClassId]);
-        if (target.Count == 0)
+        var reason = await FindAsync(db, memberUserId, targetClassId, holdSince, ignoreClassId);
+        if (reason is not null)
         {
-            return;
+            throw new RegistrationException(reason);
+        }
+    }
+
+    // Null khi lớp này không trùng lớp đang học, đơn đang giữ chỗ, cùng khóa hoặc cùng lịch.
+    public static async Task<string?> FindAsync(
+        AppDbContext db,
+        int memberUserId,
+        int targetClassId,
+        DateTime holdSince,
+        int? ignoreClassId = null)
+    {
+        var reasons = await FindManyAsync(db, memberUserId, [targetClassId], holdSince, ignoreClassId);
+        return reasons.GetValueOrDefault(targetClassId);
+    }
+
+    public static async Task<Dictionary<int, string>> FindManyAsync(
+        AppDbContext db,
+        int memberUserId,
+        IReadOnlyCollection<int> targetClassIds,
+        DateTime holdSince,
+        int? ignoreClassId = null)
+    {
+        var result = new Dictionary<int, string>();
+        if (targetClassIds.Count == 0)
+        {
+            return result;
         }
 
         var today = DateOnly.FromDateTime(DateTime.Now);
+        var targets = await LoadAsync(db, targetClassIds);
         var busyClassIds = await db.ClassEnrollments.AsNoTracking()
             .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled")
             .Select(enrollment => enrollment.ClassId)
@@ -26,38 +53,45 @@ public static class MemberScheduleConflict
                     && payment.Status == "pending"
                     && payment.Invoice!.IssuedAt > holdSince)
                 .Select(payment => payment.ClassId!.Value))
-            .Where(classId => classId != targetClassId && classId != ignoreClassId)
+            .Where(classId => classId != ignoreClassId)
             .ToListAsync();
         if (busyClassIds.Count == 0)
         {
-            return;
+            return result;
         }
 
-        var wanted = target[0];
         var busy = (await LoadAsync(db, busyClassIds))
             .Where(item => item.EndDate is null || item.EndDate >= today)
             .Where(item => item.Status is not ("cancelled" or "completed"))
             .ToList();
 
-        var sameCourse = busy.FirstOrDefault(item => item.CourseId == wanted.CourseId);
-        if (sameCourse is not null)
+        foreach (var wanted in targets)
         {
-            throw new RegistrationException(
-                $"Bạn đã có lớp {sameCourse.ClassName} của cùng khóa {wanted.CourseName}. Mỗi khóa chỉ học một lớp.");
-        }
-
-        foreach (var other in busy.Where(item => DatesOverlap(wanted, item)))
-        {
-            var clash = wanted.Slots.SelectMany(mine => other.Slots
-                    .Where(theirs => theirs.Weekday == mine.Weekday && theirs.Start < mine.End && mine.Start < theirs.End)
-                    .Select(_ => mine))
-                .FirstOrDefault();
-            if (clash is not null)
+            var others = busy.Where(item => item.ClassId != wanted.ClassId).ToList();
+            var sameCourse = others.FirstOrDefault(item => item.CourseId == wanted.CourseId);
+            if (sameCourse is not null)
             {
-                throw new RegistrationException(
-                    $"Trùng lịch với lớp {other.ClassName}: {ClassSessionPlanner.WeekdayName(clash.Weekday)} {clash.Start:HH\\:mm}-{clash.End:HH\\:mm}.");
+                result[wanted.ClassId] =
+                    $"Bạn đã có lớp {sameCourse.ClassName} của cùng khóa {wanted.CourseName}. Mỗi khóa chỉ học một lớp.";
+                continue;
+            }
+
+            foreach (var other in others.Where(item => DatesOverlap(wanted, item)))
+            {
+                var clash = wanted.Slots.SelectMany(mine => other.Slots
+                        .Where(theirs => theirs.Weekday == mine.Weekday && theirs.Start < mine.End && mine.Start < theirs.End)
+                        .Select(_ => mine))
+                    .FirstOrDefault();
+                if (clash is not null)
+                {
+                    result[wanted.ClassId] =
+                        $"Trùng lịch với lớp {other.ClassName}: {ClassSessionPlanner.WeekdayName(clash.Weekday)} {clash.Start:HH\\:mm}-{clash.End:HH\\:mm}.";
+                    break;
+                }
             }
         }
+
+        return result;
     }
 
     private static bool DatesOverlap(ClassWindow a, ClassWindow b) =>
@@ -88,6 +122,7 @@ public static class MemberScheduleConflict
 
         return rows
             .Select(row => new ClassWindow(
+                row.ClassId,
                 row.ClassName,
                 row.CourseId,
                 row.CourseName,
@@ -101,6 +136,7 @@ public static class MemberScheduleConflict
     private sealed record WeeklySlot(int Weekday, TimeOnly Start, TimeOnly End);
 
     private sealed record ClassWindow(
+        int ClassId,
         string ClassName,
         int CourseId,
         string CourseName,
