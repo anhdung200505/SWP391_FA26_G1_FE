@@ -28,6 +28,12 @@ public class ReceptionController(ReceptionFlowService reception) : ControllerBas
     public async Task<ActionResult<ReceptionMemberDto>> LookupMember([FromQuery] string? keyword) =>
         Ok(await reception.LookupMemberAsync(keyword));
 
+    [HttpGet("members/{memberUserId}/blocked-classes")]
+    [EndpointSummary("Lễ tân xem lớp học viên không được đăng ký vì trùng")]
+    [EndpointDescription("Cùng quy tắc với học viên tự đăng ký: đã ghi danh, cùng khóa, hoặc trùng lịch.")]
+    public async Task<ActionResult<IReadOnlyList<ClassRegistrationBlockDto>>> BlockedClasses(string memberUserId) =>
+        Ok(await reception.BlockedClassesAsync(memberUserId));
+
     [HttpPost("members/{memberUserId}/class-registrations")]
     [EndpointSummary("Lễ tân đăng ký lớp giùm học viên")]
     [EndpointDescription("Body giống POST /api/class-registrations: bắt buộc sportId, classId và slotId (id buổi học) không bắt buộc. Tạo hóa đơn và đơn thanh toán pending giữ chỗ 3 phút, ghi lễ tân là người đăng ký. Thu tiền xong gọi confirm-payment.")]

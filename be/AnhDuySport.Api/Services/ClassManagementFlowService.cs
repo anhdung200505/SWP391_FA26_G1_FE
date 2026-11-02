@@ -459,16 +459,14 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
 
         await using var transaction = await db.Database.BeginTransactionAsync();
         item.CoachUserId = coachId;
+        var change = $"HLV thay thế: {newCoach} (thay HLV {oldCoach}) từ ngày {first:dd/MM/yyyy}, {remaining.Count} buổi còn lại";
+        var storedNote = TextFormat.SubstituteNote(change, note);
         foreach (var session in remaining)
         {
             session.CoachUserId = coachId;
-            if (!string.IsNullOrEmpty(note))
-            {
-                session.Note = note.Length <= 500 ? note : note[..500];
-            }
+            session.Note = storedNote;
         }
 
-        var change = $"HLV thay thế: {newCoach} (thay HLV {oldCoach}) từ ngày {first:dd/MM/yyyy}, {remaining.Count} buổi còn lại.";
         var memberIds = await db.ClassEnrollments
             .Where(enrollment => enrollment.ClassId == item.ClassId && enrollment.Status == "enrolled")
             .Select(enrollment => enrollment.UserId)
@@ -479,7 +477,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             {
                 UserId = memberId,
                 Title = Shorten($"Đổi huấn luyện viên lớp {item.ClassName}", 200),
-                Content = $"Lớp {item.ClassName}:\n{change}" + (string.IsNullOrEmpty(note) ? "" : $"\nLý do: {TextFormat.Sentence(note)}"),
+                Content = $"Lớp {item.ClassName}:\n{storedNote}",
                 IsRead = false,
                 CreatedAt = now,
             });
@@ -491,7 +489,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
             Action = Shorten($"Đổi HLV lớp {item.ClassName}", 100),
             EntityName = "class",
             EntityId = item.ClassId,
-            Detail = $"{change}\nĐã thông báo {memberIds.Count} học viên." + (string.IsNullOrEmpty(note) ? "" : $"\nLý do: {TextFormat.Sentence(note)}"),
+            Detail = $"{storedNote}\nĐã thông báo {memberIds.Count} học viên.",
             CreatedAt = now,
         });
 
