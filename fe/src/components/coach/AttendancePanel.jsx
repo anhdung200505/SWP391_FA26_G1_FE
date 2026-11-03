@@ -8,9 +8,26 @@ const MARKS = [
   { id: 'absent', label: 'Vắng' },
 ];
 
+function todayIso() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function sessionDay(session) {
+  return String(session?.sessionDate || '').slice(0, 10);
+}
+
+function pickSession(sessions) {
+  const today = todayIso();
+  const due = sessions.filter((session) => sessionDay(session) && sessionDay(session) <= today);
+  return (due.at(-1) || sessions[0])?.sessionId || '';
+}
+
 export default function AttendancePanel({ classId, sessions }) {
   const openSessions = (sessions || []).filter((session) => session.status !== 'cancelled');
-  const [sessionId, setSessionId] = useState(openSessions[0]?.sessionId || '');
+  const [sessionId, setSessionId] = useState(() => pickSession(openSessions));
   const [sheet, setSheet] = useState(null);
   const [marks, setMarks] = useState({});
   const [loading, setLoading] = useState(false);
@@ -19,7 +36,7 @@ export default function AttendancePanel({ classId, sessions }) {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    setSessionId(openSessions[0]?.sessionId || '');
+    setSessionId(pickSession(openSessions));
   }, [classId]);
 
   useEffect(() => {
@@ -110,8 +127,8 @@ export default function AttendancePanel({ classId, sessions }) {
                     <button
                       key={mark.id}
                       type="button"
-                      onClick={() => setMarks((current) => ({ ...current, [row.memberUserId]: mark.id }))}
                       disabled={!sheet.canEdit}
+                      onClick={() => setMarks((current) => ({ ...current, [row.memberUserId]: mark.id }))}
                       className={`rounded-full px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
                         active ? 'bg-[#12141d] text-white' : 'bg-[#f4f5f7] text-gray-600'
                       }`}

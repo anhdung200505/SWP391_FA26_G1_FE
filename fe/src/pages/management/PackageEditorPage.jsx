@@ -126,6 +126,9 @@ export default function PackageEditorPage({ mode }) {
       {phase === 'form' && (
         <section className="mt-5 rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
           <h1 className="text-2xl font-black">{isCreate ? 'Nhập thông tin gói' : 'Sửa phí, thời hạn và quyền lợi'}</h1>
+          <p className="mt-2 max-w-2xl text-sm text-pretty text-gray-600">
+            Mỗi dòng quyền lợi là một quyền học viên nhìn thấy khi chọn gói. Quản trị thêm, sửa hoặc xóa từng dòng rồi lưu.
+          </p>
           <DiagramCaption>{isCreate ? 'Enter Package Information' : 'Edit Fees, Validity & Benefits'}</DiagramCaption>
           {!isCreate && existing && (
             <p className="mt-3 text-sm text-gray-600">
@@ -170,7 +173,7 @@ export default function PackageEditorPage({ mode }) {
           </div>
 
           <fieldset className="mt-5">
-            <legend className="text-sm font-bold text-gray-700">Quyền lợi</legend>
+            <legend className="text-sm font-bold text-gray-700">Quyền lợi của gói này</legend>
             <div className="mt-2 space-y-2">
               {benefits.map((benefit, index) => (
                 <div key={`${index}-${benefits.length}`} className="flex gap-2">

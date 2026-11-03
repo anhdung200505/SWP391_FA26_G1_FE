@@ -14,7 +14,7 @@ import NotificationBell from '../components/NotificationBell';
 import { studentWorkspaceItems, useHasClassRegistration } from '../components/workspace/studentNav';
 import { useAuth } from '../context/AuthContext';
 
-const AI_STEPS = ['Chỉ số BMI', 'Mục tiêu', 'Giáo án AI', 'Lịch tập'];
+const AI_STEPS = ['Chỉ số BMI', 'Mục tiêu', 'Gợi ý tập', 'Lịch tập'];
 
 const fieldClass =
   'mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2';
@@ -104,7 +104,7 @@ export default function AiWorkoutPage() {
   const [regenerateError, setRegenerateError] = useState('');
 
   useEffect(() => {
-    document.title = 'Giáo án AI · AnhDuy Sport';
+    document.title = 'Gợi ý tập cá nhân · AnhDuy Sport';
   }, []);
 
   const applySnapshot = (accessData, routineData) => {
@@ -224,7 +224,7 @@ export default function AiWorkoutPage() {
     const recommendationId = access?.proposedPlan?.id || access?.recommendationId;
     const trimmedChanges = changes.trim();
     if (!recommendationId) {
-      setDecisionError('Chưa có giáo án để xác nhận.');
+      setDecisionError('Chưa có gợi ý tập để xác nhận.');
       return;
     }
     if (editRequired && !trimmedChanges) {
@@ -252,7 +252,7 @@ export default function AiWorkoutPage() {
   const submitRegenerate = () => {
     const trimmed = regenerateNote.trim();
     if (!trimmed) {
-      setRegenerateError('Nhập lý do muốn tạo lại giáo án.');
+      setRegenerateError('Nhập lý do muốn tạo lại gợi ý tập.');
       return;
     }
     setRegenerateError('');
@@ -277,13 +277,19 @@ export default function AiWorkoutPage() {
       role="Học viên"
       homeTo="/hoc-vien-dashboard"
       items={studentWorkspaceItems(hasClass)}
-      breadcrumb={[{ label: 'Học viên', to: '/hoc-vien-dashboard' }, { label: 'Giáo án AI' }]}
+      breadcrumb={[{ label: 'Học viên', to: '/hoc-vien-dashboard' }, { label: 'Gợi ý tập' }]}
       headerExtra={<NotificationBell />}
     >
-        <h1 className="text-2xl font-black text-balance">Giáo án tập với AI</h1>
-        <p className="mt-2 text-sm text-pretty text-gray-500">
-          Nhập chỉ số cơ thể và mục tiêu. Hệ thống dùng lịch sử tập huấn luyện viên đã ghi để lập giáo án, rồi đồng bộ vào lịch cá nhân khi bạn lưu.
+        <h1 className="text-2xl font-black text-balance">Gợi ý tập cá nhân</h1>
+        <p className="mt-2 max-w-2xl text-sm text-pretty text-gray-500">
+          AI đề xuất lịch tập riêng theo chỉ số và mục tiêu của bạn. Đây không phải bài tập hay giáo án của lớp. Lưu xong, các buổi tập vào lịch cá nhân. Hạn mức lượt tạo lại và token lấy từ gói hội viên bạn đang dùng.
         </p>
+        {access?.quota && (
+          <p className="mt-3 max-w-2xl rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+            Gói {access.quota.packageName}: đã dùng {access.quota.regenerationsUsed}/{access.quota.regenerationLimit} lượt tạo lại gợi ý tập
+            và {Number(access.quota.tokensUsed || 0).toLocaleString('vi-VN')}/{Number(access.quota.tokenLimit || 0).toLocaleString('vi-VN')} token trong kỳ hội viên này.
+          </p>
+        )}
 
         {notice && (
           <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
@@ -292,7 +298,7 @@ export default function AiWorkoutPage() {
         )}
 
         {loading && (
-          <div className="mt-6 space-y-3" aria-busy="true" aria-label="Đang tải giáo án">
+          <div className="mt-6 space-y-3" aria-busy="true" aria-label="Đang tải gợi ý tập">
             <div className="h-8 w-64 rounded-full bg-gray-200" />
             <div className="h-44 rounded-3xl bg-gray-200" />
           </div>
@@ -329,7 +335,7 @@ export default function AiWorkoutPage() {
                 <h2 className="text-lg font-black text-balance">Nhập chiều cao và cân nặng</h2>
                 <p className="mt-2 text-sm text-pretty text-gray-600">
                   Hệ thống tính BMI từ hai số này.
-                  {access.proposedPlan ? ' Lưu chỉ số mới sẽ xóa giáo án đang chờ xác nhận.' : ''}
+                  {access.proposedPlan ? ' Lưu chỉ số mới sẽ xóa gợi ý tập đang chờ xác nhận.' : ''}
                 </p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <label className="block text-sm font-bold text-gray-700">
@@ -371,7 +377,7 @@ export default function AiWorkoutPage() {
               <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
                 <h2 className="text-lg font-black text-balance">Nhập mục tiêu cá nhân</h2>
                 <p className="mt-2 text-sm text-pretty text-gray-600">
-                  Huấn luyện viên phụ trách lớp cần ghi lịch sử tập trước. Nếu chưa có, hệ thống sẽ báo ngay tại đây.
+                  AI dùng chỉ số của bạn và lịch sử tập huấn luyện viên đã ghi để đề xuất lịch tập cá nhân, không phải bài tập của lớp.
                 </p>
                 <label className="mt-4 block text-sm font-bold text-gray-700">
                   Mục tiêu
@@ -420,7 +426,7 @@ export default function AiWorkoutPage() {
                   onClick={submitGoals}
                   className={`${primaryButtonClass} mt-4`}
                 >
-                  {busy === 'goals' ? 'Đang tạo giáo án...' : 'Tạo giáo án'}
+                  {busy === 'goals' ? 'Đang tạo gợi ý...' : 'Tạo gợi ý tập'}
                 </button>
               </section>
             )}
@@ -428,7 +434,7 @@ export default function AiWorkoutPage() {
             {access.proposedPlan && (
               <section className="space-y-4">
                 <div className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-                  <h2 className="text-lg font-black text-balance">Xác nhận giáo án</h2>
+                  <h2 className="text-lg font-black text-balance">Xác nhận gợi ý tập</h2>
                   <p className="mt-2 text-sm text-pretty text-gray-600">
                     Lưu để đưa các buổi tập vào lịch cá nhân. Nếu muốn đổi, mô tả phần cần sửa rồi tạo lại.
                   </p>
@@ -479,7 +485,7 @@ export default function AiWorkoutPage() {
                 <h2 className="text-lg font-black text-balance">{routine.planName}</h2>
                 <p className="mt-2 text-sm text-pretty text-gray-600">{routine.message}</p>
                 {!routine.today?.length && !routine.upcoming?.length ? (
-                  <p className="mt-4 text-sm text-gray-500">Chưa có buổi tập từ hôm nay trở đi. Yêu cầu tạo lại giáo án ở bên dưới.</p>
+                  <p className="mt-4 text-sm text-gray-500">Chưa có buổi tập từ hôm nay trở đi. Yêu cầu tạo lại gợi ý ở bên dưới.</p>
                 ) : (
                   <>
                     <ExerciseList title="Hôm nay" items={routine.today} />
@@ -493,9 +499,9 @@ export default function AiWorkoutPage() {
 
             {nextStep === 'view_routine' && (
               <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-                <h2 className="text-lg font-black text-balance">Tạo lại giáo án</h2>
+                <h2 className="text-lg font-black text-balance">Tạo lại gợi ý tập</h2>
                 <p className="mt-2 text-sm text-pretty text-gray-600">
-                  Nêu phần muốn đổi. Giáo án mới vẫn chờ bạn lưu trước khi thay lịch đang có.
+                  Nêu phần muốn đổi. Gợi ý mới vẫn chờ bạn lưu trước khi thay lịch đang có.
                 </p>
                 <label className="mt-4 block text-sm font-bold text-gray-700">
                   Lý do tạo lại
@@ -525,8 +531,8 @@ export default function AiWorkoutPage() {
 }
 
 function stepHint(nextStep) {
-  if (nextStep === 'input_goals') return 'Đã có BMI. Nhập mục tiêu để hệ thống lập giáo án.';
-  if (nextStep === 'decide') return 'Giáo án đang chờ bạn lưu hoặc yêu cầu chỉnh.';
-  if (nextStep === 'view_routine') return 'Giáo án đã nằm trên lịch cá nhân.';
+  if (nextStep === 'input_goals') return 'Đã có BMI. Nhập mục tiêu để nhận gợi ý tập.';
+  if (nextStep === 'decide') return 'Gợi ý tập đang chờ bạn lưu hoặc yêu cầu chỉnh.';
+  if (nextStep === 'view_routine') return 'Gợi ý tập đã nằm trên lịch cá nhân.';
   return 'Bắt đầu bằng chiều cao và cân nặng.';
 }

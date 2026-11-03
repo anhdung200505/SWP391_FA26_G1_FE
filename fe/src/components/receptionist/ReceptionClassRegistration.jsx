@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   lookupMember,
+  getMemberBlockedClasses,
   registerGuestAccount,
   createClassRegistrationForMember,
   confirmRegistrationPayment,
@@ -40,6 +41,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
   const [packages, setPackages] = useState([]);
   const [sportsList, setSportsList] = useState([]);
   const [classList, setClassList] = useState([]);
+  const [blockedClasses, setBlockedClasses] = useState(() => new Map());
 
   // Bổ sung State tự chọn Đăng ký kèm lớp (Mặc định: true)
   const [includeClass, setIncludeClass] = useState(true);
@@ -86,7 +88,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         if (Array.isArray(pkgs)) {
           setPackages(pkgs);
           if (pkgs.length > 0) {
-            const defaultPkg = pkgs.find((p) => p.name?.includes('Bạc')) || pkgs[0];
+            const defaultPkg = pkgs.find((p) => p.code === 'PKG-001' || p.name?.toLowerCase().includes('đồng')) || pkgs[0];
             setSelectedPackage(defaultPkg);
           }
         }
@@ -120,10 +122,20 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     async function loadClassesForSport() {
       try {
         setLoadingClasses(true);
-        const classesData = await getClasses('1', selectedSportId);
-        if (Array.isArray(classesData) && classesData.length > 0) {
-          setClassList(classesData);
-          setSelectedClass(classesData[0]);
+        const [classesData, blocks] = await Promise.all([
+          getClasses('1', selectedSportId),
+          foundMember?.id ? getMemberBlockedClasses(foundMember.id).catch(() => []) : Promise.resolve([]),
+        ]);
+        const blocked = new Map(
+          (Array.isArray(blocks) ? blocks : []).map((item) => [String(item.classId), item.reason]),
+        );
+        setBlockedClasses(blocked);
+        const unique = Array.isArray(classesData)
+          ? classesData.filter((item, index, list) => list.findIndex((other) => String(other.id) === String(item.id)) === index)
+          : [];
+        if (unique.length > 0) {
+          setClassList(unique);
+          setSelectedClass(unique.find((cls) => !blocked.has(String(cls.id))) || null);
         } else {
           setClassList([]);
           setSelectedClass(null);
@@ -138,7 +150,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     }
 
     loadClassesForSport();
-  }, [selectedSportId, includeClass, step]);
+  }, [selectedSportId, includeClass, step, foundMember?.id]);
 
   const isPaid = paymentStatus?.paymentStatus === 'paid' || paymentStatus?.paymentStatus === 'success';
   const qrImage = pendingOrder?.payosQrImage || '';
@@ -244,7 +256,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         email: searchKeyword.includes('@') ? searchKeyword : '',
         phone: !searchKeyword.includes('@') ? searchKeyword : '',
       }));
-    } fontinally: {
+    } finally {
       setLoading(false);
     }
   };
@@ -271,6 +283,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     e.preventDefault();
     if (!selectedPackage?.id) return showErr('Vui lòng chọn một gói hội viên.');
     if (includeClass && !selectedClass?.id) return showErr('Vui lòng chọn lớp học huấn luyện.');
+    if (includeClass && blockedClasses.has(String(selectedClass.id))) {
+      return showErr(blockedClasses.get(String(selectedClass.id)));
+    }
 
     const isBronze = selectedPackage.name?.toLowerCase().includes('đồng') || selectedPackage.code === 'PKG-001';
 
@@ -529,8 +544,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
               <div className="lg:col-span-7 space-y-6">
                 {/* 1. CHỌN GÓI HỘI VIÊN */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="text-sm font-black text-slate-900 uppercase">1. CHỌN GÓI HỘI VIÊN</h3>
+                  <div className="pb-2 border-b border-slate-100">
+                    <h3 className="text-sm font-black text-slate-900">Gói hội viên</h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Khi đăng ký kèm lớp, Hạng Đồng là gói bắt buộc và được tặng. Hạng Bạc hoặc Hạng Vàng là nâng hạng thay cho gói tặng.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3">
@@ -577,6 +595,18 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                               <p className="text-[11px] text-slate-500 font-medium">
                                 Thời hạn: {pkg.validityMonths || 1} tháng
                               </p>
+                              {includeClass && isBronze && (
+                                <p className="text-[11px] font-semibold text-emerald-700">
+                                  Gói bắt buộc khi đăng ký khóa học. Tặng kèm.
+                                </p>
+                              )}
+                              {Array.isArray(pkg.benefits) && pkg.benefits.length > 0 && (
+                                <ul className="mt-1 list-disc pl-4 text-[11px] text-slate-500">
+                                  {pkg.benefits.map((benefit) => (
+                                    <li key={benefit}>{benefit}</li>
+                                  ))}
+                                </ul>
+                              )}
                             </div>
                           </div>
 
@@ -584,7 +614,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                             {includeClass ? (
                               isBronze ? (
                                 <span className="text-xs font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded">
-                                  TẶNG MIỄN PHÍ (0đ)
+                                  Bắt buộc · 0đ
                                 </span>
                               ) : (
                                 <div>
@@ -664,11 +694,17 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                             {loadingClasses ? (
                               <option value="">Đang tải lớp...</option>
                             ) : classList.length > 0 ? (
-                              classList.map((cls) => (
-                                <option key={cls.id} value={cls.id}>
-                                  {cls.name} ({formatFee(cls.tuition)})
-                                </option>
-                              ))
+                              <>
+                                {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
+                                {classList.map((cls) => {
+                                  const reason = blockedClasses.get(String(cls.id));
+                                  return (
+                                    <option key={cls.id} value={cls.id} disabled={Boolean(reason)}>
+                                      {cls.name} ({formatFee(cls.tuition)}){reason ? ` · ${reason}` : ''}
+                                    </option>
+                                  );
+                                })}
+                              </>
                             ) : (
                               <option value="">Chưa có lớp mở cho môn này</option>
                             )}

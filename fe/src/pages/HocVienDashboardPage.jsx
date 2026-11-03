@@ -295,15 +295,15 @@ export default function HocVienDashboardPage() {
               displayName={displayName}
             />
 
-            {/* GIÁO ÁN TẬP VỚI AI */}
+            {/* GỢI Ý TẬP CÁ NHÂN */}
             <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-black text-slate-900 text-balance">Giáo án tập với AI</h2>
+                  <h2 className="text-lg font-black text-slate-900 text-balance">Gợi ý tập cá nhân</h2>
                   <p className="mt-1 text-sm text-pretty text-slate-500">
                     {currentMembership
-                      ? 'Nhập chỉ số BMI và mục tiêu để nhận giáo án, rồi lưu vào lịch tập cá nhân.'
-                      : 'Giáo án AI cần gói hội viên đang hiệu lực. Gói chỉ có khi đăng ký kèm khóa học.'}
+                      ? 'Nhập chỉ số và mục tiêu để AI đề xuất lịch tập riêng. Không phải bài tập của lớp.'
+                      : 'Gợi ý tập cần gói hội viên đang hiệu lực. Gói có khi đăng ký khóa học.'}
                   </p>
                 </div>
                 {currentMembership ? (
@@ -311,7 +311,7 @@ export default function HocVienDashboardPage() {
                     to="/hoc-vien/giao-an-ai"
                     className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
                   >
-                    Mở giáo án AI
+                    Mở gợi ý tập
                   </Link>
                 ) : (
                   <Link
