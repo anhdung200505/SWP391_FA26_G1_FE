@@ -10,6 +10,22 @@ public class CoachClassAccess(AppDbContext db, CurrentActor actor)
 {
     public int CoachUserId => actor.UserId;
 
+    // Quản trị: lớp bất kỳ, không kiểm tra coach phụ trách.
+    public async Task<OwnedClass> RequireAnyAsync(string classId)
+    {
+        if (!int.TryParse(classId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        }
+
+        var item = await db.Classes.AsNoTracking()
+            .Where(row => row.ClassId == id)
+            .Select(row => new { row.ClassId, row.ClassName, row.CoachUserId })
+            .FirstOrDefaultAsync()
+            ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
+        return new OwnedClass(item.ClassId, item.ClassName, item.CoachUserId);
+    }
+
     public async Task<OwnedClass> RequireAsync(string classId)
     {
         if (actor.UserId == 0)

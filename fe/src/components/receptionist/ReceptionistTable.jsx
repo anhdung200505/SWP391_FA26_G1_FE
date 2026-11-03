@@ -5,17 +5,6 @@ import {
   readSupportRequestType,
 } from '../../api/receptionistSupportApi';
 
-// Hàm parse lấy số tuổi từ chuỗi description (nếu item.age rỗng hoặc bằng 0)
-function parseAgeFromDescription(description, defaultAge = 18) {
-  if (!description) return defaultAge;
-  const match = String(description).match(/Độ tuổi:\s*(\d+)/i);
-  if (match && match[1]) {
-    const parsed = parseInt(match[1], 10);
-    if (parsed >= 1 && parsed <= 99) return parsed;
-  }
-  return defaultAge;
-}
-
 export default function ReceptionistTable({ loading, filteredList, activeTab, onRefresh }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [modalType, setModalType] = useState(''); // 'handle_service' | 'handle_enrollment' | 'view'
@@ -87,21 +76,8 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
       setSubmitting(true);
       setErrorMsg('');
 
-      // Lấy tuổi chuẩn trong khoảng 1-99 để không bị API chặn Validation
-      const rawDescription = selectedItem.description || selectedItem.note || '';
-      let validAge = Number(selectedItem.age);
-      if (!validAge || validAge < 1 || validAge > 99) {
-        validAge = parseAgeFromDescription(rawDescription, 18);
-      }
-
+      // Chỉ gửi kết quả xử lý. Bỏ trống các trường khác để API giữ nguyên nội dung đơn.
       await updateEnrollmentConsultation(selectedItem.id, {
-        title: selectedItem.title || 'Đăng ký tham quan cơ sở vật chất',
-        fullName: selectedItem.memberName || selectedItem.fullName || 'Khách hàng',
-        phone: selectedItem.phone || selectedItem.memberPhone || '',
-        email: selectedItem.memberEmail || selectedItem.email || '',
-        sports: selectedItem.sports || 'Tham quan cơ sở vật chất',
-        age: validAge,
-        note: rawDescription,
         resolutionNote: resolutionNote.trim(),
       });
 

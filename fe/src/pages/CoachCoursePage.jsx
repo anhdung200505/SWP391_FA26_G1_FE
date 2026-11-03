@@ -18,7 +18,7 @@ const TABS = [
   { id: 'attendance', label: 'Điểm danh' },
   { id: 'evaluation', label: 'Đánh giá' },
   { id: 'assignment', label: 'Bài tập' },
-  { id: 'ai', label: 'AI' },
+  { id: 'ai', label: 'Giáo án lớp' },
   { id: 'history', label: 'Lịch sử tập' },
   { id: 'settings', label: 'Cài đặt' },
 ];

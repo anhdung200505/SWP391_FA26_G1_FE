@@ -331,9 +331,9 @@ WHERE cl.class_name = N'Bơi lội - Sáng thứ 3';
 /* ===================== Gói hội viên, hóa đơn, thanh toán ===================== */
 
 INSERT INTO membership_package (package_code, package_name, fee, validity_months, benefits, status, updated_at, upgrade_discount_percent) VALUES
-    (N'PKG-001', N'Hạng Đồng', 200000, 1, N'Tự do sử dụng phòng tập đa năng. Tặng miễn phí khi đăng ký lớp học.', N'active', SYSUTCDATETIME(), 0),
-    (N'PKG-002', N'Hạng Bạc',  350000, 1, N'Tự do sử dụng phòng tập đa năng. Sử dụng hồ bơi giờ thấp điểm. Giảm 50% khi lên cấp cùng lúc đăng ký lớp.', N'active', SYSUTCDATETIME(), 50),
-    (N'PKG-003', N'Hạng Vàng', 500000, 1, N'Tự do sử dụng toàn bộ cơ sở vật chất. 1 buổi tập riêng với HLV mỗi tháng. Giảm 25% khi lên cấp cùng lúc đăng ký lớp.', N'active', SYSUTCDATETIME(), 25);
+    (N'PKG-001', N'Hạng Đồng', 200000, 1, N'Dùng phòng tập đa năng trong giờ mở cửa' + CHAR(10) + N'Gói bắt buộc khi đăng ký khóa học, được tặng 30 ngày' + CHAR(10) + N'Gợi ý tập cá nhân bằng AI: 5 lượt tạo lại và 50.000 token mỗi kỳ hội viên' + CHAR(10) + N'Không gồm hồ bơi giờ thấp điểm và buổi tập riêng với huấn luyện viên', N'active', SYSUTCDATETIME(), 0),
+    (N'PKG-002', N'Hạng Bạc',  350000, 1, N'Gồm mọi quyền của Hạng Đồng' + CHAR(10) + N'Dùng hồ bơi trong giờ thấp điểm' + CHAR(10) + N'Giảm 50% phí gói khi nâng hạng cùng lúc đăng ký khóa học' + CHAR(10) + N'Gợi ý tập cá nhân bằng AI: 10 lượt tạo lại và 100.000 token mỗi kỳ hội viên', N'active', SYSUTCDATETIME(), 50),
+    (N'PKG-003', N'Hạng Vàng', 500000, 1, N'Dùng toàn bộ cơ sở vật chất, kể cả giờ cao điểm' + CHAR(10) + N'Một buổi tập riêng với huấn luyện viên mỗi tháng' + CHAR(10) + N'Giảm 25% phí gói khi nâng hạng cùng lúc đăng ký khóa học' + CHAR(10) + N'Gợi ý tập cá nhân bằng AI: 25 lượt tạo lại và 250.000 token mỗi kỳ hội viên', N'active', SYSUTCDATETIME(), 25);
 
 UPDATE membership_package SET ai_regeneration_limit = 5,  ai_token_limit = 50000  WHERE package_code = N'PKG-001';
 UPDATE membership_package SET ai_regeneration_limit = 10, ai_token_limit = 100000 WHERE package_code = N'PKG-002';

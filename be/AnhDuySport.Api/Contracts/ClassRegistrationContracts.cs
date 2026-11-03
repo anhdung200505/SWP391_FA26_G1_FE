@@ -81,6 +81,9 @@ public sealed record ClassDetailDto(
     IReadOnlyList<ClassSlotDto> Slots,
     IReadOnlyList<ClassScheduleDto> Schedule);
 
+// Lớp học viên không được đăng ký thêm: đã ghi danh, cùng khóa, hoặc trùng lịch.
+public sealed record ClassRegistrationBlockDto(string ClassId, string Reason);
+
 public sealed record EnrolledClassDto(
     string ClassId,
     string ClassName,

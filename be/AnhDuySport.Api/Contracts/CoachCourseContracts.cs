@@ -22,7 +22,11 @@ public sealed record CoachSessionLineDto(
     TimeOnly StartTime,
     TimeOnly EndTime,
     string Status,
-    string? Note);
+    string? Note,
+    string CoachName = "",
+    string RoomName = "",
+    string? CoachChange = null,
+    bool RoomChanged = false);
 
 public sealed record CoachClassDetailDto(
     string ClassId,
@@ -47,7 +51,10 @@ public sealed record AttendanceSheetDto(
     TimeOnly StartTime,
     TimeOnly EndTime,
     string Status,
-    IReadOnlyList<AttendanceRowDto> Rows);
+    IReadOnlyList<AttendanceRowDto> Rows,
+    // CanEdit = false khi coach đang ngoài khung giờ điểm danh (hoặc buổi đã hủy); LockReason nêu lý do.
+    bool CanEdit,
+    string? LockReason);
 
 public sealed record AttendanceMarkRequest(string MemberUserId, string Status);
 
