@@ -58,7 +58,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
             break;
         }
 
-        throw new InvalidOperationException(lastMessage ?? "Google Gemini không trả giáo án.");
+        throw new InvalidOperationException(lastMessage ?? "Google Gemini không trả gợi ý tập.");
     }
 
     private async Task<(GeneratedWorkout? Workout, string? Error, bool TryNext)> CallModelAsync(
@@ -122,7 +122,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
             return (null, detail, false);
         }
 
-        return (null, $"Google Gemini ({model}) không trả giáo án.", true);
+        return (null, $"Google Gemini ({model}) không trả gợi ý tập.", true);
     }
 
     private static string ReadError(string raw)
@@ -149,14 +149,14 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
     {
         var days = string.Join(", ", request.Weekdays);
         var change = string.IsNullOrWhiteSpace(request.Changes)
-            ? "Đây là lần tạo giáo án đầu."
-            : $"Học viên yêu cầu sửa giáo án: {request.Changes}";
+            ? "Đây là lần tạo gợi ý tập cá nhân đầu."
+            : $"Học viên yêu cầu sửa gợi ý tập: {request.Changes}";
         var safety = string.IsNullOrWhiteSpace(request.SafetyNote)
             ? "Không có cảnh báo thêm."
             : request.SafetyNote;
         return $"""
             Bạn là huấn luyện viên. Chỉ trả về JSON, không markdown.
-            Tạo giáo án tập tại nhà bằng tiếng Việt cho {request.MemberName}.
+            Tạo gợi ý tập cá nhân tại nhà bằng tiếng Việt cho {request.MemberName}. Đây là lịch tập riêng, không phải giáo án hay bài tập của lớp.
             Sức khỏe: {request.HealthSummary}
             Lịch sử tập do coach tự nhập, không phải điểm danh hay điểm số: {request.TrainingHistory}
             Lịch môn học, gồm môn và số buổi học, không xếp bài cá nhân trùng ngày có buổi học: {request.ClassSchedule}
@@ -165,7 +165,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
             Các buổi theo đúng thứ tự ngày: {days}.
             {change}
             {safety}
-            JSON gồm analysis (2 đến 4 câu nhận xét BMI và mục tiêu), planName (tên giáo án ngắn) và sessions.
+            JSON gồm analysis (2 đến 4 câu nhận xét BMI và mục tiêu), planName (tên gợi ý tập ngắn, không dùng chữ giáo án) và sessions.
             Mỗi phần tử sessions gồm title, intensity (Thấp hoặc Trung bình hoặc Cao) và exercises (khởi động, bài chính gồm số hiệp và số lần, giãn cơ).
             sessions phải có đúng {request.Weekdays.Count} phần tử, cùng thứ tự các ngày ở trên.
             Bài tập phải bổ trợ đúng môn học viên đang học và nội dung lịch sử tập coach đã nhập.
@@ -185,7 +185,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
         if (!document.RootElement.TryGetProperty("candidates", out var candidates)
             || candidates.GetArrayLength() == 0)
         {
-            throw new InvalidOperationException("Google Gemini không trả nội dung giáo án.");
+            throw new InvalidOperationException("Google Gemini không trả nội dung gợi ý tập.");
         }
 
         var text = "";
@@ -244,7 +244,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
         var planName = payload.PlanName?.Trim() ?? "";
         if (planName.Length == 0)
         {
-            planName = "Giáo án cá nhân";
+            planName = "Gợi ý tập cá nhân";
         }
 
         return new GeneratedWorkout(
