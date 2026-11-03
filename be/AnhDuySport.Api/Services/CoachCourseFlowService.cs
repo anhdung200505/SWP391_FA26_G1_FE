@@ -129,6 +129,7 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
         {
             throw new RegistrationException(locked);
         }
+
         var roster = await db.ClassEnrollments
             .Where(enrollment => enrollment.ClassId == owned.ClassId && enrollment.Status == "enrolled")
             .Select(enrollment => enrollment.UserId)

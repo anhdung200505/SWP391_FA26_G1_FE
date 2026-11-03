@@ -41,7 +41,7 @@ export default function Footer() {
 
   // ------------ STATE CỦA WIDGET HỖ TRỢ (MEMBER LOGGED IN) ------------
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [supportType, setSupportType] = useState('consultation'); // Mặc định consultation
+  const [supportType, setSupportType] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [helpLoading, setHelpLoading] = useState(false);
@@ -146,8 +146,14 @@ export default function Footer() {
     e.preventDefault();
     setHelpNotice({ type: '', msg: '' });
 
-    if (!supportType || !subject.trim() || !content.trim()) {
-      setHelpNotice({ type: 'error', msg: 'Vui lòng chọn loại yêu cầu, nhập tiêu đề và nội dung cần hỗ trợ.' });
+    const requestType = supportType.trim();
+    if (!requestType || !subject.trim() || !content.trim()) {
+      setHelpNotice({ type: 'error', msg: 'Vui lòng nhập loại yêu cầu, tiêu đề và nội dung cần hỗ trợ.' });
+      return;
+    }
+
+    if (requestType.length > 80) {
+      setHelpNotice({ type: 'error', msg: 'Loại yêu cầu tối đa 80 ký tự.' });
       return;
     }
 
@@ -155,7 +161,7 @@ export default function Footer() {
 
     const supportPayload = {
       memberUserId: String(user?.id || user?.userId || '0'),
-      requestType: supportType, // Chuẩn 'financial' | 'discount' | 'consultation' | 'account'
+      requestType,
       subject: subject.trim(),
       content: content.trim(),
     };
@@ -167,6 +173,7 @@ export default function Footer() {
         type: 'success',
         msg: 'Đã gửi yêu cầu tới Lễ tân thành công! Chúng tôi sẽ phản hồi bạn sớm nhất.',
       });
+      setSupportType('');
       setSubject('');
       setContent('');
       setTimeout(() => {
@@ -493,16 +500,14 @@ export default function Footer() {
               <form onSubmit={handleSubmitSupport} className="space-y-3 text-xs">
                 <div>
                   <label className="block text-gray-400 font-bold mb-1">Loại yêu cầu *</label>
-                  <select
+                  <input
+                    type="text"
+                    maxLength={80}
                     value={supportType}
                     onChange={(e) => setSupportType(e.target.value)}
-                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white outline-none focus:border-[#e31b23] cursor-pointer font-semibold"
-                  >
-                    <option value="consultation">💬 Tư vấn thông tin (consultation)</option>
-                    <option value="account">🔑 Sự cố tài khoản (account)</option>
-                    <option value="financial">💰 Vấn đề tài chính (financial)</option>
-                    <option value="discount">🏷️ Mã giảm giá / Ưu đãi (discount)</option>
-                  </select>
+                    placeholder="vd: Đổi lịch học"
+                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 outline-none focus:border-[#e31b23]"
+                  />
                 </div>
 
                 <div>

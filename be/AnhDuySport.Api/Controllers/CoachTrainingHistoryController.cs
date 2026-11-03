@@ -29,7 +29,7 @@ public class CoachTrainingHistoryController(WorkoutRecommendationFlowService flo
 
     [HttpPost]
     [EndpointSummary("Coach nhập lịch sử tập")]
-    [EndpointDescription("Coach ghi nội dung đã tập với học viên. Nội dung này được đưa vào Google Gemini khi tạo hoặc tạo lại giáo án. Không dùng điểm danh, nhận xét hay điểm. Ví dụ: { \"memberUserId\": \"11\", \"classId\": 1, \"content\": \"Bơi ếch 4x25m, nhịp thở còn gấp. Cần bài thở trên cạn 10 phút trước giờ xuống nước.\" }")]
+    [EndpointDescription("Coach ghi nội dung đã tập với học viên. Nội dung này được đưa vào Google Gemini khi tạo hoặc tạo lại gợi ý tập cá nhân. Không dùng điểm danh, nhận xét hay điểm. Ví dụ: { \"memberUserId\": \"11\", \"classId\": 1, \"content\": \"Bơi ếch 4x25m, nhịp thở còn gấp. Cần bài thở trên cạn 10 phút trước giờ xuống nước.\" }")]
     public async Task<ActionResult<SaveCoachTrainingHistoryResponse>> Save(string coachUserId, CoachTrainingHistoryRequest request)
     {
         try

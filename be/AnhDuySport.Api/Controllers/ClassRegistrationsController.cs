@@ -17,6 +17,12 @@ public class ClassRegistrationsController(ClassRegistrationFlowService registrat
     public async Task<ActionResult<ClassRegistrationDto>> Submit(CreateClassRegistrationRequest request) =>
         Ok(await registrations.SubmitRegistrationAsync(actor.UserId, request));
 
+    [HttpGet("blocked")]
+    [EndpointSummary("Học viên xem lớp không được đăng ký vì trùng")]
+    [EndpointDescription("Lớp đã ghi danh, lớp cùng khóa, hoặc lớp trùng thứ và giờ với lớp đang học hay đơn đang giữ chỗ.")]
+    public async Task<ActionResult<IReadOnlyList<ClassRegistrationBlockDto>>> AccessBlockedClasses() =>
+        Ok(await registrations.BlockedClassesAsync(actor.UserId));
+
     [HttpGet("mine")]
     [EndpointSummary("Học viên xem các lớp đã đăng ký")]
     [EndpointDescription("Học viên lấy từ token đăng nhập. Chỉ trả lớp đã ghi danh (enrolled), đăng ký mới nhất lên đầu. Không kèm lịch học.")]

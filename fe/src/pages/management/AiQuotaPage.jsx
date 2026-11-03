@@ -27,7 +27,7 @@ export default function AiQuotaPage() {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    document.title = 'Hạn mức AI · AnhDuy Sport';
+    document.title = 'Hạn mức gợi ý tập · AnhDuy Sport';
   }, []);
 
   useEffect(() => {
@@ -100,7 +100,7 @@ export default function AiQuotaPage() {
     <ManagementShell
       breadcrumb={[
         { label: 'Bảng điều khiển', to: '/quan-ly' },
-        { label: 'Hạn mức AI' },
+        { label: 'Hạn mức gợi ý tập' },
       ]}
     >
       <section className="relative overflow-hidden rounded-3xl bg-[#12141d] px-6 py-8 text-white sm:px-8">
@@ -110,13 +110,13 @@ export default function AiQuotaPage() {
         />
         <div className="relative max-w-xl">
           <span className="inline-block bg-[#e31b23] px-3 py-1 text-[11px] font-black uppercase text-white -skew-x-12">
-            <span className="inline-block skew-x-12">AI quota</span>
+            <span className="inline-block skew-x-12">Học viên</span>
           </span>
           <h1 className="mt-4 text-3xl font-black uppercase italic leading-none text-balance sm:text-5xl">
-            Hạn mức AI
+            Hạn mức gợi ý tập
           </h1>
           <p className="mt-4 max-w-md text-sm leading-6 text-pretty text-white/75 sm:text-base">
-            Xem token đã dùng và sửa số lượt tạo lại, hạn mức token của từng gói. Học viên đang dùng gói đó nhận số mới ngay.
+            Hạn mức này dành cho gợi ý tập cá nhân của học viên, không phải giáo án lớp của huấn luyện viên và không phải hạn mức của tài khoản quản trị. Sửa số lượt tạo lại và số token của từng gói, rồi lưu. Học viên đang giữ gói đó nhận số mới ngay.
           </p>
         </div>
       </section>
@@ -157,7 +157,10 @@ export default function AiQuotaPage() {
           </p>
 
           <section className="mt-4">
-            <h2 className="text-lg font-black text-balance">Hạn mức theo gói</h2>
+            <h2 className="text-lg font-black text-balance">Hạn mức cho học viên theo gói</h2>
+            <p className="mt-1 max-w-2xl text-sm text-pretty text-gray-600">
+              Mỗi ô là hạn mức của một học viên đang dùng gói đó: bao nhiêu lượt tạo lại gợi ý tập cá nhân, và bao nhiêu token trong kỳ hội viên.
+            </p>
             {packages.length === 0 ? (
               <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-10 text-center">
                 <p className="font-bold">Chưa có gói hội viên</p>
@@ -185,20 +188,28 @@ export default function AiQuotaPage() {
                       </div>
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <label className="block text-sm font-bold text-gray-700">
-                          Lượt tạo lại giáo án
+                          Số lượt tạo lại gợi ý tập cho mỗi học viên gói {item.packageName}
+                          <span className="mt-0.5 block text-xs font-medium text-gray-500">
+                            Học viên thuộc gói này được nhờ AI viết lại lịch tập cá nhân bấy nhiêu lần trong kỳ hội viên.
+                          </span>
                           <input
                             value={draft.regenerationLimit}
                             onChange={(event) => updateDraft(item.packageId, 'regenerationLimit', event.target.value)}
                             inputMode="numeric"
+                            aria-label={`Số lượt tạo lại cho học viên gói ${item.packageName}`}
                             className={fieldClass}
                           />
                         </label>
                         <label className="block text-sm font-bold text-gray-700">
-                          Hạn mức token
+                          Số token cho mỗi học viên gói {item.packageName}
+                          <span className="mt-0.5 block text-xs font-medium text-gray-500">
+                            Tổng token AI một học viên thuộc gói này được dùng trong kỳ hội viên đang hiệu lực. Hiện có {formatCount(item.activeMembers)} học viên.
+                          </span>
                           <input
                             value={draft.tokenLimit}
                             onChange={(event) => updateDraft(item.packageId, 'tokenLimit', event.target.value)}
                             inputMode="numeric"
+                            aria-label={`Số token cho học viên gói ${item.packageName}`}
                             className={fieldClass}
                           />
                         </label>
