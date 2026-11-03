@@ -70,6 +70,18 @@ export function PanelTab({ active, onClick, children }) {
   );
 }
 
+// Mỗi dòng nội dung là một khối riêng, nên phần Ghi chú luôn xuống dòng dù trình duyệt có gom khoảng trắng.
+export function NoteText({ text, className = '' }) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  return (
+    <div className={className}>
+      {lines.map((line, index) => (
+        <span key={index} className="block min-h-[1.25em]">{line || '\u00A0'}</span>
+      ))}
+    </div>
+  );
+}
+
 export function PanelMessage({ tone = 'muted', children }) {
   return (
     <p className={`px-4 text-xs font-bold ${tone === 'error' ? 'py-3 text-red-600' : 'py-10 text-center text-gray-400'}`}>{children}</p>
@@ -90,7 +102,7 @@ export function BellItem({ highlighted, badge, heading, title, body, time, onCli
           </span>
         )}
         <span className={`block text-xs text-gray-900 ${badge || heading ? 'mt-1' : ''} ${highlighted ? 'font-black' : 'font-bold'}`}>{title}</span>
-        {body && <span className="block mt-0.5 text-xs text-gray-600 leading-5 break-words line-clamp-2">{body}</span>}
+        {body && <NoteText text={body} className="mt-0.5 text-xs text-gray-600 leading-5 break-words line-clamp-3" />}
         <span className="block mt-1 text-[10px] font-bold text-gray-400">
           🕒 {formatFull(time)} · {timeAgo(time)}
         </span>
@@ -142,7 +154,7 @@ export function NotificationDetailModal({ item, onClose }) {
             ✕
           </button>
         </div>
-        <p className="text-sm text-slate-700 leading-7 whitespace-pre-line break-words">{item.body || 'Không có nội dung chi tiết.'}</p>
+        <NoteText text={item.body || 'Không có nội dung chi tiết.'} className="text-sm text-slate-700 leading-7 break-words" />
         <div className="text-right">
           <button
             type="button"

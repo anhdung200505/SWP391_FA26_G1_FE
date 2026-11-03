@@ -133,6 +133,14 @@ public class ClassSession
     [Column("note")]
     public string? Note { get; set; }
 
+    // Phòng của buổi khác phòng mặc định của lớp (quản trị đổi riêng buổi này).
+    [Column("room_changed")]
+    public bool RoomChanged { get; set; }
+
+    // null: HLV phụ trách. substitute: dạy thay riêng buổi này. permanent: đổi HLV vĩnh viễn cho cả lớp (các buổi còn lại).
+    [Column("coach_change")]
+    public string? CoachChange { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }
 

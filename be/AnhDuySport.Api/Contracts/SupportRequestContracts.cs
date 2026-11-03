@@ -6,7 +6,7 @@ namespace AnhDuySport.Api.Contracts;
 public sealed record CreateSupportRequest(
     [property: Description("Id học viên gửi đơn.")] string MemberUserId,
     [property: Description("Loại yêu cầu do học viên tự nhập, tối đa 80 ký tự. Hiện nguyên văn trên đơn của lễ tân và quản lý. Không nhận giảm giá, khuyến mãi hoặc ưu đãi.")]
-    [property: MaxLength(80)]
+    [param: MaxLength(80, ErrorMessage = "Loại yêu cầu tối đa 80 ký tự.")]
     string RequestType,
     [property: Description("Tiêu đề đơn.")] string Subject,
     [property: Description("Nội dung học viên cần hỗ trợ.")] string Content);

@@ -33,6 +33,7 @@ const SIDEBAR_ITEMS = [
 ];
 
 const REGISTER_TAB = { key: 'register', label: 'Đăng ký khóa học', icon: '📝', href: '/dang-ky-khoa-hoc' };
+const PRIVATE_TAB = { key: 'private', label: 'Học 1-1', icon: '🎯', href: '/hoc-vien/hoc-1-1' };
 const COURSE_PLAN_TAB = { key: 'course-plan', label: 'Bài tập lớp', icon: '📋', href: '/hoc-vien/bai-tap-lop' };
 const MEMBER_ONLY_TABS = new Set(['schedule', 'support']);
 const SPY_OFFSET = 88;
@@ -148,6 +149,10 @@ export default function HocVienDashboardPage() {
 
   const sidebarItems = useMemo(() => {
     if (loading) return SIDEBAR_ITEMS.filter((item) => item.key === 'overview' || item.key === 'history');
+    const withPrivate = (list) => {
+      const at = list.findIndex((item) => item.key === 'history');
+      return [...list.slice(0, at === -1 ? list.length : at), PRIVATE_TAB, ...list.slice(at === -1 ? list.length : at)];
+    };
     const enrolled = myClasses.length > 0;
     const items = enrolled
       ? [...SIDEBAR_ITEMS]
@@ -160,7 +165,7 @@ export default function HocVienDashboardPage() {
       const classIndex = items.findIndex((item) => item.key === 'classes');
       items.splice(classIndex === -1 ? 1 : classIndex + 1, 0, COURSE_PLAN_TAB);
     }
-    return items;
+    return withPrivate(items);
   }, [loading, myClasses.length]);
 
   const selectTab = (key) => {
@@ -217,6 +222,7 @@ export default function HocVienDashboardPage() {
         onSelect={selectTab}
         breadcrumb={[{ label: 'Học viên' }, { label: currentItem?.label || 'Tổng quan' }]}
         headerExtra={<NotificationBell />}
+        footer={<Footer />}
       >
         {isProcessing && <p className="text-sm font-semibold text-slate-500">Đang xác nhận thanh toán...</p>}
         {notice.msg && (
@@ -289,15 +295,15 @@ export default function HocVienDashboardPage() {
               displayName={displayName}
             />
 
-            {/* GIÁO ÁN TẬP VỚI AI */}
+            {/* GỢI Ý TẬP CÁ NHÂN */}
             <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-black text-slate-900 text-balance">Giáo án tập với AI</h2>
+                  <h2 className="text-lg font-black text-slate-900 text-balance">Gợi ý tập cá nhân</h2>
                   <p className="mt-1 text-sm text-pretty text-slate-500">
                     {currentMembership
-                      ? 'Nhập chỉ số BMI và mục tiêu để nhận giáo án, rồi lưu vào lịch tập cá nhân.'
-                      : 'Giáo án AI cần gói hội viên đang hiệu lực. Gói chỉ có khi đăng ký kèm khóa học.'}
+                      ? 'Nhập chỉ số và mục tiêu để AI đề xuất lịch tập riêng. Không phải bài tập của lớp.'
+                      : 'Gợi ý tập cần gói hội viên đang hiệu lực. Gói có khi đăng ký khóa học.'}
                   </p>
                 </div>
                 {currentMembership ? (
@@ -305,7 +311,7 @@ export default function HocVienDashboardPage() {
                     to="/hoc-vien/giao-an-ai"
                     className="inline-flex items-center justify-center bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md self-start"
                   >
-                    Mở giáo án AI
+                    Mở gợi ý tập
                   </Link>
                 ) : (
                   <Link
@@ -381,9 +387,6 @@ export default function HocVienDashboardPage() {
           </div>
         </div>
       </WorkspaceShell>
-
-      {/* FOOTER */}
-      <Footer />
     </div>
   );
 }

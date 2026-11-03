@@ -342,6 +342,7 @@ export default function ReceptionistPage() {
           loading={loading}
           filteredList={filteredList}
           activeTab={activeTab}
+          onRefresh={fetchData}
           openActionModal={openActionModal}
         />
       </div>

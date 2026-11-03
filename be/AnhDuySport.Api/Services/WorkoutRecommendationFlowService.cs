@@ -41,7 +41,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         if (proposed is not null)
         {
             nextStep = "decide";
-            message = $"Đã có giáo án #{proposed.RecommendationId} chờ xác nhận. Gọi decision với editRequired=true để sửa, hoặc false để lưu.";
+            message = "Đã có gợi ý tập chờ bạn lưu hoặc yêu cầu chỉnh.";
         }
         else if (body is null)
         {
@@ -56,7 +56,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         else
         {
             nextStep = "view_routine";
-            message = "Giáo án đã lưu. Xem routine, hoặc POST regenerate với changes để tạo yêu cầu tạo lại giáo án.";
+            message = "Gợi ý tập đã lưu trên lịch cá nhân. Có thể tạo lại nếu muốn đổi.";
         }
 
         return new AiRecommendationAccessDto(
@@ -173,7 +173,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         var tokens = await ApplySpecAsync(recommendation, metric, goal, spec, health, history, member.FullName, null, now);
         AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Generate, tokens, now);
-        var log = AddLog(member, "Tạo giáo án AI", recommendation.PlanName, now);
+        var log = AddLog(member, "Tạo gợi ý tập cá nhân", recommendation.PlanName, now);
         await db.SaveChangesAsync();
         log.EntityId = recommendation.RecommendationId;
         await db.SaveChangesAsync();
@@ -182,7 +182,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutPlanResponse(
             recommendation.RecommendationId.ToString(),
             ToPlan(recommendation),
-            $"recommendationId = {recommendation.RecommendationId}. Dùng số này ở POST .../{recommendation.RecommendationId}/decision. Giáo án do {gemini.ProviderLabel} tạo. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: false)}",
+            $"Đã tạo gợi ý tập. Hãy lưu hoặc yêu cầu chỉnh trước khi đưa vào lịch. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: false)}",
             ToLogDto(log, member.FullName));
     }
 
@@ -194,15 +194,15 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             .Include(item => item.Sessions)
             .Include(item => item.BodyMetric)
             .FirstOrDefaultAsync(item => item.RecommendationId == recommendationId && item.UserId == member.UserId)
-            ?? throw new KeyNotFoundException("Không tìm thấy giáo án.");
+            ?? throw new KeyNotFoundException("Không tìm thấy gợi ý tập.");
         if (recommendation.Status != "proposed")
         {
-            throw new InvalidOperationException("Giáo án này đã được lưu hoặc đã thay bằng giáo án mới.");
+            throw new InvalidOperationException("Gợi ý tập này đã được lưu hoặc đã thay bằng gợi ý mới.");
         }
 
         if (recommendation.BodyMetric is null)
         {
-            throw new InvalidOperationException("Giáo án chưa gắn chỉ số BMI.");
+            throw new InvalidOperationException("Gợi ý tập chưa gắn chỉ số BMI.");
         }
 
         var allowance = await AiMembershipQuota.LoadAsync(db, member.UserId);
@@ -236,14 +236,14 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 changes,
                 now);
             AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Regenerate, tokens, now);
-            var log = AddLog(member, "Tạo lại giáo án AI", changes, now);
+            var log = AddLog(member, "Tạo lại gợi ý tập cá nhân", changes, now);
             await db.SaveChangesAsync();
             log.EntityId = recommendation.RecommendationId;
             await db.SaveChangesAsync();
             return new WorkoutDecisionResponse(
                 recommendation.RecommendationId.ToString(),
                 false,
-                $"Đã gọi {gemini.ProviderLabel} tạo lại giáo án lần {recommendation.Revision}. recommendationId vẫn là {recommendation.RecommendationId}. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
+                $"Đã tạo lại gợi ý tập lần {recommendation.Revision}. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
                 ToPlan(recommendation),
                 null,
                 ToLogDto(log, member.FullName));
@@ -256,9 +256,9 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
     public async Task<WorkoutPlanResponse> RegenerateAsync(string memberUserId, RegenerateWorkoutRequest request)
     {
         var member = await FindActiveMemberAsync(memberUserId);
-        var changes = RequireText(request.Changes, "Nhập lý do muốn tạo lại giáo án.", 1000);
+        var changes = RequireText(request.Changes, "Nhập lý do muốn tạo lại gợi ý tập.", 1000);
         var metric = await LatestBodyAsync(member.UserId)
-            ?? throw new InvalidOperationException("Hãy nhập chỉ số BMI trước khi tạo lại giáo án.");
+            ?? throw new InvalidOperationException("Hãy nhập chỉ số BMI trước khi tạo lại gợi ý tập.");
         var proposed = await db.WorkoutRecommendations
             .Include(item => item.Sessions)
             .FirstOrDefaultAsync(item => item.UserId == member.UserId && item.Status == "proposed");
@@ -266,7 +266,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             .Where(item => item.UserId == member.UserId && item.Status == "saved")
             .OrderByDescending(item => item.RecommendationId)
             .FirstOrDefaultAsync()
-            ?? throw new InvalidOperationException("Chưa có giáo án để tạo lại. Hãy nhập mục tiêu trước.");
+            ?? throw new InvalidOperationException("Chưa có gợi ý tập để tạo lại. Hãy nhập mục tiêu trước.");
 
         var history = await CollectHistoryAsync(member.UserId);
         RequireCoachHistory(history);
@@ -303,7 +303,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         recommendation.Revision += 1;
         var tokens = await ApplySpecAsync(recommendation, metric, source.Goal, spec, health, history, member.FullName, changes, now);
         AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Regenerate, tokens, now);
-        var log = AddLog(member, "Yêu cầu tạo lại giáo án AI", changes, now);
+        var log = AddLog(member, "Yêu cầu tạo lại gợi ý tập cá nhân", changes, now);
         await db.SaveChangesAsync();
         log.EntityId = recommendation.RecommendationId;
         await db.SaveChangesAsync();
@@ -312,7 +312,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutPlanResponse(
             recommendation.RecommendationId.ToString(),
             ToPlan(recommendation),
-            $"Đã nhận yêu cầu tạo lại giáo án. recommendationId = {recommendation.RecommendationId}. Gọi decision với editRequired=false để lưu lịch mới. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
+            $"Đã tạo lại gợi ý tập. Hãy lưu để cập nhật lịch cá nhân. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
             ToLogDto(log, member.FullName));
     }
 
@@ -326,7 +326,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             .Where(item => item.UserId == member.UserId && item.Status == "saved")
             .OrderByDescending(item => item.RecommendationId)
             .FirstOrDefaultAsync()
-            ?? throw new InvalidOperationException("Chưa có giáo án được lưu. Hãy chọn Edit Required = No.");
+            ?? throw new InvalidOperationException("Chưa có gợi ý tập được lưu. Hãy xác nhận gợi ý trước.");
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         var items = await db.PersonalExercises
@@ -404,7 +404,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             select session.SessionDate).Distinct().ToListAsync();
         var calendar = BuildCalendar(member.UserId, recommendation, today.AddDays(1), busy.ToHashSet(), out var moved, out var skipped);
         db.PersonalExercises.AddRange(calendar);
-        var log = AddLog(member, "Lưu giáo án AI", $"Đồng bộ {calendar.Count} buổi vào lịch cá nhân.", now);
+        var log = AddLog(member, "Lưu gợi ý tập cá nhân", $"Đồng bộ {calendar.Count} buổi vào lịch cá nhân.", now);
         await db.SaveChangesAsync();
         log.EntityId = recommendation.RecommendationId;
         await db.SaveChangesAsync();
@@ -422,7 +422,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutDecisionResponse(
             recommendation.RecommendationId.ToString(),
             true,
-            "Đã lưu giáo án vào tài khoản học viên và đồng bộ lịch. Bước tiếp theo: View Daily Exercise Routine.",
+            "Đã lưu gợi ý tập vào lịch cá nhân.",
             ToPlan(recommendation),
             sync,
             ToLogDto(log, member.FullName));
@@ -539,7 +539,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             trainingClass.Course?.CourseName ?? "",
             row.Content,
             row.RecordedAt);
-        return new SaveCoachTrainingHistoryResponse(history, "Đã lưu lịch sử tập. Học viên có thể tạo hoặc tạo lại giáo án AI.", ToLogDto(log, coach.FullName));
+        return new SaveCoachTrainingHistoryResponse(history, "Đã lưu lịch sử tập. Học viên có thể tạo hoặc tạo lại gợi ý tập cá nhân.", ToLogDto(log, coach.FullName));
     }
 
     // Lớp coach phụ trách, kể cả lớp chưa có học viên. Học viên chỉ gồm người đang ghi danh.
@@ -608,7 +608,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
     {
         if (history.EntryCount == 0)
         {
-            throw new InvalidOperationException("Coach chưa nhập lịch sử tập cho học viên này. Coach phụ trách lớp hãy ghi lịch sử tập trước khi tạo giáo án.");
+            throw new InvalidOperationException("Huấn luyện viên chưa ghi lịch sử tập. Cần có lịch sử tập trước khi tạo gợi ý tập cá nhân.");
         }
     }
 
@@ -639,7 +639,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         else if (bmi < 18.5m && focus == "giam_can")
         {
             focus = "tang_co";
-            safety = "BMI thiếu cân, không lập giáo án giảm cân. Ưu tiên tăng cơ và ăn đủ năng lượng.";
+            safety = "BMI thiếu cân, không lập bài giảm cân. Ưu tiên tăng cơ và ăn đủ năng lượng.";
         }
 
         var intensity = bmi switch
@@ -777,7 +777,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         var scheduleNote = $" Lịch môn: {history.ClassSchedule}";
         recommendation.AnalysisRequest = changes is null
             ? $"{gemini.ProviderLabel}: Phân tích chỉ số sức khỏe và BMI cho {memberName}: {health} Mục tiêu \"{goal}\", {spec.SessionsPerWeek} buổi/tuần, {spec.SessionMinutes} phút/buổi.{scheduleNote}"
-            : $"{gemini.ProviderLabel}: Yêu cầu phân tích mới sau khi học viên sửa giáo án: {changes}.{scheduleNote}";
+            : $"{gemini.ProviderLabel}: Yêu cầu phân tích mới sau khi học viên sửa gợi ý tập: {changes}.{scheduleNote}";
         recommendation.PlanName = generated.PlanName;
         recommendation.DurationWeeks = spec.DurationWeeks;
         recommendation.PreferredStartTime = spec.StartTime;
