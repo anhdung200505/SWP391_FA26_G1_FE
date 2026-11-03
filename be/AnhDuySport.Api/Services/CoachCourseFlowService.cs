@@ -63,7 +63,11 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
                 session.StartTime,
                 session.EndTime,
                 session.Status,
-                session.Note))
+                session.Note,
+                session.Coach!.FullName,
+                session.Room!.RoomName,
+                session.CoachChange,
+                session.RoomChanged))
             .ToListAsync();
 
         var schedules = item.Schedules
