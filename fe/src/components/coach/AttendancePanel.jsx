@@ -91,6 +91,10 @@ export default function AttendancePanel({ classId, sessions }) {
       {error && <p className="mt-4 text-sm font-semibold text-[#b1131a]">{error}</p>}
       {notice && <p className="mt-4 text-sm font-semibold text-emerald-800">{notice}</p>}
 
+      {sheet && !loading && !sheet.canEdit && sheet.lockReason && (
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{sheet.lockReason}</p>
+      )}
+
       {sheet && !loading && (
         <ul className="mt-4 divide-y divide-gray-100">
           {(sheet.rows || []).length === 0 && (
@@ -107,7 +111,8 @@ export default function AttendancePanel({ classId, sessions }) {
                       key={mark.id}
                       type="button"
                       onClick={() => setMarks((current) => ({ ...current, [row.memberUserId]: mark.id }))}
-                      className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                      disabled={!sheet.canEdit}
+                      className={`rounded-full px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
                         active ? 'bg-[#12141d] text-white' : 'bg-[#f4f5f7] text-gray-600'
                       }`}
                     >
@@ -121,7 +126,7 @@ export default function AttendancePanel({ classId, sessions }) {
         </ul>
       )}
 
-      <button type="button" onClick={submit} disabled={saving || loading || !sheet?.rows?.length} className={`${primaryButtonClass} mt-4`}>
+      <button type="button" onClick={submit} disabled={saving || loading || !sheet?.rows?.length || !sheet?.canEdit} className={`${primaryButtonClass} mt-4`}>
         {saving ? 'Đang lưu...' : 'Lưu điểm danh'}
       </button>
     </section>

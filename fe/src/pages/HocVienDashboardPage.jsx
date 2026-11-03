@@ -33,6 +33,7 @@ const SIDEBAR_ITEMS = [
 ];
 
 const REGISTER_TAB = { key: 'register', label: 'Đăng ký khóa học', icon: '📝', href: '/dang-ky-khoa-hoc' };
+const PRIVATE_TAB = { key: 'private', label: 'Học 1-1', icon: '🎯', href: '/hoc-vien/hoc-1-1' };
 const COURSE_PLAN_TAB = { key: 'course-plan', label: 'Bài tập lớp', icon: '📋', href: '/hoc-vien/bai-tap-lop' };
 const MEMBER_ONLY_TABS = new Set(['schedule', 'support']);
 const SPY_OFFSET = 88;
@@ -148,6 +149,10 @@ export default function HocVienDashboardPage() {
 
   const sidebarItems = useMemo(() => {
     if (loading) return SIDEBAR_ITEMS.filter((item) => item.key === 'overview' || item.key === 'history');
+    const withPrivate = (list) => {
+      const at = list.findIndex((item) => item.key === 'history');
+      return [...list.slice(0, at === -1 ? list.length : at), PRIVATE_TAB, ...list.slice(at === -1 ? list.length : at)];
+    };
     const enrolled = myClasses.length > 0;
     const items = enrolled
       ? [...SIDEBAR_ITEMS]
@@ -160,7 +165,7 @@ export default function HocVienDashboardPage() {
       const classIndex = items.findIndex((item) => item.key === 'classes');
       items.splice(classIndex === -1 ? 1 : classIndex + 1, 0, COURSE_PLAN_TAB);
     }
-    return items;
+    return withPrivate(items);
   }, [loading, myClasses.length]);
 
   const selectTab = (key) => {
