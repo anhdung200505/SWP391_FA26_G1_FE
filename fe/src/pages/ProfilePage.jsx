@@ -3,10 +3,18 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
-import { getMemberProfile, updateMemberProfile, getMySupportRequests, uploadMemberAvatar } from '../api/managementApi';
+import { 
+  getMemberProfile, 
+  updateMemberProfile, 
+  getMySupportRequests, 
+  uploadMemberAvatar,
+  sendEmailOtp,
+  confirmEmailOtp 
+} from '../api/managementApi';
 import { confirmProfileNotice } from '../auth/profileNotice';
 import { useHasClassRegistration } from '../components/workspace/studentNav';
 import ChangePasswordDialog from '../components/account/ChangePasswordDialog';
+import ChangeEmailModal from '../components/account/ChangeEmailModal';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -28,6 +36,7 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
 
   useEffect(() => {
     document.title = 'Hồ sơ cá nhân · AnhDuy Sport';
@@ -42,7 +51,6 @@ export default function ProfilePage() {
             gender: data.gender || 'Nam',
           });
           setAvatarUrl(data.avatarUrl || '');
-          // Phiên đăng nhập cũ chưa có ảnh: đồng bộ để Header hiện đúng ảnh
           if ((data.avatarUrl || '') !== (user.avatarUrl || '')) updateUser({ avatarUrl: data.avatarUrl || null });
         })
         .catch((err) => setMessage({ type: 'error', text: err.message }))
@@ -55,7 +63,6 @@ export default function ProfilePage() {
     }
   }, [user, updateUser]);
 
-  // Chọn ảnh là tải lên ngay; kiểm tra loại và dung lượng trước để báo lỗi sớm
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -91,10 +98,12 @@ export default function ProfilePage() {
     setMessage({ type: '', text: '' });
 
     try {
-      const res = await updateMemberProfile(user.id, profile);
+      // Loại bỏ email khỏi payload cập nhật chung thông tin cá nhân
+      const { email, ...updateData } = profile;
+      const res = await updateMemberProfile(user.id, updateData);
       setMessage({ type: 'success', text: res.message || 'Cập nhật thông tin thành công!' });
       if (res?.profile) {
-        updateUser({ fullName: res.profile.fullName, email: res.profile.email, phone: res.profile.phone });
+        updateUser({ fullName: res.profile.fullName, phone: res.profile.phone });
       }
       const role = user?.roleId || user?.role;
       if (role === 'RECEPTIONIST' || role === 'COACH') confirmProfileNotice(user.id);
@@ -103,6 +112,13 @@ export default function ProfilePage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Handler khi đổi email qua OTP thành công
+  const handleEmailChangeSuccess = (newEmail, successMsg) => {
+    setProfile((prev) => ({ ...prev, email: newEmail }));
+    updateUser({ email: newEmail });
+    setMessage({ type: 'success', text: successMsg });
   };
 
   return (
@@ -120,12 +136,12 @@ export default function ProfilePage() {
                 Về khóa học của tôi
               </Link>
               {hasClass && (
-              <Link
-                to="/hoc-vien/giao-an-ai"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg"
-              >
-                Giáo án AI
-              </Link>
+                <Link
+                  to="/hoc-vien/giao-an-ai"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg"
+                >
+                  Giáo án AI
+                </Link>
               )}
             </div>
           )}
@@ -172,7 +188,7 @@ export default function ProfilePage() {
             <p className="text-sm font-bold text-gray-500">Đang tải thông tin...</p>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* ẢNH ĐẠI DIỆN */}
+              {/* ẢNH ĐẠI DIỆN & MẬT KHẨU */}
               <div className="flex flex-wrap items-center gap-5">
                 <div className="relative w-24 h-24 rounded-full overflow-hidden bg-[#e31b23] text-white flex items-center justify-center text-3xl font-black shadow-md border-4 border-white ring-1 ring-gray-200">
                   {avatarUrl ? (
@@ -234,17 +250,26 @@ export default function ProfilePage() {
                   />
                 </div>
 
+                {/* EMAIL CONTROL */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
                     Email
                   </label>
-                  <input
-                    type="email"
-                    value={profile.email}
-                    onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium outline-none focus:border-[#e31b23] focus:ring-1 focus:ring-[#e31b23]"
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={profile.email}
+                      disabled
+                      className="w-full rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-sm font-medium text-gray-600 outline-none cursor-not-allowed"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEmailModalOpen(true)}
+                      className="px-4 py-3 rounded-xl border border-gray-200 text-xs font-bold uppercase text-gray-700 hover:border-[#e31b23] hover:text-[#e31b23] whitespace-nowrap bg-white"
+                    >
+                      Đổi email
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -300,6 +325,17 @@ export default function ProfilePage() {
           )}
 
           {passwordOpen && <ChangePasswordDialog onClose={() => setPasswordOpen(false)} />}
+
+          {emailModalOpen && (
+            <ChangeEmailModal
+              memberUserId={user.id}
+              currentEmail={profile.email}
+              onClose={() => setEmailModalOpen(false)}
+              onSuccess={handleEmailChangeSuccess}
+              sendEmailOtp={sendEmailOtp}
+              confirmEmailOtp={confirmEmailOtp}
+            />
+          )}
 
           {((user?.roleId || user?.role) === 'MEMBER') && (
             <section className="mt-10 border-t border-gray-100 pt-8">
