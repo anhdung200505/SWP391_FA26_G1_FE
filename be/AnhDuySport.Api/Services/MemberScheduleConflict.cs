@@ -68,7 +68,8 @@ public static class MemberScheduleConflict
         foreach (var wanted in targets)
         {
             var others = busy.Where(item => item.ClassId != wanted.ClassId).ToList();
-            var sameCourse = others.FirstOrDefault(item => item.CourseId == wanted.CourseId);
+            // Lớp 1-1 là gói riêng theo lịch, không bị giới hạn một lớp mỗi khóa.
+            var sameCourse = wanted.ClassType == "private" ? null : others.FirstOrDefault(item => item.CourseId == wanted.CourseId);
             if (sameCourse is not null)
             {
                 result[wanted.ClassId] =
@@ -111,6 +112,7 @@ public static class MemberScheduleConflict
                 item.StartDate,
                 item.EndDate,
                 item.Status,
+                item.ClassType,
                 Slots = item.Schedules.Select(schedule => new
                 {
                     schedule.Weekday,
@@ -129,6 +131,7 @@ public static class MemberScheduleConflict
                 row.StartDate,
                 row.EndDate,
                 row.Status,
+                row.ClassType,
                 row.Slots.Select(slot => new WeeklySlot(slot.Weekday, slot.StartTime, slot.EndTime)).ToList()))
             .ToList();
     }
@@ -143,5 +146,6 @@ public static class MemberScheduleConflict
         DateOnly? StartDate,
         DateOnly? EndDate,
         string Status,
+        string ClassType,
         List<WeeklySlot> Slots);
 }

@@ -97,3 +97,42 @@ public class CoachTrainingHistory
     [Column("recorded_at")]
     public DateTime RecordedAt { get; set; }
 }
+
+// Check-in vào trung tâm do lễ tân thao tác. Hoàn tác = status voided (giữ dòng).
+[Table("center_checkin")]
+public class CenterCheckIn
+{
+    [Key]
+    [Column("checkin_id")]
+    public int CheckInId { get; set; }
+
+    [Column("user_id")]
+    public int UserId { get; set; }
+
+    [Column("membership_id")]
+    public int? MembershipId { get; set; }
+
+    [Column("checked_in_at")]
+    public DateTime CheckedInAt { get; set; }
+
+    [Column("checked_in_by_user_id")]
+    public int CheckedInByUserId { get; set; }
+
+    [Column("checked_out_at")]
+    public DateTime? CheckedOutAt { get; set; }
+
+    [Column("checked_out_by_user_id")]
+    public int? CheckedOutByUserId { get; set; }
+
+    [Column("status")]
+    public string Status { get; set; } = "valid";
+
+    [Column("voided_at")]
+    public DateTime? VoidedAt { get; set; }
+
+    [Column("voided_by_user_id")]
+    public int? VoidedByUserId { get; set; }
+
+    [Column("void_reason")]
+    public string? VoidReason { get; set; }
+}
