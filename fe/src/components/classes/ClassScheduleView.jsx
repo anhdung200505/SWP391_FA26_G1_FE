@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { CancelSessionModal, EditSessionModal } from '../sessions/SessionSchedulePanel';
+import AdminAttendanceModal from './AdminAttendanceModal';
 import { CLASS_STATUS, formatDate } from './classUtils';
 import { getSessions } from '../../api/managementApi';
 import WeekSlotTable, { formatClock, mondayOf, weekContaining } from '../schedule/WeekSlotTable';
+import SessionCoachLine from '../schedule/SessionCoachLine';
+import SessionRoomLine from '../schedule/SessionRoomLine';
 
 const SESSION_STATUS = {
   upcoming: { label: 'Sắp học', className: 'bg-sky-50 text-sky-700 border-sky-200' },
@@ -25,7 +28,7 @@ function sessionStatusKey(session, today) {
   return session.status;
 }
 
-// mode = 'admin': đổi HLV/phòng và hủy buổi. mode = 'reception': chỉ đổi HLV. loadClasses trả danh sách lớp để tìm lớp theo id.
+// mode = 'admin': đổi HLV/phòng, hủy buổi và sửa điểm danh (từ hôm nay về quá khứ, không sửa buổi tương lai). mode = 'reception': chỉ đổi HLV. loadClasses trả danh sách lớp để tìm lớp theo id.
 export default function ClassScheduleView({ classId, mode = 'admin', loadClasses, back }) {
   const isAdmin = mode === 'admin';
   const today = todayIso();
@@ -38,6 +41,7 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState(null);
   const [cancelling, setCancelling] = useState(null);
+  const [attending, setAttending] = useState(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const weekClass = useRef('');
 
@@ -72,6 +76,7 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
   const handleSaved = (message) => {
     setEditing(null);
     setCancelling(null);
+    setAttending(null);
     setNotice(message);
     setReloadKey((key) => key + 1);
   };
@@ -190,12 +195,19 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
                       <p className="mt-1 text-xs text-gray-500 tabular-nums">
                         {formatClock(session.startTime)}–{formatClock(session.endTime)}
                       </p>
-                      <p className="text-xs text-gray-500">{session.roomName}</p>
-                      <p className="text-xs text-gray-500">{session.coachName}</p>
+                      <SessionRoomLine session={session} />
+                      <SessionCoachLine session={session} />
                       <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
                         {badge.label}
                       </span>
-                      {session.note && <p className="mt-1 text-xs text-pretty text-gray-600">{session.note}</p>}
+                      {session.note && (cancelled || !(session.coachChange || session.roomChanged) || session.note.startsWith('Buổi bù')) && (
+                        <p className="mt-1 text-xs text-pretty whitespace-pre-line text-gray-600">{session.note}</p>
+                      )}
+                      {isAdmin && !cancelled && String(session.date).slice(0, 10) <= today && (
+                        <button type="button" onClick={() => setAttending(session)} className="mt-2 block text-xs font-semibold text-emerald-700 underline">
+                          Điểm danh
+                        </button>
+                      )}
                       {editable && (
                         <div className="mt-2 flex gap-2">
                           <button type="button" onClick={() => setEditing(session)} className="text-xs font-semibold text-gray-700 underline">
@@ -218,6 +230,9 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
       )}
 
       {editing && <EditSessionModal session={editing} isAdmin={isAdmin} onClose={() => setEditing(null)} onSaved={handleSaved} />}
+      {isAdmin && attending && (
+        <AdminAttendanceModal classId={classId} session={attending} onClose={() => setAttending(null)} onSaved={handleSaved} />
+      )}
       {isAdmin && cancelling && <CancelSessionModal session={cancelling} onClose={() => setCancelling(null)} onSaved={handleSaved} />}
     </>
   );

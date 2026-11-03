@@ -290,23 +290,41 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
         {
             var enrollment = await db.ClassEnrollments
                 .FirstOrDefaultAsync(item => item.ClassId == classId && item.UserId == payment.UserId);
-            if (enrollment is null)
+            var alreadyEnrolled = enrollment?.Status == "enrolled";
+            var scheduleBlock = alreadyEnrolled
+                ? null
+                : await MemberScheduleConflict.FindAsync(db, payment.UserId, classId, DateTime.Now.AddMinutes(-PaymentTimeout.Minutes));
+            if (scheduleBlock is null)
             {
-                db.ClassEnrollments.Add(new ClassEnrollment
+                if (enrollment is null)
                 {
-                    ClassId = classId,
+                    db.ClassEnrollments.Add(new ClassEnrollment
+                    {
+                        ClassId = classId,
+                        UserId = payment.UserId,
+                        EnrolledAt = DateTime.Now,
+                        Status = "enrolled",
+                    });
+                }
+                else if (!alreadyEnrolled)
+                {
+                    enrollment.Status = "enrolled";
+                    enrollment.EnrolledAt = DateTime.Now;
+                }
+
+                await ClassMembershipBonus.GrantAsync(db, payment, DateTime.Now);
+            }
+            else
+            {
+                db.Notifications.Add(new AccountNotification
+                {
                     UserId = payment.UserId,
-                    EnrolledAt = DateTime.Now,
-                    Status = "enrolled",
+                    Title = "Không ghi danh được vì trùng lớp",
+                    Content = $"Không ghi danh vì {scheduleBlock} AnhDuy Sport sẽ liên hệ để hoàn tiền.",
+                    IsRead = false,
+                    CreatedAt = DateTime.Now,
                 });
             }
-            else if (enrollment.Status != "enrolled")
-            {
-                enrollment.Status = "enrolled";
-                enrollment.EnrolledAt = DateTime.Now;
-            }
-
-            await ClassMembershipBonus.GrantAsync(db, payment, DateTime.Now);
         }
 
         AddHistory(payment, "paid", "Thanh toán thành công");

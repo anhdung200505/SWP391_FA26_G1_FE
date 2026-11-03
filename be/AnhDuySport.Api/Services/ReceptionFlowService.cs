@@ -46,88 +46,8 @@ public class ReceptionFlowService(
         await payOs.CancelAsync(paymentId, payment.UserId);
     }
 
-    // Check-in đúng buổi hôm nay: buổi đang diễn ra, không có thì buổi sắp tới. Không điểm danh hộ buổi đã qua.
-    public async Task<ReceptionCheckInDto> CheckInAsync(string? keyword)
-    {
-        var member = await FindMemberByKeywordAsync(keyword);
-        var now = DateTime.Now;
-        var today = DateOnly.FromDateTime(now);
-        var clock = TimeOnly.FromDateTime(now);
-        var classIds = await db.ClassEnrollments.AsNoTracking()
-            .Where(item => item.UserId == member.UserId && item.Status == "enrolled")
-            .Select(item => item.ClassId)
-            .ToListAsync();
-        var sessions = await db.ClassSessions.AsNoTracking()
-            .Include(item => item.Class)
-            .Where(item => classIds.Contains(item.ClassId) && item.SessionDate == today && item.Status != "cancelled")
-            .OrderBy(item => item.StartTime)
-            .ThenBy(item => item.SessionId)
-            .ToListAsync();
-        var current = sessions.LastOrDefault(item => item.StartTime <= clock && clock < item.EndTime);
-        var upcoming = sessions.FirstOrDefault(item => item.StartTime > clock);
-        var target = current ?? upcoming;
-        if (target is null)
-        {
-            throw new RegistrationException(sessions.Count == 0
-                ? $"{member.FullName} không có buổi học hôm nay."
-                : $"Buổi học hôm nay của {member.FullName} đã kết thúc.");
-        }
-
-        var row = await db.ClassAttendances
-            .FirstOrDefaultAsync(item => item.SessionId == target.SessionId && item.UserId == member.UserId);
-        var already = row?.Status == "present" && row.CheckInAt is not null;
-        var checkedInAt = row?.CheckInAt ?? now;
-        if (!already)
-        {
-            if (row is null)
-            {
-                row = new ClassAttendance
-                {
-                    SessionId = target.SessionId,
-                    UserId = member.UserId,
-                    Status = "present",
-                    CheckInAt = now,
-                };
-                db.ClassAttendances.Add(row);
-            }
-            else
-            {
-                row.Status = "present";
-                row.CheckInAt ??= now;
-                checkedInAt = row.CheckInAt.Value;
-            }
-
-            var performer = await PerformerAsync();
-            db.ActivityLogs.Add(new ActivityLog
-            {
-                ActorUserId = performer.UserId,
-                Action = "Check-in học viên",
-                EntityName = "attendance",
-                EntityId = target.SessionId,
-                Detail = $"{member.FullName} · {target.Class?.ClassName} · {target.StartTime:HH\\:mm}-{target.EndTime:HH\\:mm}",
-                CreatedAt = now,
-            });
-            await db.SaveChangesAsync();
-            checkedInAt = row.CheckInAt ?? now;
-        }
-
-        var label = $"{ClassSessionPlanner.SessionTitle(target.SessionNo)} · {target.StartTime:HH\\:mm}–{target.EndTime:HH\\:mm}";
-        return new ReceptionCheckInDto(
-            member.UserId.ToString(),
-            member.FullName,
-            member.Phone ?? "",
-            target.ClassId.ToString(),
-            target.Class?.ClassName ?? "",
-            target.SessionId.ToString(),
-            label,
-            target.StartTime.ToString("HH:mm"),
-            target.EndTime.ToString("HH:mm"),
-            checkedInAt,
-            already,
-            already
-                ? $"{member.FullName} đã check-in buổi này lúc {checkedInAt:HH:mm}."
-                : $"Đã check-in {member.FullName} vào {target.Class?.ClassName}.");
-    }
+    public async Task<IReadOnlyList<ClassRegistrationBlockDto>> BlockedClassesAsync(string memberUserId) =>
+        await registrations.BlockedClassesAsync(ParseId(memberUserId, "Không tìm thấy học viên."));
 
     public async Task<ClassRegistrationDto> RegisterForMemberAsync(string memberUserId, CreateClassRegistrationRequest request)
     {
@@ -190,7 +110,7 @@ public class ReceptionFlowService(
         {
             UserId = memberId,
             Title = $"Bạn đã được cho ra khỏi lớp {className}",
-            Content = $"Lý do: {TextFormat.Sentence(reason)} Khi muốn học tiếp, hãy liên hệ lễ tân AnhDuy Sport để đăng ký học lại.",
+            Content = $"Lý do: {TextFormat.Sentence(reason)}\nKhi muốn học tiếp, hãy liên hệ lễ tân AnhDuy Sport để đăng ký học lại.",
             IsRead = false,
             CreatedAt = now,
         });
@@ -259,6 +179,7 @@ public class ReceptionFlowService(
                 item.ClassName,
                 item.CourseId,
                 item.Status,
+                item.ClassType,
                 item.EndDate,
                 item.Capacity,
                 CourseStatus = item.Course!.Status,
@@ -266,6 +187,11 @@ public class ReceptionFlowService(
             })
             .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("Không tìm thấy lớp muốn học lại.");
+        if (target.ClassType == "private")
+        {
+            throw new RegistrationException("Lớp 1-1 chỉ ghi danh qua yêu cầu học 1-1 đã được duyệt.");
+        }
+
         if (target.CourseId != courseId)
         {
             throw new RegistrationException("Chỉ chuyển sang lớp cùng khóa học.");
@@ -281,6 +207,11 @@ public class ReceptionFlowService(
         {
             throw new RegistrationException("Lớp đã hết chỗ.");
         }
+
+        await db.Database
+            .SqlQuery<int>($"SELECT user_id AS [Value] FROM [user] WITH (UPDLOCK, HOLDLOCK) WHERE user_id = {memberId}")
+            .ToListAsync();
+        await MemberScheduleConflict.EnsureNoneAsync(db, memberId, targetId, now.AddMinutes(-PaymentTimeout.Minutes));
 
         var enrollment = targetId == sourceId
             ? source
@@ -302,7 +233,7 @@ public class ReceptionFlowService(
         {
             UserId = memberId,
             Title = $"Bạn đã được đăng ký học lại lớp {target.ClassName}",
-            Content = $"Lễ tân AnhDuy Sport đã đăng ký học lại cho bạn. Lý do: {TextFormat.Sentence(reason)}",
+            Content = $"Lễ tân AnhDuy Sport đã đăng ký học lại cho bạn.\nLý do: {TextFormat.Sentence(reason)}",
             IsRead = false,
             CreatedAt = now,
         });
@@ -527,7 +458,7 @@ public class ReceptionFlowService(
             ?? throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
     }
 
-    private async Task<UserAccount> FindMemberByKeywordAsync(string? keyword)
+    internal async Task<UserAccount> FindMemberByKeywordAsync(string? keyword)
     {
         var value = keyword?.Trim() ?? "";
         if (value.Length == 0)

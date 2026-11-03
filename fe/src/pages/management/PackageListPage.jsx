@@ -80,11 +80,9 @@ export default function PackageListPage() {
                 </Link>
               </div>
               {Array.isArray(item.benefits) && item.benefits.length > 0 && (
-                <ul className="mt-3 flex flex-wrap gap-2">
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">
                   {item.benefits.map((benefit, idx) => (
-                    <li key={`${item.id}-benefit-${idx}`} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-                      {benefit}
-                    </li>
+                    <li key={`${item.id}-benefit-${idx}`}>{benefit}</li>
                   ))}
                 </ul>
               )}

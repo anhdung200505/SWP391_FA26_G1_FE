@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import SessionCoachLine from '../schedule/SessionCoachLine';
+import SessionRoomLine from '../schedule/SessionRoomLine';
 import {
   cancelSession,
   changeSessionCoach,
@@ -194,7 +196,7 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
           </h2>
           <p className="text-[11px] font-bold text-slate-400">
             {isAdmin
-              ? 'Đổi HLV, phòng hoặc hủy buổi chưa diễn ra. Học viên trong lớp nhận thông báo.'
+              ? 'Đổi HLV, phòng hoặc hủy buổi chưa diễn ra. Hủy buổi hôm nay hoặc buổi sắp tới sẽ tự thêm buổi bù cùng thứ, cùng giờ. Học viên trong lớp nhận thông báo.'
               : 'Đổi HLV khi HLV phụ trách bận. Học viên trong lớp nhận thông báo.'}
           </p>
         </div>
@@ -245,8 +247,12 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
                         </span>
                         <span className="ml-1.5 text-[10px] font-bold text-slate-400">Buổi {session.sessionNo}</span>
                       </td>
-                      <td className="p-4 min-w-[130px] font-bold text-slate-800">👤 {session.coachName}</td>
-                      <td className="p-4 min-w-[120px] text-slate-600">📍 {session.roomName}</td>
+                      <td className="p-4 min-w-[130px]">
+                        <SessionCoachLine session={session} className="text-sm font-bold text-slate-800" />
+                      </td>
+                      <td className="p-4 min-w-[120px]">
+                        <SessionRoomLine session={session} className="text-sm text-slate-600" />
+                      </td>
                       <td className="p-4 whitespace-nowrap">
                         <span className="font-bold text-slate-900">
                           {session.enrolledCount}/{session.capacity ?? '∞'}
@@ -283,7 +289,7 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
                       </td>
                       <td className="p-4 min-w-[160px] max-w-[220px]">
                         {session.note ? (
-                          <p className="text-[11px] font-semibold text-slate-600 leading-5 break-words">{session.note}</p>
+                          <p className="text-[11px] font-semibold text-slate-600 leading-5 break-words whitespace-pre-line">{session.note}</p>
                         ) : (
                           <span className="text-[11px] text-slate-300">—</span>
                         )}
@@ -438,14 +444,14 @@ export function EditSessionModal({ session, isAdmin, onClose, onSaved }) {
 
           <label className="block space-y-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-              {isAdmin ? 'Ghi chú (hiện ở cuối hàng)' : 'Lý do đổi HLV (ghi chú)'}
+              {isAdmin ? 'Ghi chú (hiện ở cuối hàng, xuống dòng trong thông báo)' : 'Ghi chú đổi HLV (ghi là thay thế)'}
             </span>
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={3}
               maxLength={500}
-              placeholder={isAdmin ? 'VD: HLV nghỉ phép, chuyển sang phòng 2 do bảo trì...' : 'VD: HLV phụ trách nghỉ ốm.'}
+              placeholder={isAdmin ? 'VD: HLV nghỉ phép. Khi đổi HLV, hệ thống ghi HLV thay thế rồi xuống dòng phần ghi chú này.' : 'VD: HLV phụ trách nghỉ ốm. Ghi chú này xuống dòng dưới dòng HLV thay thế.'}
               className={`${inputClass} w-full font-medium resize-none`}
             />
           </label>
@@ -489,8 +495,13 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
     setSaving(true);
     setError('');
     try {
-      await cancelSession(session.id, reason.trim());
-      onSaved(`Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}).`);
+      const result = await cancelSession(session.id, reason.trim());
+      const makeupDate = result?.makeupSession?.date ? formatDate(String(result.makeupSession.date).slice(0, 10)) : '';
+      onSaved(
+        makeupDate
+          ? `Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}). Buổi bù: ${makeupDate}.`
+          : `Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}).`,
+      );
     } catch (err) {
       setError(err.message || 'Hủy buổi học thất bại.');
       setSaving(false);
@@ -501,8 +512,9 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
     <ModalFrame title="Hủy buổi học" badge="Xác nhận" session={session} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
         <div className="text-xs text-slate-600 bg-red-50/50 border border-red-100 p-3.5 rounded-xl">
-          Buổi học sẽ chuyển sang <strong className="text-[#e31b23]">Đã hủy</strong> và không thể hoàn tác.{' '}
-          {session.enrolledCount} học viên trong lớp sẽ nhận thông báo kèm lý do.
+          Buổi học sẽ chuyển sang <strong className="text-[#e31b23]">Đã hủy</strong>. Hệ thống thêm một buổi bù cùng thứ, cùng giờ vào tuần sau.
+          Nếu tuần sau lớp đã có buổi này, buổi bù dời sang tuần cùng thứ còn trống.{' '}
+          {session.enrolledCount} học viên trong lớp sẽ nhận thông báo kèm lý do và ngày bù.
         </div>
         <label className="block space-y-1.5">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Lý do hủy (ghi chú)</span>

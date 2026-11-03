@@ -450,7 +450,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             .SingleAsync();
         if (planCount > 0)
         {
-            throw new InvalidOperationException("Tài khoản đang có giáo án nên không tự xóa được.");
+            throw new InvalidOperationException("Tài khoản đang có gợi ý tập nên không tự xóa được.");
         }
 
         var email = user.Email ?? "";

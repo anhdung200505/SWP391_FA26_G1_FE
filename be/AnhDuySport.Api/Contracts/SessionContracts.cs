@@ -26,7 +26,14 @@ public sealed record SessionDto(
     int EnrolledCount,
     int? Capacity,
     // Chỉ điền ở lịch của học viên: present, late, absent, null = chưa điểm danh.
-    string? AttendanceStatus = null);
+    string? AttendanceStatus = null,
+    // HLV phụ trách lớp. IsSubstituteCoach = true: buổi này do HLV khác dạy thay (CoachName là HLV thay thế).
+    string? ClassCoachUserId = null,
+    string? ClassCoachName = null,
+    bool IsSubstituteCoach = false,
+    // CoachChange: null, substitute (dạy thay một buổi) hoặc permanent (đổi HLV vĩnh viễn). RoomChanged: phòng khác phòng mặc định của lớp.
+    string? CoachChange = null,
+    bool RoomChanged = false);
 
 // Khung giờ cố định. Kind: group (3 giờ) hoặc private (90 phút).
 public sealed record TimeSlotDto(
@@ -49,6 +56,9 @@ public sealed record ChangeSessionCoachRequest(
 
 public sealed record CancelSessionRequest(
     [Required, StringLength(500, MinimumLength = 1)] string Reason);
+
+// Quản trị hủy buổi hôm nay hoặc buổi sắp tới: buổi gốc chuyển cancelled, MakeupSession là buổi bù cùng thứ, cùng giờ.
+public sealed record CancelSessionResult(SessionDto Session, SessionDto MakeupSession);
 
 // Lựa chọn HLV hoặc phòng cho một buổi. IsBusy = true: trùng giờ với buổi khác hoặc phòng không đủ sức chứa (BusyReason).
 public sealed record SessionOptionDto(
