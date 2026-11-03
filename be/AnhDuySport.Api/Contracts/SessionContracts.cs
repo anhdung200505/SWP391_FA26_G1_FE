@@ -30,7 +30,10 @@ public sealed record SessionDto(
     // HLV phụ trách lớp. IsSubstituteCoach = true: buổi này do HLV khác dạy thay (CoachName là HLV thay thế).
     string? ClassCoachUserId = null,
     string? ClassCoachName = null,
-    bool IsSubstituteCoach = false);
+    bool IsSubstituteCoach = false,
+    // CoachChange: null, substitute (dạy thay một buổi) hoặc permanent (đổi HLV vĩnh viễn). RoomChanged: phòng khác phòng mặc định của lớp.
+    string? CoachChange = null,
+    bool RoomChanged = false);
 
 // Khung giờ cố định. Kind: group (3 giờ) hoặc private (90 phút).
 public sealed record TimeSlotDto(
