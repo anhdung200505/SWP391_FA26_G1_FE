@@ -518,3 +518,61 @@ export function confirmMembershipRenewal(memberUserId, paymentId) {
     method: 'POST',
   });
 }
+
+// ==========================================
+// API HỌC 1-1 (PRIVATE CLASSES)
+// ==========================================
+
+// Học viên: gói 1-1 (lọc theo môn), tìm HLV rảnh, gửi/hủy/thanh toán yêu cầu
+export function getPrivateCourses(sportId) {
+  return request(`/private-classes/courses${toQuery({ sportId })}`);
+}
+
+// { courseId, startDate, slots: [{ weekday, timeSlotId }] } → số buổi, còn phòng, HLV kèm isBusy/busyReason
+export function checkPrivateAvailability(payload) {
+  return request('/private-classes/availability', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// { courseId, coachUserId, startDate, slots, note }
+export function createPrivateRequest(payload) {
+  return request('/private-classes/requests', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getMyPrivateRequests() {
+  return request('/private-classes/requests/mine');
+}
+
+export function cancelPrivateRequest(requestId) {
+  return request(`/private-classes/requests/${requestId}/cancel`, { method: 'POST' });
+}
+
+// Tạo đơn thanh toán (mã QR giữ 3 phút) cho yêu cầu đã được duyệt
+export function payPrivateRequest(requestId) {
+  return request(`/private-classes/requests/${requestId}/pay`, { method: 'POST' });
+}
+
+// Quản lý: danh sách (status: pending, approved, paid, rejected, cancelled, expired), chi tiết kèm buổi dự kiến, duyệt, từ chối
+export function getPrivateRequests(status) {
+  return request(`/management/private-requests${toQuery({ status })}`);
+}
+
+export function getPrivateRequestDetail(requestId) {
+  return request(`/management/private-requests/${requestId}`);
+}
+
+export function approvePrivateRequest(requestId) {
+  return request(`/management/private-requests/${requestId}/approve`, { method: 'POST' });
+}
+
+export function rejectPrivateRequest(requestId, reason) {
+  return request(`/management/private-requests/${requestId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
