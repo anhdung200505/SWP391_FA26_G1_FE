@@ -38,6 +38,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PersonalExercise> PersonalExercises => Set<PersonalExercise>();
     public DbSet<ClassAssignment> ClassAssignments => Set<ClassAssignment>();
     public DbSet<ClassAttendance> ClassAttendances => Set<ClassAttendance>();
+    public DbSet<CenterCheckIn> CenterCheckIns => Set<CenterCheckIn>();
+    public DbSet<PrivateClassRequest> PrivateClassRequests => Set<PrivateClassRequest>();
+    public DbSet<PrivateClassRequestSlot> PrivateClassRequestSlots => Set<PrivateClassRequestSlot>();
     public DbSet<CoachEvaluation> CoachEvaluations => Set<CoachEvaluation>();
     public DbSet<CoachTrainingHistory> CoachTrainingHistories => Set<CoachTrainingHistory>();
     public DbSet<CoachCourseBrief> CoachCourseBriefs => Set<CoachCourseBrief>();
