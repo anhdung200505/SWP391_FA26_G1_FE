@@ -31,6 +31,31 @@ public class EmailNotificationService(SmtpEmailSender emailSender)
         return SendAsync(member, subject, body);
     }
 
+    public Task<EmailDto> SendPrivateApprovedToMemberAsync(
+        UserAccount member, string courseName, string coachName, string schedule, DateTime payBefore)
+    {
+        var subject = "[AnhDuy Sport] Yêu cầu học 1-1 của bạn đã được duyệt";
+        var body = $"Xin chào {member.FullName}, yêu cầu học 1-1 \"{courseName}\" với HLV {coachName} đã được duyệt. {schedule} "
+            + $"Hãy vào mục Học 1-1 để thanh toán trước {payBefore:HH:mm dd/MM/yyyy}, quá hạn lớp sẽ được nhả lịch.";
+        return SendAsync(member, subject, body);
+    }
+
+    public Task<EmailDto> SendPrivateApprovedToCoachAsync(UserAccount coach, string memberName, string courseName, string schedule)
+    {
+        var subject = "[AnhDuy Sport] Bạn được giao lớp 1-1 mới";
+        var body = $"Xin chào {coach.FullName}, bạn được giao lớp 1-1 \"{courseName}\" của học viên {memberName}. {schedule} "
+            + "Lớp sẽ có hiệu lực khi học viên thanh toán.";
+        return SendAsync(coach, subject, body);
+    }
+
+    public Task<EmailDto> SendPrivateRejectedAsync(UserAccount member, string courseName, string reason)
+    {
+        var subject = "[AnhDuy Sport] Yêu cầu học 1-1 chưa được duyệt";
+        var body = $"Xin chào {member.FullName}, rất tiếc yêu cầu học 1-1 \"{courseName}\" chưa được duyệt. Lý do: {reason}. "
+            + "Bạn có thể gửi lại yêu cầu với lịch hoặc huấn luyện viên khác.";
+        return SendAsync(member, subject, body);
+    }
+
     private async Task<EmailDto> SendAsync(UserAccount user, string subject, string body)
     {
         var to = user.Email?.Trim() ?? "";

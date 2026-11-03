@@ -91,9 +91,6 @@ export default function AttendancePanel({ classId, sessions }) {
     return <p className="rounded-3xl border border-gray-200 bg-white p-5 text-sm text-gray-600">Lớp chưa có buổi để điểm danh.</p>;
   }
 
-  const selectedSession = openSessions.find((session) => String(session.sessionId) === String(sessionId));
-  const notYet = selectedSession && sessionDay(selectedSession) > todayIso();
-
   return (
     <section className="rounded-3xl border border-gray-200 bg-white p-5">
       <label className="block text-sm font-bold text-gray-700">
@@ -107,14 +104,13 @@ export default function AttendancePanel({ classId, sessions }) {
         </select>
       </label>
 
-      {notYet && (
-        <p className="mt-4 text-sm font-semibold text-[#b1131a]">
-          Buổi ngày {formatDate(selectedSession.sessionDate)} chưa tới nên chưa điểm danh được.
-        </p>
-      )}
       {loading && <p className="mt-4 text-sm text-gray-500">Đang tải sĩ số...</p>}
       {error && <p className="mt-4 text-sm font-semibold text-[#b1131a]">{error}</p>}
       {notice && <p className="mt-4 text-sm font-semibold text-emerald-800">{notice}</p>}
+
+      {sheet && !loading && !sheet.canEdit && sheet.lockReason && (
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{sheet.lockReason}</p>
+      )}
 
       {sheet && !loading && (
         <ul className="mt-4 divide-y divide-gray-100">
@@ -131,9 +127,9 @@ export default function AttendancePanel({ classId, sessions }) {
                     <button
                       key={mark.id}
                       type="button"
-                      disabled={notYet}
+                      disabled={!sheet.canEdit}
                       onClick={() => setMarks((current) => ({ ...current, [row.memberUserId]: mark.id }))}
-                      className={`rounded-full px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40 ${
+                      className={`rounded-full px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
                         active ? 'bg-[#12141d] text-white' : 'bg-[#f4f5f7] text-gray-600'
                       }`}
                     >
@@ -147,7 +143,7 @@ export default function AttendancePanel({ classId, sessions }) {
         </ul>
       )}
 
-      <button type="button" onClick={submit} disabled={saving || loading || notYet || !sheet?.rows?.length} className={`${primaryButtonClass} mt-4`}>
+      <button type="button" onClick={submit} disabled={saving || loading || !sheet?.rows?.length || !sheet?.canEdit} className={`${primaryButtonClass} mt-4`}>
         {saving ? 'Đang lưu...' : 'Lưu điểm danh'}
       </button>
     </section>

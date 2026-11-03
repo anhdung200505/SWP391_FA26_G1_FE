@@ -9,7 +9,7 @@ namespace AnhDuySport.Api.Controllers;
 [ApiController]
 [FlowErrors]
 [Route("api/reception")]
-public class ReceptionController(ReceptionFlowService reception) : ControllerBase
+public class ReceptionController(ReceptionFlowService reception, CenterCheckInFlowService checkIns) : ControllerBase
 {
     [HttpGet("registrations")]
     [EndpointSummary("Lễ tân xem học viên đã đăng ký và mọi thông tin")]
@@ -55,10 +55,28 @@ public class ReceptionController(ReceptionFlowService reception) : ControllerBas
     }
 
     [HttpPost("check-ins")]
-    [EndpointSummary("Lễ tân check-in học viên vào buổi học hôm nay")]
-    [EndpointDescription("Nhập mã học viên, email hoặc số điện thoại. Ghi present cho buổi đang diễn ra, hoặc buổi sắp tới trong ngày nếu chưa tới giờ. Buổi đã kết thúc hoặc không có lịch hôm nay thì trả 400.")]
-    public async Task<ActionResult<ReceptionCheckInDto>> CheckIn(ReceptionCheckInRequest request) =>
-        Ok(await reception.CheckInAsync(request.Keyword));
+    [EndpointSummary("Lễ tân check-in học viên vào trung tâm")]
+    [EndpointDescription("Nhập mã học viên, email hoặc số điện thoại. Không gắn lớp học, chỉ cần gói hội viên còn hạn (400 kèm lý do nếu hết hạn, chưa bắt đầu, chưa có gói hoặc tài khoản bị khóa). Nhiều lượt mỗi ngày. outcome: checked_in (lượt mới), already_inside (đang ở trong, chưa check-out) hoặc duplicate (vừa check-in dưới 10 phút, không tạo thêm).")]
+    public async Task<ActionResult<CenterCheckInResultDto>> CheckIn(ReceptionCheckInRequest request) =>
+        Ok(await checkIns.CheckInAsync(request.Keyword));
+
+    [HttpPost("check-ins/{checkInId}/check-out")]
+    [EndpointSummary("Lễ tân ghi giờ ra của một lượt check-in")]
+    [EndpointDescription("Chỉ lượt hôm nay, chưa check-out và chưa hoàn tác. Lượt hôm trước chưa check-out đã tự đóng lúc 00:00 nên trả 400.")]
+    public async Task<ActionResult<CenterCheckInDto>> CheckOut(string checkInId) =>
+        Ok(await checkIns.CheckOutAsync(checkInId));
+
+    [HttpPost("check-ins/{checkInId}/void")]
+    [EndpointSummary("Hoàn tác check-in nhầm học viên")]
+    [EndpointDescription("Bắt buộc reason (tối đa 500 ký tự). Giữ lại dòng, đánh dấu voided kèm người hủy và lý do. Lễ tân chỉ hoàn tác lượt trong ngày, quản trị hoàn tác mọi lúc.")]
+    public async Task<ActionResult<CenterCheckInDto>> VoidCheckIn(string checkInId, VoidCheckInRequest request) =>
+        Ok(await checkIns.VoidAsync(checkInId, request.Reason, User.IsInRole("ADMIN")));
+
+    [HttpGet("check-ins")]
+    [EndpointSummary("Xem danh sách check-in trung tâm theo ngày")]
+    [EndpointDescription("date (yyyy-MM-dd) mặc định hôm nay; q tìm theo tên, mã, email hoặc số điện thoại; status: bỏ trống = mọi lượt hợp lệ, inside = đang ở trong, voided = đã hoàn tác. Kèm summary của cả ngày: total, uniqueMembers, inside, voided. Lễ tân và quản trị đều xem được.")]
+    public async Task<ActionResult<CenterCheckInListDto>> AccessCheckIns([FromQuery] DateOnly? date, [FromQuery] string? q, [FromQuery] string? status) =>
+        Ok(await checkIns.AccessAsync(date, q, status));
 
     [HttpPost("class-registrations/{paymentId}/confirm-payment")]
     [EndpointSummary("Lễ tân xác nhận đã thu học phí tại quầy")]

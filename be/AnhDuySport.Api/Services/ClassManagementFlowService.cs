@@ -53,7 +53,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
 
     public async Task<IReadOnlyList<CourseOptionDto>> AccessCoursesAsync(string? sportId)
     {
-        var query = db.Courses.AsNoTracking().Where(course => course.Status == "active");
+        var query = db.Courses.AsNoTracking().Where(course => course.Status == "active" && course.Format == "group");
 
         if (!string.IsNullOrWhiteSpace(sportId))
         {
@@ -184,7 +184,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
     public async Task<ClassAvailabilityDto> CheckAvailabilityAsync(ClassAvailabilityRequest request)
     {
         var course = int.TryParse(request.CourseId, out var courseId)
-            ? await db.Courses.AsNoTracking().FirstOrDefaultAsync(item => item.CourseId == courseId)
+            ? await db.Courses.AsNoTracking().FirstOrDefaultAsync(item => item.CourseId == courseId && item.Format == "group")
             : null;
         if (course is null)
         {
@@ -265,7 +265,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         var today = DateOnly.FromDateTime(DateTime.Now);
 
         var course = int.TryParse(request.CourseId, out var courseId)
-            ? await db.Courses.AsNoTracking().FirstOrDefaultAsync(item => item.CourseId == courseId && item.Status == "active")
+            ? await db.Courses.AsNoTracking().FirstOrDefaultAsync(item => item.CourseId == courseId && item.Status == "active" && item.Format == "group")
             : null;
         if (course is null)
         {
