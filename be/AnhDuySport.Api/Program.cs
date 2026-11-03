@@ -45,6 +45,7 @@ builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<ClassManagementFlowService>();
 builder.Services.AddScoped<ReceptionFlowService>();
 builder.Services.AddScoped<CenterCheckInFlowService>();
+builder.Services.AddScoped<PrivateClassFlowService>();
 builder.Services.AddScoped<SessionFlowService>();
 builder.Services.AddScoped<SessionManagementFlowService>();
 builder.Services.AddScoped<NotificationFlowService>();
@@ -157,6 +158,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     var startup = scope.ServiceProvider;
     await CoachCourseSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await CenterCheckInSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await PrivateClassSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await startup.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 
