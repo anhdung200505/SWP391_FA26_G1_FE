@@ -176,6 +176,7 @@ public class ReceptionFlowService(
                 item.ClassName,
                 item.CourseId,
                 item.Status,
+                item.ClassType,
                 item.EndDate,
                 item.Capacity,
                 CourseStatus = item.Course!.Status,
@@ -183,6 +184,11 @@ public class ReceptionFlowService(
             })
             .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("Không tìm thấy lớp muốn học lại.");
+        if (target.ClassType == "private")
+        {
+            throw new RegistrationException("Lớp 1-1 chỉ ghi danh qua yêu cầu học 1-1 đã được duyệt.");
+        }
+
         if (target.CourseId != courseId)
         {
             throw new RegistrationException("Chỉ chuyển sang lớp cùng khóa học.");

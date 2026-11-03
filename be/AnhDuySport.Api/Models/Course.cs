@@ -54,5 +54,15 @@ public class Course
     [Column("status")]
     public string Status { get; set; } = "active";
 
+    // format: group hoặc private (gói học 1-1: SessionCount buổi, mỗi buổi SessionMinutes phút).
+    [Column("format")]
+    public string Format { get; set; } = "group";
+
+    [Column("session_minutes")]
+    public int? SessionMinutes { get; set; }
+
+    [Column("session_count")]
+    public int? SessionCount { get; set; }
+
     public Sport? Sport { get; set; }
 }
