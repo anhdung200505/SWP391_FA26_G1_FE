@@ -159,6 +159,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     await CoachCourseSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await CenterCheckInSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await PrivateClassSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await SessionChangeSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await startup.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 

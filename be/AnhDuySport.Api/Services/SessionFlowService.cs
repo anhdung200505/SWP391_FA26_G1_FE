@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AnhDuySport.Api.Services;
 
 // Lịch buổi học (session), danh mục khung giờ (time_slot) và điều chỉnh từng buổi (đổi HLV, phòng, hủy buổi).
-public class SessionFlowService(AppDbContext db, CurrentActor actor)
+public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotificationService email, ILogger<SessionFlowService> logger)
 {
     private static readonly string[] SlotKinds = ["group", "private"];
 
@@ -176,7 +176,14 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         EnsureEditable(session);
 
         var changes = new List<string>();
+        var noteLines = new List<string>();
+        var oldCoachId = session.CoachUserId;
+        var previousCoach = session.Coach!;
+        var previousRoomName = session.Room!.RoomName;
+        UserAccount? newCoach = null;
         var coachChanged = false;
+        var roomChanged = false;
+        string? newRoomName = null;
         if (!string.IsNullOrWhiteSpace(request.CoachUserId))
         {
             var coach = await ResolveCoachAsync(request.CoachUserId, session.Class!.Course!.SportId);
@@ -185,7 +192,9 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
                 var change = CoachChange(session, coach);
                 changes.Add(change);
                 session.CoachUserId = coach.UserId;
-                session.Note = TextFormat.SubstituteNote(change, NormalizeNote(request.Note));
+                session.CoachChange = coach.UserId == session.Class.CoachUserId ? null : "substitute";
+                noteLines.Add(change);
+                newCoach = coach;
                 coachChanged = true;
             }
         }
@@ -195,35 +204,62 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
             var room = await ResolveRoomAsync(request.RoomId, session.Class!);
             if (room.RoomId != session.RoomId)
             {
-                changes.Add($"đổi phòng {session.Room!.RoomName} → {room.RoomName}");
+                var roomLine = $"Đổi phòng: {session.Room!.RoomName} → {room.RoomName}";
+                changes.Add(roomLine);
+                noteLines.Add(roomLine);
                 session.RoomId = room.RoomId;
+                session.RoomChanged = session.Class.RoomId.HasValue && room.RoomId != session.Class.RoomId;
+                roomChanged = true;
+                newRoomName = room.RoomName;
             }
         }
 
-        if (!coachChanged && request.Note is not null)
+        // Đổi HLV hoặc phòng thì dựng lại ghi chú của buổi từ các thay đổi còn hiệu lực (HLV dạy thay, phòng khác mặc định);
+        // thay đổi đã trở về mặc định thì bỏ dòng cũ. Lý do người nhập nằm dưới mục Ghi chú.
+        if (coachChanged || roomChanged)
+        {
+            var oldLines = (session.Note ?? "").Replace("\r\n", "\n").Split('\n');
+            var coachLine = coachChanged ? noteLines.FirstOrDefault(line => !line.StartsWith("Đổi phòng", StringComparison.Ordinal)) : oldLines.FirstOrDefault(line => line.StartsWith("HLV thay thế", StringComparison.Ordinal));
+            var roomLine = roomChanged ? noteLines.FirstOrDefault(line => line.StartsWith("Đổi phòng", StringComparison.Ordinal)) : oldLines.FirstOrDefault(line => line.StartsWith("Đổi phòng", StringComparison.Ordinal));
+            var shown = new List<string>();
+            if (session.CoachChange is not null && coachLine is not null) shown.Add(coachLine.TrimEnd('.', ' '));
+            if (session.RoomChanged && roomLine is not null) shown.Add(roomLine.TrimEnd('.', ' '));
+            session.Note = shown.Count > 0
+                ? TextFormat.SubstituteNote(string.Join(".\n", shown), NormalizeNote(request.Note))
+                : NormalizeNote(request.Note);
+        }
+        else if (request.Note is not null)
         {
             session.Note = NormalizeNote(request.Note);
         }
 
         if (changes.Count > 0)
         {
-            var body = coachChanged
-                ? $"{When(session)}:\n{session.Note}"
-                : TextFormat.WithNote($"{When(session)}:\n{string.Join("\n", changes)}.", session.Note);
-            if (coachChanged)
-            {
-                var extra = changes.Where(item => !item.StartsWith("HLV", StringComparison.Ordinal)).ToList();
-                if (extra.Count > 0)
-                {
-                    body += "\n" + string.Join("\n", extra) + ".";
-                }
-            }
-
+            var body = $"{When(session)}:\n{TextFormat.SubstituteNote(string.Join(".\n", noteLines), NormalizeNote(request.Note))}";
             await NotifyMembersAsync(session, $"Thay đổi buổi học lớp {session.Class!.ClassName}", body);
+            NotifyCoaches(session, $"Thay đổi buổi học lớp {session.Class.ClassName}", body, coachChanged ? oldCoachId : null);
         }
 
         AddLog("Điều chỉnh buổi học", session, changes.Count > 0 ? string.Join("; ", changes) : "Cập nhật ghi chú");
+        var whenText = When(session);
         await SaveAsync();
+        if (newCoach is not null)
+        {
+            await EmailCoachChangeAsync(session, whenText, previousCoach, newCoach, NormalizeNote(request.Note));
+        }
+
+        if (roomChanged && newRoomName is not null)
+        {
+            // HLV hiện tại của buổi (đã là HLV mới nếu vừa đổi HLV cùng lúc).
+            var coachNow = newCoach ?? previousCoach;
+            if (!string.IsNullOrWhiteSpace(coachNow.Email))
+            {
+                await TrySendAsync(
+                    () => email.SendCoachRoomChangedAsync(coachNow, session.Class!.ClassName, whenText, previousRoomName, newRoomName, NormalizeNote(request.Note)),
+                    coachNow.UserId);
+            }
+        }
+
         return await SelectSessionAsync(sessionId);
     }
 
@@ -240,12 +276,18 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         }
 
         var change = CoachChange(session, coach);
+        var oldCoachId = session.CoachUserId;
+        var previousCoach = session.Coach!;
         session.CoachUserId = coach.UserId;
+        session.CoachChange = coach.UserId == session.Class.CoachUserId ? null : "substitute";
         session.Note = TextFormat.SubstituteNote(change, NormalizeNote(request.Note));
         await NotifyMembersAsync(session, $"Đổi huấn luyện viên lớp {session.Class.ClassName}",
             $"{When(session)}:\n{session.Note}");
+        NotifyCoaches(session, $"Đổi huấn luyện viên lớp {session.Class.ClassName}", $"{When(session)}:\n{session.Note}", oldCoachId);
         AddLog("Đổi HLV buổi học", session, change);
+        var whenText = When(session);
         await SaveAsync();
+        await EmailCoachChangeAsync(session, whenText, previousCoach, coach, NormalizeNote(request.Note));
         return await SelectSessionAsync(sessionId);
     }
 
@@ -275,7 +317,12 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
             CoachUserId = session.CoachUserId,
             RoomId = session.RoomId,
             Status = "scheduled",
-            Note = $"Buổi bù cho buổi ngày {session.SessionDate:dd/MM/yyyy}.",
+            RoomChanged = session.RoomChanged,
+            CoachChange = session.CoachChange,
+            Note = Shorten(
+                $"Buổi bù cho buổi ngày {session.SessionDate:dd/MM/yyyy}."
+                + (session.RoomChanged || session.CoachChange is not null ? "\n" + ChangeLines(session.Note) : ""),
+                500),
             CreatedAt = DateTime.Now,
         };
         if (session.Class!.EndDate is DateOnly end && end < makeupDate)
@@ -291,8 +338,11 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
             session,
             $"Hủy buổi học lớp {session.Class.ClassName}",
             TextFormat.WithNote($"{When(session)} bị hủy.\nBuổi bù: {makeupWhen}.", reason));
+        NotifyCoaches(session, $"Hủy buổi học lớp {session.Class.ClassName}", $"{When(session)} bị hủy.\nBuổi bù: {makeupWhen}.\nLý do: {TextFormat.Sentence(reason)}");
         AddLog("Hủy buổi học", session, $"{reason}. Buổi bù: {makeupWhen}");
+        var cancelledWhen = When(session);
         await SaveAsync();
+        await EmailCancelledAsync(session, cancelledWhen, makeupWhen, reason);
         return new CancelSessionResult(
             await SelectSessionAsync(session.SessionId.ToString()),
             await SelectSessionAsync(makeup.SessionId.ToString()));
@@ -461,6 +511,81 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
         }
     }
 
+    // Thông báo trong hệ thống cho HLV của buổi (và HLV cũ nếu vừa đổi). Chỉ ghi vào context, lưu cùng SaveAsync.
+    private void NotifyCoaches(ClassSession session, string title, string content, int? previousCoachId = null)
+    {
+        var now = DateTime.Now;
+        foreach (var coachId in new[] { session.CoachUserId, previousCoachId ?? session.CoachUserId }.Distinct())
+        {
+            db.Notifications.Add(new AccountNotification
+            {
+                UserId = coachId,
+                Title = Shorten(title, 200),
+                Content = content,
+                IsRead = false,
+                CreatedAt = now,
+            });
+        }
+    }
+
+    // Hủy buổi báo thêm qua email cho mọi học viên đang học lớp. Gửi sau khi đã lưu, lỗi gửi chỉ ghi log.
+    private async Task EmailCancelledAsync(ClassSession session, string when, string makeupWhen, string reason)
+    {
+        var members = await db.UserAccounts.AsNoTracking()
+            .Where(user => db.ClassEnrollments.Any(enrollment =>
+                enrollment.ClassId == session.ClassId && enrollment.UserId == user.UserId && enrollment.Status == "enrolled"))
+            .ToListAsync();
+        var coach = await db.UserAccounts.AsNoTracking().FirstOrDefaultAsync(user => user.UserId == session.CoachUserId);
+        if (coach is not null && !string.IsNullOrWhiteSpace(coach.Email))
+        {
+            await TrySendAsync(
+                () => email.SendSessionCancelledToCoachAsync(coach, session.Class!.ClassName, when, makeupWhen, reason),
+                coach.UserId);
+        }
+
+        foreach (var member in members.Where(user => !string.IsNullOrWhiteSpace(user.Email)))
+        {
+            await TrySendAsync(
+                () => email.SendSessionCancelledAsync(member, session.Class!.ClassName, when, makeupWhen, reason),
+                member.UserId);
+        }
+    }
+
+    // Đổi HLV một buổi: chỉ báo email cho hai HLV (HLV mới và HLV cũ), không báo học viên.
+    private async Task EmailCoachChangeAsync(ClassSession session, string when, UserAccount previous, UserAccount current, string? reason)
+    {
+        var className = session.Class!.ClassName;
+        var back = current.UserId == session.Class.CoachUserId;
+        if (!string.IsNullOrWhiteSpace(current.Email))
+        {
+            await TrySendAsync(() => email.SendCoachSessionAssignedAsync(current, className, when, previous.FullName, back, reason), current.UserId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(previous.Email))
+        {
+            await TrySendAsync(() => email.SendCoachSessionReleasedAsync(previous, className, when, current.FullName, reason), previous.UserId);
+        }
+    }
+
+    // Email là việc phụ sau khi đã lưu: lỗi gửi chỉ ghi log, không làm hỏng thao tác.
+    private async Task TrySendAsync(Func<Task> send, int userId)
+    {
+        try
+        {
+            await send();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Không gửi được email buổi học cho người dùng {UserId}", userId);
+        }
+    }
+
+    // Các dòng "HLV thay thế..." và "Đổi phòng..." của ghi chú buổi (bỏ phần lý do người nhập).
+    private static string ChangeLines(string? note) =>
+        string.Join("\n", (note ?? "").Replace("\r\n", "\n").Split('\n')
+            .TakeWhile(line => line != "Ghi chú:")
+            .Where(line => line.StartsWith("HLV thay thế", StringComparison.Ordinal) || line.StartsWith("Đổi phòng", StringComparison.Ordinal)));
+
     private void AddLog(string action, ClassSession session, string detail)
     {
         db.ActivityLogs.Add(new ActivityLog
@@ -535,6 +660,8 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
                 session.Room!.RoomName,
                 session.Status,
                 session.Note,
+                session.CoachChange,
+                session.RoomChanged,
                 EnrolledCount = session.Class.Enrollments.Count(enrollment => enrollment.Status == "enrolled"),
                 session.Class.Capacity,
             })
@@ -567,7 +694,9 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor)
                     row.Capacity,
                     ClassCoachUserId: row.ClassCoachUserId.ToString(),
                     ClassCoachName: row.ClassCoachName,
-                    IsSubstituteCoach: row.CoachUserId != row.ClassCoachUserId);
+                    IsSubstituteCoach: row.CoachChange == "substitute",
+                    CoachChange: row.CoachChange,
+                    RoomChanged: row.RoomChanged);
             })
             .ToList();
     }

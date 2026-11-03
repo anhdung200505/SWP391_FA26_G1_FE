@@ -48,6 +48,65 @@ public class EmailNotificationService(SmtpEmailSender emailSender)
         return SendAsync(coach, subject, body);
     }
 
+    public Task<EmailDto> SendSessionCancelledAsync(UserAccount member, string className, string when, string makeupWhen, string reason)
+    {
+        var subject = $"[AnhDuy Sport] Buổi học lớp {className} bị hủy";
+        var body = $"Xin chào {member.FullName}, {when} bị hủy. Lý do: {TextFormat.Sentence(reason)} "
+            + $"Buổi bù: {makeupWhen}.";
+        return SendAsync(member, subject, body);
+    }
+
+    public Task<EmailDto> SendSessionCancelledToCoachAsync(UserAccount coach, string className, string when, string makeupWhen, string reason)
+    {
+        var subject = $"[AnhDuy Sport] Buổi học lớp {className} bị hủy";
+        var body = $"Xin chào {coach.FullName}, {when} bị hủy. Lý do: {TextFormat.Sentence(reason)} Buổi bù: {makeupWhen}.";
+        return SendAsync(coach, subject, body);
+    }
+
+    // HLV được giao một buổi: dạy thay HLV khác, hoặc (back = true) HLV phụ trách dạy lại buổi đã giao người khác.
+    public Task<EmailDto> SendCoachSessionAssignedAsync(UserAccount coach, string className, string when, string otherCoachName, bool back, string? reason)
+    {
+        var subject = $"[AnhDuy Sport] {(back ? "Bạn dạy lại" : "Bạn dạy thay")} buổi học lớp {className}";
+        var body = back
+            ? $"Xin chào {coach.FullName}, {when} (đang do HLV {otherCoachName} dạy thay) được giao lại cho bạn."
+            : $"Xin chào {coach.FullName}, bạn dạy thay HLV {otherCoachName} {when}.";
+        return SendAsync(coach, subject, WithReason(body, reason));
+    }
+
+    // HLV có một buổi chuyển cho HLV khác dạy.
+    public Task<EmailDto> SendCoachSessionReleasedAsync(UserAccount coach, string className, string when, string newCoachName, string? reason)
+    {
+        var subject = $"[AnhDuy Sport] Buổi học lớp {className} chuyển cho HLV khác";
+        var body = $"Xin chào {coach.FullName}, {when} đã chuyển cho HLV {newCoachName} dạy, bạn không cần dạy buổi này.";
+        return SendAsync(coach, subject, WithReason(body, reason));
+    }
+
+    // Đổi HLV vĩnh viễn cả lớp: HLV mới nhận lớp từ ngày first, remaining buổi còn lại.
+    public Task<EmailDto> SendCoachClassAssignedAsync(UserAccount coach, string className, string oldCoachName, DateOnly first, int remaining, string? reason)
+    {
+        var subject = $"[AnhDuy Sport] Bạn được giao lớp {className}";
+        var body = $"Xin chào {coach.FullName}, bạn được giao dạy lớp {className} thay HLV {oldCoachName} từ ngày {first:dd/MM/yyyy}, còn {remaining} buổi.";
+        return SendAsync(coach, subject, WithReason(body, reason));
+    }
+
+    public Task<EmailDto> SendCoachClassReleasedAsync(UserAccount coach, string className, string newCoachName, DateOnly first, int remaining, string? reason)
+    {
+        var subject = $"[AnhDuy Sport] Lớp {className} chuyển cho HLV khác";
+        var body = $"Xin chào {coach.FullName}, lớp {className} đã chuyển cho HLV {newCoachName} từ ngày {first:dd/MM/yyyy}, {remaining} buổi còn lại bạn không cần dạy.";
+        return SendAsync(coach, subject, WithReason(body, reason));
+    }
+
+    // Đổi phòng của một buổi: chỉ báo cho HLV của buổi (học viên đã có thông báo trong hệ thống).
+    public Task<EmailDto> SendCoachRoomChangedAsync(UserAccount coach, string className, string when, string oldRoom, string newRoom, string? reason)
+    {
+        var subject = $"[AnhDuy Sport] Đổi phòng buổi học lớp {className}";
+        var body = $"Xin chào {coach.FullName}, {when} đổi phòng từ {oldRoom} sang {newRoom}.";
+        return SendAsync(coach, subject, WithReason(body, reason));
+    }
+
+    private static string WithReason(string body, string? reason) =>
+        string.IsNullOrWhiteSpace(reason) ? body : $"{body} Lý do: {TextFormat.Sentence(reason)}";
+
     public Task<EmailDto> SendPrivateRejectedAsync(UserAccount member, string courseName, string reason)
     {
         var subject = "[AnhDuy Sport] Yêu cầu học 1-1 chưa được duyệt";
