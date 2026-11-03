@@ -331,6 +331,8 @@ CREATE TABLE [session] (
     room_id       INT           NOT NULL,
     status        NVARCHAR(20)  NOT NULL CONSTRAINT DF_session_status DEFAULT (N'scheduled'),
     note          NVARCHAR(500) NULL,
+    room_changed  BIT           NOT NULL CONSTRAINT DF_session_room_changed DEFAULT (0),
+    coach_change  NVARCHAR(12)  NULL,
     created_at    DATETIME2(0)  NOT NULL CONSTRAINT DF_session_created_at DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_session PRIMARY KEY (session_id),
     CONSTRAINT UQ_session UNIQUE (class_id, session_date, time_slot_id),
@@ -339,7 +341,8 @@ CREATE TABLE [session] (
     CONSTRAINT FK_session_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_session_room FOREIGN KEY (room_id) REFERENCES room (room_id),
     CONSTRAINT CK_session_time CHECK (end_time > start_time),
-    CONSTRAINT CK_session_status CHECK (status IN (N'scheduled', N'held', N'cancelled', N'completed'))
+    CONSTRAINT CK_session_status CHECK (status IN (N'scheduled', N'held', N'cancelled', N'completed')),
+    CONSTRAINT CK_session_coach_change CHECK (coach_change IS NULL OR coach_change IN (N'substitute', N'permanent'))
 );
 GO
 
