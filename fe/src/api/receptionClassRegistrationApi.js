@@ -98,11 +98,31 @@ export function cancelReceptionRegistration(paymentId) {
   });
 }
 
+// Check-in vào trung tâm (không gắn lớp, cần gói hội viên còn hạn).
+// Trả { outcome: checked_in | already_inside | duplicate, checkIn, message }.
 export function checkInMember(keyword) {
   return request('/reception/check-ins', {
     method: 'POST',
     body: JSON.stringify({ keyword }),
   });
+}
+
+export function checkOutMember(checkInId) {
+  return request(`/reception/check-ins/${checkInId}/check-out`, { method: 'POST' });
+}
+
+// Lễ tân chỉ hoàn tác lượt trong ngày, quản trị mọi lúc. reason bắt buộc.
+export function voidCheckIn(checkInId, reason) {
+  return request(`/reception/check-ins/${checkInId}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+// params: date (yyyy-MM-dd, mặc định hôm nay), q, status ('' | 'inside' | 'voided'). Trả { date, summary, items }.
+export function getCenterCheckIns(params = {}) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value)).toString();
+  return request(`/reception/check-ins${query ? `?${query}` : ''}`);
 }
 
 /**

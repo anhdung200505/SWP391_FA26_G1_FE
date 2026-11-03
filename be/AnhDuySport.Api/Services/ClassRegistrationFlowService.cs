@@ -190,7 +190,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         var holds = LiveHolds();
         var item = await db.Classes
             .AsNoTracking()
-            .Where(current => current.ClassId == id)
+            .Where(current => current.ClassId == id && current.ClassType == "group")
             .Select(current => new
             {
                 current.ClassId,
@@ -270,7 +270,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         var today = DateOnly.FromDateTime(DateTime.Now);
         var rows = await db.Classes
             .AsNoTracking()
-            .Where(item => item.Course!.SportId == sportKey)
+            .Where(item => item.Course!.SportId == sportKey && item.ClassType == "group")
             .Where(item => item.Status == "open" || item.Status == "ongoing")
             .Where(item => item.EndDate == null || item.EndDate >= today)
             .Where(item => item.Course!.Status == "active")
@@ -296,7 +296,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
     public async Task<ClassRegistrationDto> SubmitRegistrationAsync(
         int memberUserId,
         CreateClassRegistrationRequest request,
-        RegistrationActor? registeredBy = null)
+        RegistrationActor? registeredBy = null,
+        bool allowPrivate = false)
     {
         var member = await FindActiveMemberAsync(memberUserId);
         registeredBy ??= new RegistrationActor(member.UserId, "MEMBER");
@@ -331,6 +332,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             {
                 current.ClassName,
                 current.Status,
+                current.ClassType,
                 current.EndDate,
                 CourseStatus = current.Course!.Status,
                 Tuition = current.Course.Price,
@@ -339,6 +341,12 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             })
             .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("Không tìm thấy lớp học.");
+
+        // Lớp 1-1 chỉ có đường vào là yêu cầu học 1-1 được quản lý duyệt, không đăng ký trực tiếp.
+        if (item.ClassType == "private" && !allowPrivate)
+        {
+            throw new RegistrationException("Lớp 1-1 chỉ đăng ký qua yêu cầu học 1-1 đã được duyệt.");
+        }
 
         if (await db.ClassEnrollments.AnyAsync(enrollment =>
                 enrollment.ClassId == classId && enrollment.UserId == member.UserId && enrollment.Status == "enrolled"))
@@ -666,6 +674,10 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
                 .Where(item => item.ClassId == classId)
                 .Select(item => item.Capacity)
                 .FirstAsync();
+            var classStatus = await db.Classes
+                .Where(item => item.ClassId == classId)
+                .Select(item => item.Status)
+                .FirstAsync();
             var enrolledCount = await db.ClassEnrollments
                 .CountAsync(item => item.ClassId == classId && item.Status == "enrolled");
             var enrollment = await db.ClassEnrollments
@@ -678,7 +690,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             scheduleBlock = alreadyEnrolled
                 ? null
                 : await MemberScheduleConflict.FindAsync(db, payment.UserId, classId, HoldSince());
-            hasSeat = scheduleBlock is null && (alreadyEnrolled || capacity is null || enrolledCount < capacity);
+            // Lớp đã hủy (vd. lớp 1-1 quá hạn thanh toán) thì tiền về sau coi như lớp đầy: không ghi danh, chờ hoàn tiền.
+            hasSeat = scheduleBlock is null
+                && (alreadyEnrolled || (classStatus != "cancelled" && (capacity is null || enrolledCount < capacity)));
             if (hasSeat && !alreadyEnrolled)
             {
                 if (enrollment is null)
@@ -1038,7 +1052,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
 
         var held = await LiveHolds()
-            .Where(hold => hold.UserId == memberUserId && hold.Class!.Course!.SportId == sportId)
+            .Where(hold => hold.UserId == memberUserId && hold.Class!.Course!.SportId == sportId && hold.Class.ClassType == "group")
             .Select(hold => hold.ClassId)
             .FirstOrDefaultAsync();
         if (held is int heldClassId)
@@ -1356,6 +1370,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
     private IQueryable<TrainingClass> OpenClasses(DateOnly today) =>
         db.Classes
             .AsNoTracking()
+            .Where(item => item.ClassType == "group")
             .Where(item => item.Status == "open" || item.Status == "ongoing")
             .Where(item => item.EndDate == null || item.EndDate >= today)
             .Where(item => item.Course!.Status == "active");

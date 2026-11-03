@@ -8,7 +8,7 @@ param([string]$Server)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 
-foreach ($script in '01_schema.sql', '02_seed.sql', '03_seed_extra_coaches.sql', '04_seed_extra_members.sql', '05_membership_email_change.sql', '06_rename_class_names.sql') {
+foreach ($script in '01_schema.sql', '02_seed.sql', '03_seed_extra_coaches.sql', '04_seed_extra_members.sql', '05_membership_email_change.sql', '06_rename_class_names.sql', '07_seed_private_courses.sql') {
     if (-not (Test-Path (Join-Path $root $script))) { throw "Thieu file $script trong $root" }
 }
 
@@ -58,5 +58,6 @@ Invoke-SqlFile '03_seed_extra_coaches.sql' 'AnhDuySport'
 Invoke-SqlFile '04_seed_extra_members.sql' 'AnhDuySport'
 Invoke-SqlFile '05_membership_email_change.sql' 'AnhDuySport'
 Invoke-SqlFile '06_rename_class_names.sql' 'AnhDuySport'
+Invoke-SqlFile '07_seed_private_courses.sql' 'AnhDuySport'
 
 Write-Output "AnhDuySport san sang tren $Server"
