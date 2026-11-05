@@ -242,7 +242,14 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
 
         AddLog("Điều chỉnh buổi học", session, changes.Count > 0 ? string.Join("; ", changes) : "Cập nhật ghi chú");
         var whenText = When(session);
+        var memberSummary = changes.Count > 0
+            ? $"{whenText}:\n{TextFormat.SubstituteNote(string.Join(".\n", noteLines), NormalizeNote(request.Note))}"
+            : null;
         await SaveAsync();
+        if (memberSummary is not null)
+        {
+            await EmailMembersScheduleAsync(session, memberSummary);
+        }
         if (newCoach is not null)
         {
             await EmailCoachChangeAsync(session, whenText, previousCoach, newCoach, NormalizeNote(request.Note));
@@ -286,7 +293,9 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
         NotifyCoaches(session, $"Đổi huấn luyện viên lớp {session.Class.ClassName}", $"{When(session)}:\n{session.Note}", oldCoachId);
         AddLog("Đổi HLV buổi học", session, change);
         var whenText = When(session);
+        var memberSummary = $"{whenText}:\n{session.Note}";
         await SaveAsync();
+        await EmailMembersScheduleAsync(session, memberSummary);
         await EmailCoachChangeAsync(session, whenText, previousCoach, coach, NormalizeNote(request.Note));
         return await SelectSessionAsync(sessionId);
     }
@@ -528,13 +537,22 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
         }
     }
 
+    // Đổi phòng, đổi HLV hoặc thay đổi lịch khác: gửi Gmail cho học viên đang học lớp, kèm link lịch.
+    private async Task EmailMembersScheduleAsync(ClassSession session, string summary)
+    {
+        var members = await EnrolledMembersAsync(session.ClassId);
+        foreach (var member in members)
+        {
+            await TrySendAsync(
+                () => email.SendMemberScheduleChangedAsync(member, session.Class!.ClassName, summary),
+                member.UserId);
+        }
+    }
+
     // Hủy buổi báo thêm qua email cho mọi học viên đang học lớp. Gửi sau khi đã lưu, lỗi gửi chỉ ghi log.
     private async Task EmailCancelledAsync(ClassSession session, string when, string makeupWhen, string reason)
     {
-        var members = await db.UserAccounts.AsNoTracking()
-            .Where(user => db.ClassEnrollments.Any(enrollment =>
-                enrollment.ClassId == session.ClassId && enrollment.UserId == user.UserId && enrollment.Status == "enrolled"))
-            .ToListAsync();
+        var members = await EnrolledMembersAsync(session.ClassId);
         var coach = await db.UserAccounts.AsNoTracking().FirstOrDefaultAsync(user => user.UserId == session.CoachUserId);
         if (coach is not null && !string.IsNullOrWhiteSpace(coach.Email))
         {
@@ -543,7 +561,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
                 coach.UserId);
         }
 
-        foreach (var member in members.Where(user => !string.IsNullOrWhiteSpace(user.Email)))
+        foreach (var member in members)
         {
             await TrySendAsync(
                 () => email.SendSessionCancelledAsync(member, session.Class!.ClassName, when, makeupWhen, reason),
@@ -551,7 +569,14 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
         }
     }
 
-    // Đổi HLV một buổi: chỉ báo email cho hai HLV (HLV mới và HLV cũ), không báo học viên.
+    private Task<List<UserAccount>> EnrolledMembersAsync(int classId) =>
+        db.UserAccounts.AsNoTracking()
+            .Where(user => user.Email != null && user.Email.Contains("@")
+                && db.ClassEnrollments.Any(enrollment =>
+                    enrollment.ClassId == classId && enrollment.UserId == user.UserId && enrollment.Status == "enrolled"))
+            .ToListAsync();
+
+    // Đổi HLV một buổi: báo email cho hai HLV (HLV mới và HLV cũ). Học viên nhận thư riêng.
     private async Task EmailCoachChangeAsync(ClassSession session, string when, UserAccount previous, UserAccount current, string? reason)
     {
         var className = session.Class!.ClassName;

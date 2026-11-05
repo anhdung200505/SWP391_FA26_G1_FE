@@ -61,12 +61,19 @@ export default function ClassRegistrationPage() {
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedClass, setSelectedClass] = useState(null);
   const [pickedPackage, setSelectedPackage] = useState(null);
+  // Đã có gói: mặc định không gia hạn, học viên chọn một gói trong danh sách nếu muốn.
+  const [skipPackage, setSkipPackage] = useState(false);
 
   // Gói cao nhất học viên đang có: khóa các gói rẻ hơn.
   const [ownedPackageId, setOwnedPackageId] = useState(null);
   const ownedPackage = packages.find((pkg) => String(pkg.id) === String(ownedPackageId)) || null;
+  const canSkipPackage = includeClass && !!ownedPackage;
   const isPackageLocked = (pkg) => !!ownedPackage && (pkg?.fee || 0) < (ownedPackage.fee || 0);
-  const selectedPackage = pickedPackage && isPackageLocked(pickedPackage) ? ownedPackage : pickedPackage;
+  const selectedPackage = canSkipPackage && skipPackage
+    ? null
+    : pickedPackage && isPackageLocked(pickedPackage)
+      ? ownedPackage
+      : pickedPackage;
 
   const [loading, setLoading] = useState(true);
   const [loadingClasses, setLoadingClasses] = useState(false);
@@ -206,6 +213,10 @@ export default function ClassRegistrationPage() {
     return () => clearInterval(interval);
   }, [registrationResult, user?.id]);
 
+  useEffect(() => {
+    setSkipPackage(Boolean(ownedPackageId));
+  }, [ownedPackageId]);
+
   // Gói cao nhất đang có để khóa các gói thấp hơn
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -321,14 +332,19 @@ export default function ClassRegistrationPage() {
   const calculatePackagePrice = (pkg) => {
     if (!pkg) return 0;
     if (!includeClass) return pkg.fee || 0;
-    if (isBronzePackage(pkg)) return 0;
+    if (isBronzePackage(pkg)) return ownedPackage ? pkg.fee || 0 : 0;
     const percent = Number(pkg.upgradeDiscountPercent) || 0;
     if (percent <= 0) return pkg.fee || 0;
     return Math.round(((pkg.fee || 0) * (100 - percent)) / 100);
   };
 
+  const packageFeeNow = () => {
+    if (canSkipPackage && skipPackage) return 0;
+    return includeMembership ? calculatePackagePrice(selectedPackage) : 0;
+  };
+
   const calculateTotalFee = () => {
-    const packageFee = includeMembership ? calculatePackagePrice(selectedPackage) : 0;
+    const packageFee = packageFeeNow();
     const classTuition = includeClass ? selectedClass?.tuition || 0 : 0;
     return packageFee + classTuition;
   };
@@ -339,7 +355,7 @@ export default function ClassRegistrationPage() {
     if (submitting) return;
     setError('');
 
-    if (includeMembership && !selectedPackage?.id) {
+    if (!(canSkipPackage && skipPackage) && !selectedPackage?.id) {
       setError('Vui lòng chọn một gói hội viên.');
       return;
     }
@@ -388,9 +404,14 @@ export default function ClassRegistrationPage() {
         sportId: selectedSportId || sportsList[0]?.id || '1',
         classId: selectedClass.id,
         ...(selectedClass?.nextSlot?.id ? { slotId: selectedClass.nextSlot.id } : {}),
-        ...(includeMembership && !isBronzePackage(selectedPackage) && selectedPackage?.id
-          ? { membershipPackageId: selectedPackage.id }
-          : {}),
+        ...(canSkipPackage && skipPackage
+          ? { renewMembership: false }
+          : {
+              ...(canSkipPackage ? { renewMembership: true } : {}),
+              ...(selectedPackage?.id && !(includeClass && isBronzePackage(selectedPackage) && !ownedPackage)
+                ? { membershipPackageId: selectedPackage.id }
+                : {}),
+            }),
         fullName: fullName.trim(),
         phone: phone.trim(),
         ...(dateOfBirth ? { dateOfBirth } : {}),
@@ -423,11 +444,13 @@ export default function ClassRegistrationPage() {
   };
 
   const pageTitle = renewOnly ? 'Gia hạn gói hội viên' : 'Đăng ký khóa học';
-  const packageSummaryName = !selectedPackage
-    ? 'Chưa chọn'
-    : includeClass && isBronzePackage(selectedPackage)
-      ? `${selectedPackage.name} (bắt buộc, tặng kèm)`
-      : selectedPackage.name;
+  const packageSummaryName = canSkipPackage && skipPackage
+    ? `Giữ ${ownedPackage.name}, không gia hạn`
+    : !selectedPackage
+      ? 'Chưa chọn'
+      : includeClass && isBronzePackage(selectedPackage)
+        ? `${selectedPackage.name} (bắt buộc, tặng kèm)`
+        : selectedPackage.name;
 
   return (
     <WorkspaceShell
@@ -441,7 +464,9 @@ export default function ClassRegistrationPage() {
       <p className="mt-2 max-w-2xl text-sm text-pretty text-gray-500">
         {renewOnly
           ? 'Chọn gói để gia hạn hoặc nâng hạng. Bước này không đăng ký lớp.'
-          : 'Đăng ký khóa học luôn kèm Hạng Đồng. Đây là gói bắt buộc và được tặng. Có thể nâng lên Hạng Bạc hoặc Hạng Vàng thay cho gói tặng.'}
+          : ownedPackage
+            ? `Bạn đang có ${ownedPackage.name}. Chọn gói nếu muốn gia hạn hoặc nâng hạng, giá vẫn được giảm. Chọn Không gia hạn nếu chỉ đóng học phí lớp.`
+            : 'Đăng ký khóa học luôn kèm Hạng Đồng. Đây là gói bắt buộc và được tặng. Có thể nâng lên Hạng Bạc hoặc Hạng Vàng thay cho gói tặng.'}
       </p>
 
       {loading ? (
@@ -620,8 +645,27 @@ export default function ClassRegistrationPage() {
                 </p>
               )}
               <div className="mt-4 space-y-3">
+                {canSkipPackage && (
+                  <label className={`block cursor-pointer rounded-2xl border p-4 ${skipPackage ? 'border-[#e31b23] bg-red-50/50' : 'border-gray-200 bg-white'}`}>
+                    <span className="flex items-start gap-3">
+                      <input
+                        type="radio"
+                        name="package_select"
+                        checked={skipPackage}
+                        onChange={() => setSkipPackage(true)}
+                        className="mt-1 accent-[#e31b23]"
+                      />
+                      <span>
+                        <span className="block text-sm font-black text-gray-900">Không gia hạn</span>
+                        <span className="mt-0.5 block text-sm text-gray-500">
+                          Giữ {ownedPackage.name}. Chỉ đóng học phí lớp, không cộng thêm gói.
+                        </span>
+                      </span>
+                    </span>
+                  </label>
+                )}
                 {packages.map((pkg) => {
-                  const isSelected = selectedPackage?.id === pkg.id;
+                  const isSelected = !(canSkipPackage && skipPackage) && selectedPackage?.id === pkg.id;
                   const isLocked = isPackageLocked(pkg);
                   const price = calculatePackagePrice(pkg);
                   return (
@@ -643,7 +687,9 @@ export default function ClassRegistrationPage() {
                             checked={isSelected}
                             disabled={isLocked}
                             onChange={() => {
-                              if (!isLocked) setSelectedPackage(pkg);
+                              if (isLocked) return;
+                              setSkipPackage(false);
+                              setSelectedPackage(pkg);
                             }}
                             className="mt-1 accent-[#e31b23]"
                           />
@@ -653,18 +699,22 @@ export default function ClassRegistrationPage() {
                               {isLocked ? ' · thấp hơn gói đang có' : ''}
                             </span>
                             <span className="mt-0.5 block text-sm text-gray-500">Thời hạn {pkg.validityMonths || 1} tháng</span>
-                            {!renewOnly && isBronzePackage(pkg) && (
+                            {!renewOnly && isBronzePackage(pkg) && !ownedPackage && (
                               <span className="mt-1 block text-sm font-semibold text-emerald-700">
                                 Gói bắt buộc khi đăng ký khóa học. Tặng kèm, không tính thêm phí.
                               </span>
                             )}
                             {!renewOnly && !isBronzePackage(pkg) && !isLocked && (
-                              <span className="mt-1 block text-sm text-gray-500">Nâng hạng thay cho Hạng Đồng tặng kèm.</span>
+                              <span className="mt-1 block text-sm text-gray-500">
+                                {ownedPackage
+                                  ? 'Gia hạn hoặc nâng hạng khi đăng ký kèm lớp, vẫn được giảm giá.'
+                                  : 'Nâng hạng thay cho Hạng Đồng tặng kèm.'}
+                              </span>
                             )}
                           </span>
                         </span>
                         <span className="shrink-0 text-right text-sm font-black">
-                          {includeClass && isBronzePackage(pkg) ? (
+                          {includeClass && isBronzePackage(pkg) && !ownedPackage ? (
                             <span className="text-emerald-700">0đ</span>
                           ) : includeClass && Number(pkg.upgradeDiscountPercent) > 0 ? (
                             <span>
@@ -729,7 +779,9 @@ export default function ClassRegistrationPage() {
               </div>
               <div className="flex items-start justify-between gap-3">
                 <dt className="text-gray-600">Phí gói</dt>
-                <dd className="font-bold">{formatFee(calculatePackagePrice(selectedPackage))}</dd>
+                <dd className="font-bold">
+                  {formatFee(packageFeeNow())}
+                </dd>
               </div>
               {includeClass && selectedClass && (
                 <div className="flex items-start justify-between gap-3">
@@ -745,7 +797,7 @@ export default function ClassRegistrationPage() {
             {error && <p className="mt-4 text-sm font-semibold text-[#b1131a]">{error}</p>}
             <button
               type="submit"
-              disabled={submitting || (includeClass && !selectedClass) || !selectedPackage}
+              disabled={submitting || (includeClass && !selectedClass) || (!(canSkipPackage && skipPackage) && !selectedPackage)}
               className={`${primaryButtonClass} mt-4 w-full`}
             >
               {submitting ? 'Đang tạo đơn...' : 'Tạo mã thanh toán'}
