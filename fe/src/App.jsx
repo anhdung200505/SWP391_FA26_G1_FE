@@ -32,6 +32,7 @@ import CenterCheckInPage from './pages/management/CenterCheckInPage';
 import PrivateRequestsPage from './pages/management/PrivateRequestsPage';
 import CoachCoursePage from './pages/CoachCoursePage';
 import MemberCoursePlanPage from './pages/MemberCoursePlanPage';
+import PaymentHistoryPage from './pages/PaymentHistoryPage';
 import StudentLayout from './components/workspace/StudentLayout';
 
 function Protected({ children, allowedRoles }) {
@@ -64,7 +65,10 @@ export default function App() {
             {/* Khung chung cho mọi trang học viên: thanh bên giữ nguyên khi chuyển trang */}
             <Route element={<Protected allowedRoles={['MEMBER', 'ADMIN']}><StudentLayout /></Protected>}>
               <Route path="/hoc-vien-dashboard" element={<HocVienDashboardPage />} />
+              {/* Trang quảng bá cho học viên chưa kích hoạt gói */}
+              <Route path="/hoc-vien-kham-pha" element={<HocVienKhamPhaPage />} />
               <Route path="/dang-ky-khoa-hoc" element={<ClassRegistrationPage />} />
+              <Route path="/hoc-vien/lich-su-thanh-toan" element={<PaymentHistoryPage />} />
               <Route
                 path="/hoc-vien/bai-tap-lop"
                 element={<Protected allowedRoles={['MEMBER']}><MemberCoursePlanPage /></Protected>}
@@ -76,16 +80,6 @@ export default function App() {
             </Route>
 
             <Route path="/hoc-vien/hoc-1-1" element={<Navigate to="/dang-ky-khoa-hoc?type=private" replace />} />
-
-            {/* Route Quảng bá cho Học viên chưa kích hoạt gói */}
-            <Route
-              path="/hoc-vien-kham-pha"
-              element={
-                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
-                  <HocVienKhamPhaPage />
-                </Protected>
-              }
-            />
 
             <Route
               path="/hlv/lop-hoc"

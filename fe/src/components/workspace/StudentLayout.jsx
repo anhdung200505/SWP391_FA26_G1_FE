@@ -14,6 +14,7 @@ const PAGE_LABELS = {
   '/hoc-vien/bai-tap-lop': 'Bài tập lớp',
   '/hoc-vien/giao-an-ai': 'Gợi ý tập',
   '/dang-ky-khoa-hoc': 'Đăng ký khóa học',
+  '/hoc-vien/lich-su-thanh-toan': 'Lịch sử thanh toán',
 };
 
 // Một khung duy nhất cho mọi trang học viên: thanh bên và đầu trang giữ nguyên, chỉ phần nội dung đổi.

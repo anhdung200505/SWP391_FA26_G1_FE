@@ -180,6 +180,39 @@ function NavGroup({ item }) {
   );
 }
 
+// Mục dẫn tới một trang. Trang cuộn theo mục (có activeId) tự báo mục đang xem; các mục trỏ vào
+// phần của trang đó (`/trang#phan`) bấm khi đang ở trang thì cuộn tại chỗ, không tải lại trang.
+function NavItem({ item, activeId, onSelect }) {
+  const { pathname } = useLocation();
+  const [path, hash] = item.to.split('#');
+  const spyHere = activeId !== undefined && pathname === path;
+
+  if (!hash && !spyHere) {
+    return (
+      <NavLink to={item.to} end={item.end} className={({ isActive }) => itemClass(isActive)}>
+        {item.label}
+      </NavLink>
+    );
+  }
+
+  const active = spyHere && activeId === item.id;
+  return (
+    <Link
+      to={item.to}
+      aria-current={active ? 'page' : undefined}
+      onClick={(event) => {
+        if (spyHere && onSelect) {
+          event.preventDefault();
+          onSelect(item.id);
+        }
+      }}
+      className={itemClass(active)}
+    >
+      {item.label}
+    </Link>
+  );
+}
+
 function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
   return (
     <div className="flex h-full flex-col pb-[env(safe-area-inset-bottom)] overflow-y-auto">
@@ -198,9 +231,7 @@ function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
           item.children ? (
             <NavGroup key={item.id} item={item} />
           ) : item.to ? (
-            <NavLink key={item.id} to={item.to} end={item.end} className={({ isActive }) => itemClass(isActive)}>
-              {item.label}
-            </NavLink>
+            <NavItem key={item.id} item={item} activeId={activeId} onSelect={onSelect} />
           ) : (
             <button
               key={item.id}
