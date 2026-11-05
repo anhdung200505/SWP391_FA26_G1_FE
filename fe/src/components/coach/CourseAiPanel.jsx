@@ -128,19 +128,19 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
     });
   };
 
-  if (loading) return <p className="text-sm text-gray-500">Đang tải tab AI...</p>;
+  if (loading) return <p className="text-sm text-slate-500">Đang tải giáo án...</p>;
 
   return (
     <div className="space-y-4">
-      <section className="rounded-3xl border border-gray-200 bg-white p-5">
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black">Giáo án và bài tập của lớp</h2>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            <h2 className="text-lg font-black text-balance text-slate-900">Giáo án và bài tập của lớp</h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">
               Đây là giáo án huấn luyện viên soạn cho cả lớp. Học viên xem ở mục Bài tập lớp sau khi bạn phát hành. Không phải gợi ý tập cá nhân của từng học viên. AI chỉ đọc mô tả khóa và lịch sử tập bạn đã ghi. Hiện có {workspace?.historyCount ?? 0} ghi chú.
             </p>
           </div>
-          <button type="button" onClick={onOpenHistory} className="text-sm font-bold text-[#e31b23]">
+          <button type="button" onClick={onOpenHistory} className="cursor-pointer text-sm font-bold text-[#e31b23] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23]">
             Ghi lịch sử tập
           </button>
         </div>
@@ -171,7 +171,7 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
             </button>
           )}
         </div>
-        <label className="mt-4 block text-sm font-bold text-gray-700">
+        <label className="mt-4 block text-sm font-bold text-slate-700">
           Yêu cầu sửa khi sinh lại
           <textarea
             rows={2}
@@ -199,21 +199,21 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
           </p>
         )}
         {workspace?.published && (
-          <p className="mt-2 text-sm text-gray-500">Đã phát hành lúc {formatDateTime(workspace.published.createdAt)}.</p>
+          <p className="mt-2 text-sm text-slate-500">Đã phát hành lúc {formatDateTime(workspace.published.createdAt)}.</p>
         )}
-        {error && <p className="mt-3 text-sm font-semibold text-[#b1131a]">{error}</p>}
-        {notice && <p className="mt-3 text-sm font-semibold text-emerald-800">{notice}</p>}
+        {error && <p className="mt-3 text-sm font-semibold text-red-700">{error}</p>}
+        {notice && <p className="mt-3 text-sm font-semibold text-emerald-700">{notice}</p>}
       </section>
 
       {!editor && (
-        <p className="rounded-3xl border border-dashed border-gray-300 bg-white p-5 text-sm text-gray-600">
+        <p className="rounded-3xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-600">
           Chưa có bộ bài. Viết mô tả khóa, ghi lịch sử tập, rồi bấm Sinh bài.
         </p>
       )}
 
       {editor && (
         <section className="space-y-4">
-          <label className="block rounded-3xl border border-gray-200 bg-white p-5 text-sm font-bold text-gray-700">
+          <label className="block rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 text-sm font-bold text-slate-700">
             Tóm tắt
             <textarea
               rows={3}
@@ -224,11 +224,11 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
           </label>
 
           {editor.sessions.map((session, sessionIndex) => (
-            <article key={session.sessionId} className="rounded-3xl border border-gray-200 bg-white p-5">
+            <article key={session.sessionId} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
               <h3 className="font-black">{session.sessionLabel}</h3>
               <ul className="mt-3 space-y-3">
                 {session.exercises.map((exercise, exerciseIndex) => (
-                  <li key={`${session.sessionId}-${exerciseIndex}`} className="rounded-2xl bg-[#f4f5f7] p-3">
+                  <li key={`${session.sessionId}-${exerciseIndex}`} className="rounded-2xl bg-slate-100 hover:bg-slate-200 p-3">
                     <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
                       <input
                         value={exercise.title}
@@ -272,12 +272,12 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
             </article>
           ))}
 
-          <article className="rounded-3xl border border-gray-200 bg-white p-5">
+          <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
             <h3 className="font-black">Bài thi cuối kỳ</h3>
-            <p className="mt-1 text-sm text-gray-500">Đáp án chỉ coach thấy. Học viên xem đề sau khi phát hành.</p>
+            <p className="mt-1 text-sm text-slate-500">Đáp án chỉ coach thấy. Học viên xem đề sau khi phát hành.</p>
             <ul className="mt-3 space-y-3">
               {editor.exam.map((question, index) => (
-                <li key={`exam-${index}`} className="rounded-2xl bg-[#f4f5f7] p-3">
+                <li key={`exam-${index}`} className="rounded-2xl bg-slate-100 hover:bg-slate-200 p-3">
                   <textarea
                     rows={2}
                     value={question.prompt}
@@ -299,7 +299,7 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
                     className={fieldClass}
                     aria-label="Đáp án gợi ý"
                   />
-                  <label className="mt-2 block text-sm font-bold text-gray-700">
+                  <label className="mt-2 block text-sm font-bold text-slate-700">
                     Điểm
                     <input
                       type="number"
@@ -321,12 +321,12 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
             </ul>
           </article>
 
-          <article className="rounded-3xl border border-gray-200 bg-white p-5">
+          <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
             <h3 className="font-black">Tiêu chí chấm</h3>
-            <p className="mt-1 text-sm text-gray-500">Hiện ở tab Đánh giá sau khi lưu, để coach nhập một điểm tổng.</p>
+            <p className="mt-1 text-sm text-slate-500">Hiện ở tab Đánh giá sau khi lưu, để coach nhập một điểm tổng.</p>
             <ul className="mt-3 space-y-3">
               {editor.rubric.map((item, index) => (
-                <li key={`rubric-${index}`} className="rounded-2xl bg-[#f4f5f7] p-3">
+                <li key={`rubric-${index}`} className="rounded-2xl bg-slate-100 hover:bg-slate-200 p-3">
                   <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
                     <input
                       value={item.criterion}
@@ -388,9 +388,9 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
             </button>
           </div>
           {dirty && workspace?.draft && (
-            <p className="text-sm text-gray-600">Phát hành dùng bản đã lưu. Hãy lưu nháp trước nếu muốn phát hành bản đang sửa.</p>
+            <p className="text-sm text-slate-600">Phát hành dùng bản đã lưu. Hãy lưu nháp trước nếu muốn phát hành bản đang sửa.</p>
           )}
-          {!workspace?.draft && <p className="text-sm text-gray-600">Chưa có nháp đã lưu nên chưa phát hành được.</p>}
+          {!workspace?.draft && <p className="text-sm text-slate-600">Chưa có nháp đã lưu nên chưa phát hành được.</p>}
         </section>
       )}
     </div>

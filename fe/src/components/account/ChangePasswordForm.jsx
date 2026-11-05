@@ -127,7 +127,7 @@ export default function ChangePasswordForm() {
       <button
         type="submit"
         disabled={saving || !allValid}
-        className="rounded-xl bg-[#e31b23] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#b1131a] disabled:bg-gray-300 cursor-pointer disabled:cursor-not-allowed"
+        className="rounded-xl bg-[#e31b23] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#b1131a] disabled:bg-slate-300 cursor-pointer disabled:cursor-not-allowed"
       >
         {saving ? 'Đang lưu...' : 'Đổi mật khẩu'}
       </button>
