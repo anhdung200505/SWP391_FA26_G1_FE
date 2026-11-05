@@ -17,6 +17,12 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
             from = userName;
         }
 
+        if (!NotificationEmail.CanDeliver(to))
+        {
+            logger.LogInformation("Bỏ qua email mẫu, không gửi để tránh thư trả về: {Recipient}", to);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(from))
         {
             if (!environment.IsDevelopment())
@@ -61,7 +67,14 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
     // Một lần đăng nhập SMTP cho cả lô, để đổi lịch không mở lại kết nối theo từng học viên.
     public async Task SendManyAsync(IReadOnlyList<QueuedEmail> messages, CancellationToken cancellationToken = default)
     {
-        if (messages.Count == 0)
+        var deliverable = messages.Where(item => NotificationEmail.CanDeliver(item.To)).ToList();
+        var skipped = messages.Count - deliverable.Count;
+        if (skipped > 0)
+        {
+            logger.LogInformation("Bỏ qua {Skipped} email mẫu, không gửi để tránh thư trả về.", skipped);
+        }
+
+        if (deliverable.Count == 0)
         {
             return;
         }
@@ -82,7 +95,7 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
                 throw new InvalidOperationException("Chưa cấu hình máy chủ email.");
             }
 
-            foreach (var item in messages)
+            foreach (var item in deliverable)
             {
                 var path = await SaveToMailboxAsync(item.To, item.Subject, TextWithLink(item.Body, item.LinkUrl, item.LinkLabel));
                 logger.LogWarning("SMTP chưa có tài khoản gửi. Thư được lưu tại {Path}", path);
@@ -98,7 +111,7 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
         {
             await client.ConnectAsync(host, port, SecureSocketOptions.StartTls, cancellationToken);
             await client.AuthenticateAsync(userName, password.Replace(" ", ""), cancellationToken);
-            foreach (var item in messages)
+            foreach (var item in deliverable)
             {
                 var message = new MimeMessage();
                 message.From.Add(new MailboxAddress(string.IsNullOrWhiteSpace(fromName) ? DefaultFromName : fromName, from));
@@ -119,13 +132,13 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError(exception, "SMTP không kết nối được để gửi {Count} thư.", messages.Count);
+            logger.LogError(exception, "SMTP không kết nối được để gửi {Count} thư.", deliverable.Count);
             if (!environment.IsDevelopment())
             {
                 return;
             }
 
-            foreach (var item in messages)
+            foreach (var item in deliverable)
             {
                 await SaveToMailboxAsync(item.To, item.Subject, TextWithLink(item.Body, item.LinkUrl, item.LinkLabel));
             }

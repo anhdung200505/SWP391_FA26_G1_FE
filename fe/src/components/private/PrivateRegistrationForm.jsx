@@ -171,7 +171,7 @@ function MyRequests({ onPaymentCreated, refreshKey }) {
   );
 }
 
-export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
+export default function PrivateRegistrationForm({ user, onPaymentCreated, membershipOptional = false }) {
   const [courses, setCourses] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
   const [packages, setPackages] = useState([]);
@@ -187,7 +187,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
   const [note, setNote] = useState('');
 
   const [pickedPackage, setPickedPackage] = useState(null);
-  const [skipPackage, setSkipPackage] = useState(false);
+  const [skipMembership, setSkipMembership] = useState(true);
 
   const [fullName, setFullName] = useState(user?.fullName || user?.userName || '');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -220,7 +220,6 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
         setPackages(pkgs);
         const owned = membership?.highestPackageId || null;
         setOwnedPackageId(owned);
-        setSkipPackage(Boolean(owned));
         setPickedPackage(pkgs.find((pkg) => isBronzePackage(pkg)) || pkgs[0] || null);
         if (profile) {
           setFullName(profile.fullName || '');
@@ -248,9 +247,12 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
   const course = courses.find((item) => item.sportId === sportId);
 
   const ownedPackage = packages.find((pkg) => String(pkg.id) === String(ownedPackageId)) || null;
-  const canSkipPackage = !!ownedPackage;
   const isPackageLocked = (pkg) => !!ownedPackage && (pkg?.fee || 0) < (ownedPackage.fee || 0);
-  const selectedPackage = canSkipPackage && skipPackage ? null : pickedPackage && isPackageLocked(pickedPackage) ? ownedPackage : pickedPackage;
+  const selectedPackage = membershipOptional && skipMembership
+    ? null
+    : pickedPackage && isPackageLocked(pickedPackage)
+      ? ownedPackage
+      : pickedPackage;
 
   const calculatePackagePrice = (pkg) => {
     if (!pkg) return 0;
@@ -258,10 +260,10 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
     const percent = Number(pkg.upgradeDiscountPercent) || 0;
     return percent <= 0 ? pkg.fee || 0 : Math.round(((pkg.fee || 0) * (100 - percent)) / 100);
   };
-  const packageFee = canSkipPackage && skipPackage ? 0 : calculatePackagePrice(selectedPackage);
+  const packageFee = membershipOptional && skipMembership ? 0 : calculatePackagePrice(selectedPackage);
   const total = packageFee + (course?.price || 0);
-  const packageSummaryName = canSkipPackage && skipPackage
-    ? `Giữ ${ownedPackage.name}, không gia hạn`
+  const packageSummaryName = membershipOptional && skipMembership
+    ? 'Không gia hạn'
     : !selectedPackage
       ? 'Chưa chọn'
       : isBronzePackage(selectedPackage) && !ownedPackage
@@ -322,7 +324,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
       setError('Vui lòng tìm và chọn huấn luyện viên.');
       return;
     }
-    if (!(canSkipPackage && skipPackage) && !selectedPackage?.id) {
+    if (!(membershipOptional && skipMembership) && !selectedPackage?.id) {
       setError('Vui lòng chọn một gói hội viên.');
       return;
     }
@@ -339,10 +341,10 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
         startDate,
         slots: slotsPayload,
         note: note.trim() || null,
-        ...(canSkipPackage && skipPackage
+        ...(membershipOptional && skipMembership
           ? { renewMembership: false }
           : {
-              ...(canSkipPackage ? { renewMembership: true } : {}),
+              ...(ownedPackage ? { renewMembership: true } : {}),
               ...(selectedPackage?.id && !(isBronzePackage(selectedPackage) && !ownedPackage)
                 ? { membershipPackageId: selectedPackage.id }
                 : {}),
@@ -546,11 +548,31 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
               </section>
             )}
 
+            {membershipOptional && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-3xl border border-gray-200 bg-white p-5">
+                <input
+                  type="checkbox"
+                  checked={!skipMembership}
+                  onChange={(event) => setSkipMembership(!event.target.checked)}
+                  className="mt-1 accent-[#e31b23]"
+                />
+                <span>
+                  <span className="block text-sm font-black text-gray-900">Gia hạn gói</span>
+                  <span className="mt-1 block text-sm text-gray-500">
+                    Tích để gia hạn hoặc nâng hạng, kèm lớp vẫn được giảm giá. Không tích thì chỉ đóng học phí 1-1.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {(!membershipOptional || !skipMembership) && (
             <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-              <h2 className="text-lg font-black">Gói hội viên</h2>
+              <h2 className="text-lg font-black">{membershipOptional ? 'Gia hạn gói hội viên' : 'Gói hội viên'}</h2>
               <p className="mt-1 text-sm text-pretty text-gray-500">
-                Hạng Đồng là gói bắt buộc khi đăng ký khóa học và được tặng khi thanh toán. Chọn Hạng Bạc hoặc Hạng Vàng nếu muốn nâng hạng thay cho gói tặng.
-                Gói và giá được áp lúc bạn thanh toán sau khi quản lý duyệt, nên có thể thay đổi nếu gói hội viên của bạn đổi trong lúc chờ.
+                {membershipOptional
+                  ? 'Gia hạn đúng gói đang có, hoặc nâng lên hạng cao hơn. Kèm lớp vẫn được giảm giá.'
+                  : 'Tài khoản chưa có lớp nên phải mua hội viên mới dùng được. Học 1-1 kèm lớp thì Hạng Đồng được tặng.'}
+                {' '}Gói và giá được áp lúc bạn thanh toán sau khi quản lý duyệt, nên có thể thay đổi nếu gói hội viên của bạn đổi trong lúc chờ.
               </p>
               {ownedPackage && (
                 <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
@@ -558,19 +580,8 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
                 </p>
               )}
               <div className="mt-4 space-y-3">
-                {canSkipPackage && (
-                  <label className={`block cursor-pointer rounded-2xl border p-4 ${skipPackage ? 'border-[#e31b23] bg-red-50/50' : 'border-gray-200 bg-white'}`}>
-                    <span className="flex items-start gap-3">
-                      <input type="radio" name="private_package" checked={skipPackage} onChange={() => setSkipPackage(true)} className="mt-1 accent-[#e31b23]" />
-                      <span>
-                        <span className="block text-sm font-black text-gray-900">Không gia hạn</span>
-                        <span className="mt-0.5 block text-sm text-gray-500">Giữ {ownedPackage.name}. Chỉ đóng học phí gói 1-1, không cộng thêm gói.</span>
-                      </span>
-                    </span>
-                  </label>
-                )}
                 {packages.map((pkg) => {
-                  const isSelected = !(canSkipPackage && skipPackage) && selectedPackage?.id === pkg.id;
+                  const isSelected = !(membershipOptional && skipMembership) && selectedPackage?.id === pkg.id;
                   const isLocked = isPackageLocked(pkg);
                   const price = calculatePackagePrice(pkg);
                   return (
@@ -593,7 +604,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
                             disabled={isLocked}
                             onChange={() => {
                               if (isLocked) return;
-                              setSkipPackage(false);
+                              setSkipMembership(false);
                               setPickedPackage(pkg);
                             }}
                             className="mt-1 accent-[#e31b23]"
@@ -640,6 +651,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
                 })}
               </div>
             </section>
+            )}
 
             <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
               <h2 className="text-lg font-black">Thông tin học viên</h2>

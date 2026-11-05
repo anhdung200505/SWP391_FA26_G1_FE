@@ -4,7 +4,8 @@ import { Outlet, useLocation } from 'react-router-dom';
 import WorkspaceShell from './WorkspaceShell';
 import NotificationBell from '../NotificationBell';
 import Footer from '../Footer';
-import { studentWorkspaceItems, useHasClassRegistration } from './studentNav';
+import { studentWorkspaceItems, useHasClassRegistration, useMembershipWithClass } from './studentNav';
+import { useAuth } from '../../context/AuthContext';
 
 const HOME = '/hoc-vien-dashboard';
 const STUDENT = { label: 'Học viên', to: HOME };
@@ -13,14 +14,16 @@ const STUDENT = { label: 'Học viên', to: HOME };
 const PAGE_LABELS = {
   '/hoc-vien/bai-tap-lop': 'Bài tập lớp',
   '/hoc-vien/giao-an-ai': 'Gợi ý tập',
-  '/dang-ky-khoa-hoc': 'Đăng ký khóa học',
+  '/dang-ky-khoa-hoc': 'Đăng ký hội viên',
   '/hoc-vien/lich-su-thanh-toan': 'Lịch sử thanh toán',
 };
 
 // Một khung duy nhất cho mọi trang học viên: thanh bên và đầu trang giữ nguyên, chỉ phần nội dung đổi.
 export default function StudentLayout() {
   const { pathname } = useLocation();
+  const { user } = useAuth();
   const hasClass = useHasClassRegistration();
+  const membershipWithClass = useMembershipWithClass(user?.id);
   const [extra, setExtra] = useState(null);
 
   const pageLabel = PAGE_LABELS[pathname];
@@ -31,7 +34,7 @@ export default function StudentLayout() {
       <WorkspaceShell
         role="Học viên"
         homeTo={HOME}
-        items={extra?.items || studentWorkspaceItems(hasClass)}
+        items={extra?.items || studentWorkspaceItems(hasClass, membershipWithClass)}
         activeId={extra?.activeId}
         onSelect={extra?.onSelect}
         breadcrumb={breadcrumb}
