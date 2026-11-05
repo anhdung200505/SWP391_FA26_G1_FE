@@ -61,51 +61,51 @@ export default function EvaluationPanel({ classId }) {
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-500">Đang tải đánh giá...</p>;
-  if (!sheet) return <p className="text-sm font-semibold text-[#b1131a]">{error || 'Không tải được đánh giá.'}</p>;
+  if (loading) return <p className="text-sm text-slate-500">Đang tải đánh giá...</p>;
+  if (!sheet) return <p className="text-sm font-semibold text-red-700">{error || 'Không tải được đánh giá.'}</p>;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-      <aside className="rounded-3xl border border-gray-200 bg-white p-5">
-        <h2 className="text-lg font-black">Tiêu chí chấm</h2>
-        <p className="mt-2 text-sm text-gray-500">
+    <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <aside className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+        <h2 className="text-lg font-black text-balance text-slate-900">Tiêu chí chấm</h2>
+        <p className="mt-2 text-sm text-slate-500">
           {sheet.rubricSource === 'draft' && 'Từ bản nháp AI đã lưu.'}
           {sheet.rubricSource === 'published' && 'Từ bản AI đã phát hành.'}
-          {!sheet.rubricSource && 'Lưu bài ở tab AI để có tiêu chí. Điểm vẫn nhập được ngay.'}
+          {!sheet.rubricSource && 'Lưu giáo án ở tab Giáo án lớp để có tiêu chí. Điểm vẫn nhập được ngay.'}
         </p>
         {sheet.rubric?.length ? (
           <ul className="mt-4 space-y-3">
             {sheet.rubric.map((item) => (
-              <li key={item.criterion} className="rounded-2xl bg-[#f4f5f7] px-3 py-3">
+              <li key={item.criterion} className="rounded-2xl bg-slate-100 hover:bg-slate-200 px-3 py-3">
                 <p className="font-bold">
                   {item.criterion}
-                  <span className="ml-2 tabular-nums text-gray-500">{item.maxScore}</span>
+                  <span className="ml-2 tabular-nums text-slate-500">{item.maxScore}</span>
                 </p>
-                <p className="mt-1 text-sm text-gray-600">{item.guidance}</p>
+                <p className="mt-1 text-sm text-slate-600">{item.guidance}</p>
               </li>
             ))}
           </ul>
         ) : null}
       </aside>
 
-      <section className="rounded-3xl border border-gray-200 bg-white p-5">
-        <h2 className="text-lg font-black">Điểm và nhận xét</h2>
-        {error && <p className="mt-3 text-sm font-semibold text-[#b1131a]">{error}</p>}
-        {notice && <p className="mt-3 text-sm font-semibold text-emerald-800">{notice}</p>}
-        {(sheet.students || []).length === 0 && <p className="mt-4 text-sm text-gray-600">Lớp chưa có học viên.</p>}
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+        <h2 className="text-lg font-black text-balance text-slate-900">Điểm và nhận xét</h2>
+        {error && <p className="mt-3 text-sm font-semibold text-red-700">{error}</p>}
+        {notice && <p className="mt-3 text-sm font-semibold text-emerald-700">{notice}</p>}
+        {(sheet.students || []).length === 0 && <p className="mt-4 text-sm text-slate-600">Lớp chưa có học viên.</p>}
         <ul className="mt-4 space-y-4">
           {(sheet.students || []).map((student) => {
             const draft = drafts[student.memberUserId] || { score: '', comment: '' };
             return (
-              <li key={student.memberUserId} className="rounded-2xl border border-gray-200 p-4">
+              <li key={student.memberUserId} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="font-black">{student.memberName}</p>
                   {student.evaluatedAt && (
-                    <p className="text-xs text-gray-500">Lưu lúc {formatDateTime(student.evaluatedAt)}</p>
+                    <p className="text-xs text-slate-500">Lưu lúc {formatDateTime(student.evaluatedAt)}</p>
                   )}
                 </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-[120px_1fr]">
-                  <label className="text-sm font-bold text-gray-700">
+                <div className="mt-3 grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
+                  <label className="text-sm font-bold text-slate-700">
                     Điểm
                     <input
                       type="number"
@@ -122,7 +122,7 @@ export default function EvaluationPanel({ classId }) {
                       className={fieldClass}
                     />
                   </label>
-                  <label className="text-sm font-bold text-gray-700">
+                  <label className="text-sm font-bold text-slate-700">
                     Nhận xét
                     <textarea
                       rows={2}

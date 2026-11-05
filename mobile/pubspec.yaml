@@ -1,0 +1,38 @@
+name: mobile
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Thư viện gọi REST API Backend
+  dio: ^5.4.0
+
+  # Thư viện lưu trữ JWT Token & dữ liệu đăng nhập cục bộ
+  shared_preferences: ^2.2.2
+
+  # Thư viện quản lý State (Trạng thái ứng dụng)
+  provider: ^6.1.2
+
+  # Thư viện định dạng ngày tháng và tiền tệ (VND)
+  intl: ^0.19.0
+
+  # Phông chữ giao diện
+  google_fonts: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

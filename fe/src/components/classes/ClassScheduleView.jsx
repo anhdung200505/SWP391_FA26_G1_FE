@@ -5,6 +5,7 @@ import { CLASS_STATUS, formatDate } from './classUtils';
 import { getSessions } from '../../api/managementApi';
 import WeekSlotTable, { formatClock, mondayOf, weekContaining } from '../schedule/WeekSlotTable';
 import SessionCoachLine from '../schedule/SessionCoachLine';
+import SessionRoomLine from '../schedule/SessionRoomLine';
 
 const SESSION_STATUS = {
   upcoming: { label: 'Sắp học', className: 'bg-sky-50 text-sky-700 border-sky-200' },
@@ -111,10 +112,8 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
 
             <div className="mt-5 grid grid-cols-2 lg:grid-cols-3 gap-5 bg-white p-6 rounded-3xl border border-gray-200 shadow-xs text-xs">
               <div>
-                <span className="text-gray-400 font-bold block">Môn · Level</span>
-                <strong className="text-slate-900 text-sm">
-                  {klass.sportName} · {klass.level}
-                </strong>
+                <span className="text-gray-400 font-bold block">Môn</span>
+                <strong className="text-slate-900 text-sm">{klass.sportName}</strong>
               </div>
               <div>
                 <span className="text-gray-400 font-bold block">Coach</span>
@@ -194,12 +193,14 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
                       <p className="mt-1 text-xs text-gray-500 tabular-nums">
                         {formatClock(session.startTime)}–{formatClock(session.endTime)}
                       </p>
-                      <p className="text-xs text-gray-500">{session.roomName}</p>
+                      <SessionRoomLine session={session} />
                       <SessionCoachLine session={session} />
                       <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
                         {badge.label}
                       </span>
-                      {session.note && <p className="mt-1 text-xs text-pretty whitespace-pre-line text-gray-600">{session.note}</p>}
+                      {session.note && (cancelled || !(session.coachChange || session.roomChanged) || session.note.startsWith('Buổi bù')) && (
+                        <p className="mt-1 text-xs text-pretty whitespace-pre-line text-gray-600">{session.note}</p>
+                      )}
                       {isAdmin && !cancelled && String(session.date).slice(0, 10) <= today && (
                         <button type="button" onClick={() => setAttending(session)} className="mt-2 block text-xs font-semibold text-emerald-700 underline">
                           Điểm danh

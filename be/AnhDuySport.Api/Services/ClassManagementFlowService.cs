@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
 
-public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
+public class ClassManagementFlowService(AppDbContext db, CurrentActor actor, EmailNotificationService email, ILogger<ClassManagementFlowService> logger)
 {
     private static readonly string[] ClassStatuses = ["open", "ongoing", "closed", "cancelled"];
 
@@ -452,6 +452,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         }
 
         var oldCoach = item.Coach!.FullName;
+        var oldCoachId = item.CoachUserId;
         var newCoach = await db.UserAccounts.Where(user => user.UserId == coachId).Select(user => user.FullName).FirstAsync();
         var note = request.Note?.Trim();
         var first = remaining.Min(session => session.SessionDate);
@@ -464,7 +465,20 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
         foreach (var session in remaining)
         {
             session.CoachUserId = coachId;
+            session.CoachChange = "permanent";
             session.Note = storedNote;
+        }
+
+        foreach (var coachUserId in new[] { coachId, oldCoachId })
+        {
+            db.Notifications.Add(new AccountNotification
+            {
+                UserId = coachUserId,
+                Title = Shorten($"Đổi huấn luyện viên lớp {item.ClassName}", 200),
+                Content = $"Lớp {item.ClassName}:\n{storedNote}",
+                IsRead = false,
+                CreatedAt = now,
+            });
         }
 
         var memberIds = await db.ClassEnrollments
@@ -495,7 +509,48 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor)
 
         await SaveSessionsAsync();
         await transaction.CommitAsync();
+
+        // Email cho hai HLV và học viên đang học lớp; lỗi gửi không làm hỏng việc đã lưu.
+        var coaches = await db.UserAccounts.AsNoTracking().Where(user => user.UserId == coachId || user.UserId == oldCoachId).ToListAsync();
+        var incoming = coaches.FirstOrDefault(user => user.UserId == coachId);
+        var outgoing = coaches.FirstOrDefault(user => user.UserId == oldCoachId);
+        if (incoming is not null && !string.IsNullOrWhiteSpace(incoming.Email))
+        {
+            await TrySendAsync(() => email.SendCoachClassAssignedAsync(incoming, item.ClassName, oldCoach, first, remaining.Count, note), coachId);
+        }
+
+        if (outgoing is not null && !string.IsNullOrWhiteSpace(outgoing.Email))
+        {
+            await TrySendAsync(() => email.SendCoachClassReleasedAsync(outgoing, item.ClassName, newCoach, first, remaining.Count, note), oldCoachId);
+        }
+
+        var memberSummary = $"Từ ngày {first:dd/MM/yyyy}, {remaining.Count} buổi còn lại do HLV {newCoach} dạy (thay HLV {oldCoach}).";
+        if (!string.IsNullOrWhiteSpace(note))
+        {
+            memberSummary += $" Lý do: {TextFormat.Sentence(note)}";
+        }
+
+        var members = await db.UserAccounts.AsNoTracking()
+            .Where(user => memberIds.Contains(user.UserId) && user.Email != null && user.Email.Contains("@"))
+            .ToListAsync();
+        foreach (var member in members)
+        {
+            await TrySendAsync(() => email.SendMemberScheduleChangedAsync(member, item.ClassName, memberSummary), member.UserId);
+        }
+
         return await LoadDtoAsync(item.ClassId);
+    }
+
+    private async Task TrySendAsync(Func<Task> send, int userId)
+    {
+        try
+        {
+            await send();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Không gửi được email đổi HLV cho người dùng {UserId}", userId);
+        }
     }
 
     private async Task<TrainingClass> LoadClassForCoachChangeAsync(string classId, bool tracking = false)

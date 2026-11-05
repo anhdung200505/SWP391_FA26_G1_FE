@@ -24,16 +24,41 @@ public static class PrivateClassSchema
                         reject_reason       NVARCHAR(500) NULL,
                         class_id            INT           NULL,
                         approval_expires_at DATETIME2(0)  NULL,
+                        membership_package_id INT          NULL,
+                        renew_membership    BIT           NOT NULL CONSTRAINT DF_private_class_request_renew DEFAULT (0),
+                        full_name           NVARCHAR(200) NULL,
+                        phone               NVARCHAR(30)  NULL,
+                        date_of_birth       DATE          NULL,
+                        gender              NVARCHAR(10)  NULL,
                         CONSTRAINT PK_private_class_request PRIMARY KEY (request_id),
                         CONSTRAINT FK_private_class_request_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
                         CONSTRAINT FK_private_class_request_course FOREIGN KEY (course_id) REFERENCES course (course_id),
                         CONSTRAINT FK_private_class_request_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
                         CONSTRAINT FK_private_class_request_decider FOREIGN KEY (decided_by_user_id) REFERENCES [user] (user_id),
                         CONSTRAINT FK_private_class_request_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+                        CONSTRAINT FK_private_class_request_package FOREIGN KEY (membership_package_id) REFERENCES membership_package (membership_package_id),
                         CONSTRAINT CK_private_class_request_status CHECK (status IN (N'pending', N'approved', N'rejected', N'cancelled', N'expired'))
                 );
                 CREATE INDEX IX_private_class_request_member ON dbo.private_class_request (member_user_id, status);
                 CREATE INDEX IX_private_class_request_status ON dbo.private_class_request (status, created_at);
+            END
+
+            IF OBJECT_ID(N'dbo.private_class_request', N'U') IS NOT NULL AND COL_LENGTH(N'dbo.private_class_request', N'membership_package_id') IS NULL
+            BEGIN
+                ALTER TABLE dbo.private_class_request ADD
+                    membership_package_id INT NULL,
+                    renew_membership BIT NOT NULL CONSTRAINT DF_private_class_request_renew DEFAULT (0),
+                    full_name NVARCHAR(200) NULL,
+                    phone NVARCHAR(30) NULL,
+                    date_of_birth DATE NULL,
+                    gender NVARCHAR(10) NULL;
+            END
+
+            IF OBJECT_ID(N'dbo.private_class_request', N'U') IS NOT NULL AND COL_LENGTH(N'dbo.private_class_request', N'membership_package_id') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_private_class_request_package')
+            BEGIN
+                ALTER TABLE dbo.private_class_request ADD CONSTRAINT FK_private_class_request_package
+                    FOREIGN KEY (membership_package_id) REFERENCES dbo.membership_package (membership_package_id);
             END
 
             IF OBJECT_ID(N'dbo.private_class_request_slot', N'U') IS NULL

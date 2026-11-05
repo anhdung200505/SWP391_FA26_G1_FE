@@ -1,89 +1,81 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import {
+  cardClass,
+  cardHeadClass,
+  sectionTitle,
+  sectionSub,
+  linkAccent,
+  btnPrimary,
+  emptyBox,
+  spinnerClass,
+} from './memberUi';
 
 export default function MemberClassList({ loading, myClasses }) {
   return (
-    <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-      <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
+    <section className={cardClass}>
+      <div className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${cardHeadClass}`}>
         <div>
-          <h2 className="text-lg font-black text-slate-900 uppercase">
-            KHÓA HỌC & LỚP ĐÃ GHI DANH
-          </h2>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">
-            Danh sách các lớp thể thao bạn đã đăng ký tham gia
-          </p>
+          <h2 className={sectionTitle}>Khóa học và lớp đã ghi danh</h2>
+          <p className={sectionSub}>Danh sách các lớp thể thao bạn đã đăng ký tham gia</p>
         </div>
 
-        <Link to="/dang-ky-khoa-hoc" className="text-xs font-extrabold text-[#e31b23] hover:underline">
+        <Link to="/dang-ky-khoa-hoc" className={linkAccent}>
           + Đăng ký khóa học mới
         </Link>
       </div>
 
       {loading ? (
         <div className="py-12 text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#e31b23] border-t-transparent mb-2"></div>
-          <p className="text-xs font-bold text-slate-400">Đang tải danh sách lớp học...</p>
+          <div className={`${spinnerClass} mb-2`}></div>
+          <p className="text-sm font-bold text-slate-500">Đang tải danh sách lớp học...</p>
         </div>
       ) : myClasses.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {myClasses.map((cls, idx) => (
             <div
               key={cls.classId || idx}
-              className="bg-slate-50 hover:bg-slate-100/80 rounded-2xl p-5 border border-slate-200 transition-all space-y-3"
+              className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-colors hover:bg-slate-100/80"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="text-[10px] font-black uppercase text-[#e31b23] bg-red-50 border border-red-100 px-2.5 py-0.5 rounded-md">
+                  <span className="rounded-md border border-red-100 bg-red-50 px-2.5 py-0.5 text-xs font-black uppercase text-[#e31b23]">
                     {cls.sportName || 'Thể thao'}
                   </span>
-                  <h3 className="text-base font-black text-slate-900 mt-1.5">
-                    {cls.className || cls.courseName}
-                  </h3>
+                  <h3 className="mt-1.5 text-base font-black text-slate-900">{cls.className || cls.courseName}</h3>
                 </div>
 
-                <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 uppercase">
-                  ✓ Đã ghi danh
+                <span className="whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
+                  Đã ghi danh
                 </span>
               </div>
 
-              <div className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-200/60">
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-medium">Cấp độ:</span>
-                  <span className="font-bold text-slate-800">{cls.level || 'Cơ bản'}</span>
+              <dl className="space-y-1.5 border-t border-slate-200/60 pt-2 text-sm text-slate-600">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">HLV phụ trách</dt>
+                  <dd className="font-bold text-slate-800">{cls.coachName || 'Đang cập nhật'}</dd>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-medium">HLV Phụ trách:</span>
-                  <span className="font-bold text-slate-800">{cls.coachName || 'Đang cập nhật'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-medium">Thời gian học:</span>
-                  <span className="font-bold text-slate-800">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">Thời gian học</dt>
+                  <dd className="font-bold text-slate-800 tabular-nums">
                     {cls.startDate} ~ {cls.endDate}
-                  </span>
+                  </dd>
                 </div>
-              </div>
+              </dl>
             </div>
           ))}
         </div>
       ) : (
-        <div className="py-12 px-4 text-center max-w-md mx-auto space-y-4">
-          <div className="w-16 h-16 bg-red-50 text-[#e31b23] rounded-full flex items-center justify-center mx-auto text-2xl font-black">
-            🏋️
-          </div>
+        <div className={`${emptyBox} mx-auto max-w-md space-y-4 px-4 py-10`}>
           <div>
-            <h3 className="text-base font-black text-slate-900 uppercase">
-              BẠN CHƯA ĐĂNG KÝ LỚP HỌC NÀO
-            </h3>
-            <p className="text-xs text-slate-500 font-medium mt-1">
-              Hãy khám phá danh sách các khóa học thể thao đa dạng tại AnhDuy Sport để bắt đầu rèn luyện!
+            <h3 className="text-base font-black text-slate-900">Bạn chưa đăng ký lớp học nào</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Hãy khám phá danh sách các khóa học thể thao tại AnhDuy Sport để bắt đầu rèn luyện.
             </p>
           </div>
 
-          <Link
-            to="/tuyen-sinh"
-            className="inline-block bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase px-8 py-3.5 rounded-xl shadow-md transition-all cursor-pointer"
-          >
-            KHÁM PHÁ CÁC KHÓA HỌC →
+          <Link to="/tuyen-sinh" className={btnPrimary}>
+            Khám phá các khóa học →
           </Link>
         </div>
       )}

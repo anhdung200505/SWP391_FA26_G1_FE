@@ -73,6 +73,78 @@ public class AuthController(AuthService auth, CurrentActor actor) : ControllerBa
     public Task<ActionResult<LoginResponse>> LoginMember(MemberLoginRequest request) =>
         SignIn(() => auth.LoginMemberAsync(request));
 
+    [AllowAnonymous]
+    [HttpGet("google-client")]
+    [EndpointSummary("Client ID đăng nhập Google")]
+    public IActionResult GoogleClient() => Ok(new { clientId = auth.GoogleClientId() });
+
+    [AllowAnonymous]
+    [HttpPost("google")]
+    [EndpointSummary("Đăng nhập bằng Gmail")]
+    [EndpointDescription("Nhận access token từ cửa sổ Google. Gmail đã đăng ký bằng mật khẩu thì trả requiresChoice, chưa vào tài khoản. Gửi lại kèm linkExisting để vào tài khoản đó. Học viên chưa có tài khoản thì tạo mới.")]
+    public async Task<IActionResult> LoginWithGoogle(GoogleLoginRequest request)
+    {
+        try
+        {
+            var result = await auth.LoginWithGoogleAsync(request);
+            if (result.Choice is not null)
+            {
+                return Ok(new
+                {
+                    requiresChoice = true,
+                    email = result.Choice.Email,
+                    fullName = result.Choice.FullName,
+                });
+            }
+
+            return Ok(result.Login);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Unauthorized(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpPost("gmail/otp")]
+    [EndpointSummary("Gửi mã đăng nhập Gmail")]
+    [EndpointDescription("Chỉ nhận địa chỉ @gmail.com. Mã 6 số hiệu lực 3 phút, gửi lại cách nhau 1 phút.")]
+    public async Task<IActionResult> SendGmailOtp(GmailOtpRequest request)
+    {
+        try
+        {
+            await auth.SendGmailLoginOtpAsync(request);
+            return Ok(new { message = "Đã gửi mã tới Gmail. Mã có hiệu lực trong 3 phút." });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpPost("gmail/confirm")]
+    [EndpointSummary("Đăng nhập bằng mã Gmail")]
+    public async Task<ActionResult<LoginResponse>> ConfirmGmail(GmailConfirmRequest request)
+    {
+        try
+        {
+            return Ok(await auth.ConfirmGmailLoginAsync(request));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Unauthorized(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
     private async Task<ActionResult<LoginResponse>> SignIn(Func<Task<LoginResponse>> login)
     {
         try

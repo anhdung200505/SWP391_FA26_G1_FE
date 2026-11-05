@@ -74,6 +74,34 @@ export function loginMember(email, password, portal = 'member') {
   });
 }
 
+export function getGoogleClientId() {
+  return request('/auth/google-client', { anonymous: true });
+}
+
+export function loginWithGoogle(accessToken, portal = 'member', linkExisting = false) {
+  return request('/auth/google', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ accessToken, portal, linkExisting }),
+  });
+}
+
+export function sendGmailOtp(email, portal = 'member') {
+  return request('/auth/gmail/otp', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, portal }),
+  });
+}
+
+export function confirmGmailLogin(email, code, portal = 'member') {
+  return request('/auth/gmail/confirm', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, code, portal }),
+  });
+}
+
 export function registerGuest(payload) {
   return request('/auth/register', {
     method: 'POST',
@@ -87,6 +115,22 @@ export function sendRegisterOtp(payload) {
     method: 'POST',
     anonymous: true,
     body: JSON.stringify(payload),
+  });
+}
+
+export function forgotPassword(email) {
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(email, code, newPassword) {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, code, newPassword }),
   });
 }
 
@@ -413,23 +457,21 @@ export function getMemberProfile(memberUserId) {
   return request(`/members/${memberUserId}/profile`);
 }
 
-export function updateMemberProfile(memberUserId, payload) {
-  return request(`/members/${memberUserId}/profile`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
-// Gửi ảnh đại diện dạng form-data (không dùng request() vì request() luôn đặt Content-Type JSON)
-export async function uploadMemberAvatar(memberUserId, file) {
+// Hồ sơ và ảnh đại diện cùng một request. file bỏ trống thì giữ ảnh cũ.
+export async function updateMemberProfile(memberUserId, payload, file) {
   const token = readSession()?.token || localStorage.getItem('token');
   const form = new FormData();
-  form.append('file', file);
+  form.append('fullName', payload.fullName ?? '');
+  form.append('phone', payload.phone ?? '');
+  form.append('dateOfBirth', payload.dateOfBirth ?? '');
+  form.append('gender', payload.gender ?? '');
+  if (payload.email) form.append('email', payload.email);
+  if (file) form.append('file', file);
 
   let response;
   try {
-    response = await fetch(`/api/members/${memberUserId}/profile/avatar`, {
-      method: 'POST',
+    response = await fetch(`/api/members/${memberUserId}/profile`, {
+      method: 'PUT',
       headers: {
         accept: 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -448,9 +490,24 @@ export async function uploadMemberAvatar(memberUserId, file) {
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(body?.message || 'Tải ảnh đại diện thất bại.');
+    throw new Error(body?.message || 'Cập nhật hồ sơ thất bại.');
   }
+  notifyDataChanged('PUT');
   return body;
+}
+
+export function sendEmailOtp(memberUserId, { newEmail, currentPassword }) {
+  return request(`/members/${memberUserId}/profile/email/otp`, {
+    method: 'POST',
+    body: JSON.stringify({ newEmail, currentPassword }),
+  });
+}
+
+export function confirmEmailOtp(memberUserId, code) {
+  return request(`/members/${memberUserId}/profile/email/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
 }
 
 // ==========================================
