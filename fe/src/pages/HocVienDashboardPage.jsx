@@ -2,9 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useStudentShell } from '../components/workspace/studentShell';
-import { groupStudyItems } from '../components/workspace/studentNav';
 import MemberSchedule from '../components/member/MemberSchedule';
-import PaymentHistory from '../components/member/PaymentHistory';
 import MembershipCard from '../components/member/MembershipCard';
 import MemberClassList from '../components/member/MemberClassList';
 import MemberSupportRequests from '../components/member/MemberSupportRequests';
@@ -29,14 +27,14 @@ const SIDEBAR_ITEMS = [
   { key: 'classes', label: 'Lớp của tôi' },
   { key: 'schedule', label: 'Lịch học' },
   { key: 'support', label: 'Đơn hỗ trợ' },
-  { key: 'history', label: 'Lịch sử thanh toán' },
+  { key: 'history', label: 'Lịch sử thanh toán', href: '/hoc-vien/lich-su-thanh-toan' },
 ];
 
 const REGISTER_TAB = { key: 'register', label: 'Đăng ký khóa học', href: '/dang-ky-khoa-hoc' };
 const COURSE_PLAN_TAB = { key: 'course-plan', label: 'Bài tập lớp', href: '/hoc-vien/bai-tap-lop' };
 const PERSONAL_AI_TAB = { key: 'personal-ai', label: 'Gợi ý tập', href: '/hoc-vien/giao-an-ai' };
 const MEMBER_ONLY_TABS = new Set(['schedule', 'support']);
-const SPY_OFFSET = 88;
+const SPY_OFFSET = 120; // lớn hơn scroll-mt-24 (96px) để mục vừa cuộn tới được tính là đang xem
 
 export default function HocVienDashboardPage() {
   const { user } = useAuth();
@@ -200,12 +198,13 @@ export default function HocVienDashboardPage() {
       frame = 0;
       if (Date.now() < spyLockUntil.current) return;
       const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
-      let current = sidebarItems[0].key;
-      for (const item of sidebarItems) {
+      const spyItems = sidebarItems.filter((item) => !item.href);
+      let current = spyItems[0].key;
+      for (const item of spyItems) {
         const element = document.getElementById(item.key);
         if (element && element.getBoundingClientRect().top <= SPY_OFFSET) current = item.key;
       }
-      setActiveTab(atBottom ? sidebarItems[sidebarItems.length - 1].key : current);
+      setActiveTab(atBottom ? spyItems[spyItems.length - 1].key : current);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -220,15 +219,16 @@ export default function HocVienDashboardPage() {
   useEffect(() => {
     const key = window.location.hash.replace('#', '');
     if (!sidebarItems.some((item) => item.key === key && !item.href)) return undefined;
-    const timer = setTimeout(() => document.getElementById(key)?.scrollIntoView({ block: 'start' }), 400);
-    return () => clearTimeout(timer);
+    spyLockUntil.current = Date.now() + 600;
+    setActiveTab(key);
+    document.getElementById(key)?.scrollIntoView({ block: 'start' });
+    return undefined;
   }, [sidebarItems]);
 
   const currentItem = sidebarItems.find((item) => item.key === activeTab);
 
   useStudentShell(
     {
-      items: groupStudyItems(sidebarItems.map((item) => ({ id: item.key, label: item.label, to: item.href }))),
       activeId: activeTab,
       onSelect: selectTab,
       breadcrumb: [{ label: 'Học viên' }, { label: currentItem?.label || 'Tổng quan' }],
@@ -397,10 +397,6 @@ export default function HocVienDashboardPage() {
             </div>
           )}
 
-          {/* MỤC LỊCH SỬ THANH TOÁN */}
-          <div id="history" className="scroll-mt-24">
-            <PaymentHistory />
-          </div>
         </div>
     </>
   );
