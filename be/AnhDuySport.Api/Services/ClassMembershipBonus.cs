@@ -15,12 +15,20 @@ public static class ClassMembershipBonus
     public const string BronzeCode = "PKG-001";
 
     // Gói gắn vào đơn đăng ký lớp.
-    // Chưa có gói: không chọn thì tặng Đồng; chọn Bạc/Vàng thì lên cấp với giá giảm.
-    // Đã có gói: chọn gói thì gia hạn hoặc lên hạng, giá giảm như đăng ký kèm lớp; không chọn thì không cấp thêm gói.
-    // Chưa có gói thì hội viên là bắt buộc, kể cả khi client gửi renewMembership = false.
+    // Tài khoản chưa từng ghi danh lớp: hội viên là bắt buộc (không chọn thì tặng Đồng).
+    // Tài khoản đã có lớp: không chọn gói thì chỉ đóng học phí lớp.
+    // Có chọn gói: chưa có gói thì tặng Đồng hoặc lên cấp giá giảm; đã có gói thì gia hạn hoặc lên hạng, cùng giá giảm.
     public static async Task<ClassPackageChoice> ResolveForClassAsync(
         AppDbContext db, int userId, string? membershipPackageId, bool renewMembership, DateOnly today)
     {
+        var hasClass = await db.ClassEnrollments.AnyAsync(item =>
+            item.UserId == userId && item.Status == "enrolled");
+        var wantsPackage = renewMembership || !string.IsNullOrWhiteSpace(membershipPackageId);
+        if (hasClass && !wantsPackage)
+        {
+            return new ClassPackageChoice(null, 0, true);
+        }
+
         var owned = await HighestOwnedPackageAsync(db, userId, today);
         if (owned is null)
         {
@@ -28,7 +36,7 @@ public static class ClassMembershipBonus
             return new ClassPackageChoice(upgrade.Package, upgrade.Price, false);
         }
 
-        if (!renewMembership)
+        if (!wantsPackage)
         {
             return new ClassPackageChoice(null, 0, true);
         }

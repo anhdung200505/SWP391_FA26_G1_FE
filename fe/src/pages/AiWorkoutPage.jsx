@@ -272,7 +272,7 @@ export default function AiWorkoutPage() {
     <>
         <h1 className="text-2xl font-black text-balance">Gợi ý tập cá nhân</h1>
         <p className="mt-2 max-w-2xl text-sm text-pretty text-slate-500">
-          AI đề xuất lịch tập riêng theo chỉ số và mục tiêu của bạn. Đây không phải bài tập hay giáo án của lớp. Lưu xong, các buổi tập vào lịch cá nhân. Hạn mức lượt tạo lại và token lấy từ gói hội viên bạn đang dùng.
+          AI chỉ mở khi gói hội viên đang dùng được đăng ký kèm lớp. Đây không phải bài tập của lớp. Lưu xong, các buổi tập vào lịch cá nhân.
         </p>
         {access?.quota && (
           <p className="mt-3 max-w-2xl rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
