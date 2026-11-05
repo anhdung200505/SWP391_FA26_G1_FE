@@ -223,4 +223,6 @@ public sealed record MembershipManagementDto(
     IReadOnlyList<PackageDto> Packages,
     // Gói cao nhất đang có (đang dùng hoặc chờ kích hoạt); null khi chưa có gói.
     // Mua gói thấp hơn gói đang dùng vẫn được: gói mới xếp nối tiếp sau các gói hiện có.
-    string? HighestPackageId);
+    string? HighestPackageId,
+    // Gói đang hiệu lực được mua kèm lớp (tặng Đồng hoặc thanh toán lớp). Gợi ý tập AI chỉ mở trong trường hợp này.
+    bool MembershipWithClass = false);

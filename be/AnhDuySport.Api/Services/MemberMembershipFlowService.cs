@@ -365,13 +365,16 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
             .ToListAsync();
 
         var highest = await ClassMembershipBonus.HighestOwnedPackageAsync(db, member.UserId, today);
+        var currentRow = memberships.FirstOrDefault(item =>
+            item.Status == "active" && item.StartDate <= today && item.EndDate >= today);
         return new MembershipManagementDto(
             ToProfileDto(member),
             current,
             endDate,
             history,
             packages.Select(AccountFlowMapper.ToDto).ToList(),
-            highest?.MembershipPackageId.ToString());
+            highest?.MembershipPackageId.ToString(),
+            currentRow is not null && AiMembershipQuota.BundledWithClass(currentRow));
     }
 
     // ===== Need Consultation? = Yes → hiển thị số chăm sóc khách hàng =====

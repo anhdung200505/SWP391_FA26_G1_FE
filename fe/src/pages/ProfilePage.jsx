@@ -11,7 +11,7 @@ import {
   confirmEmailOtp 
 } from '../api/managementApi';
 import { confirmProfileNotice } from '../auth/profileNotice';
-import { useHasClassRegistration } from '../components/workspace/studentNav';
+import { useMembershipWithClass } from '../components/workspace/studentNav';
 import ChangePasswordDialog from '../components/account/ChangePasswordDialog';
 import ChangeEmailModal from '../components/account/ChangeEmailModal';
 
@@ -20,7 +20,7 @@ const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
-  const hasClass = useHasClassRegistration((user?.roleId || user?.role) === 'MEMBER');
+  const membershipWithClass = useMembershipWithClass((user?.roleId || user?.role) === 'MEMBER' ? user?.id : null);
   const [profile, setProfile] = useState({
     fullName: '',
     email: '',
@@ -146,7 +146,7 @@ export default function ProfilePage() {
               >
                 Về khóa học của tôi
               </Link>
-              {hasClass && (
+              {membershipWithClass && (
                 <Link
                   to="/hoc-vien/giao-an-ai"
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#e31b23] bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg"
