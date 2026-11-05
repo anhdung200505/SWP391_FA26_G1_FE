@@ -83,17 +83,17 @@ export default function CoachHistoryPanel({ classId, onClassIdChange }) {
 
   if (loading) {
     return (
-      <div className="grid gap-4 lg:grid-cols-2" aria-busy="true" aria-label="Đang tải lịch sử tập">
-        <div className="h-72 rounded-3xl bg-gray-200" />
-        <div className="h-72 rounded-3xl bg-gray-200" />
+      <div className="grid gap-4 xl:grid-cols-2" aria-busy="true" aria-label="Đang tải lịch sử tập">
+        <div className="h-72 rounded-3xl bg-slate-200" />
+        <div className="h-72 rounded-3xl bg-slate-200" />
       </div>
     );
   }
 
   if (loadError && !data) {
     return (
-      <div className="rounded-3xl border border-gray-200 bg-white p-5">
-        <p className="text-sm font-semibold text-[#b1131a]">{loadError}</p>
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+        <p className="text-sm font-semibold text-red-700">{loadError}</p>
         <button type="button" onClick={() => reload().finally(() => setLoading(false))} className={`${primaryButtonClass} mt-4`}>
           Tải lại
         </button>
@@ -102,15 +102,15 @@ export default function CoachHistoryPanel({ classId, onClassIdChange }) {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-        <h2 className="text-lg font-black">Ghi buổi tập</h2>
-        <p className="mt-1 text-sm text-gray-500">
+    <div className="grid gap-4 xl:grid-cols-2">
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+        <h2 className="text-lg font-black text-balance text-slate-900">Ghi buổi tập</h2>
+        <p className="mt-1 text-sm text-slate-500">
           Nội dung này được dùng khi sinh bài ở tab AI. Không lấy điểm danh, nhận xét hay điểm.
         </p>
         {!data?.classes?.length ? (
           <div className="mt-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-600">
               Bạn chưa được phân công lớp nào. Khi quản trị gán lớp, hãy tải lại để ghi lịch sử tập.
             </p>
             <button type="button" onClick={() => reload()} className={`${primaryButtonClass} mt-4`}>
@@ -119,7 +119,7 @@ export default function CoachHistoryPanel({ classId, onClassIdChange }) {
           </div>
         ) : (
           <>
-            <label className="mt-4 block text-sm font-bold text-gray-700">
+            <label className="mt-4 block text-sm font-bold text-slate-700">
               Lớp
               <select
                 value={selectedClass ? String(selectedClass.classId) : ''}
@@ -133,7 +133,7 @@ export default function CoachHistoryPanel({ classId, onClassIdChange }) {
                 ))}
               </select>
             </label>
-            <label className="mt-4 block text-sm font-bold text-gray-700">
+            <label className="mt-4 block text-sm font-bold text-slate-700">
               Học viên
               <select
                 value={selectedMember ? String(selectedMember.memberUserId) : ''}
@@ -149,7 +149,7 @@ export default function CoachHistoryPanel({ classId, onClassIdChange }) {
                 ))}
               </select>
             </label>
-            <label className="mt-4 block text-sm font-bold text-gray-700">
+            <label className="mt-4 block text-sm font-bold text-slate-700">
               Nội dung đã tập
               <textarea
                 value={content}
@@ -159,8 +159,8 @@ export default function CoachHistoryPanel({ classId, onClassIdChange }) {
                 placeholder="Ví dụ: Bơi ếch 4x25m, nhịp thở còn gấp. Cần bài thở trên cạn 10 phút trước giờ xuống nước."
               />
             </label>
-            {formError && <p className="mt-3 text-sm font-semibold text-[#b1131a]">{formError}</p>}
-            {notice && <p className="mt-3 text-sm font-semibold text-emerald-800">{notice}</p>}
+            {formError && <p className="mt-3 text-sm font-semibold text-red-700">{formError}</p>}
+            {notice && <p className="mt-3 text-sm font-semibold text-emerald-700">{notice}</p>}
             <button
               type="button"
               disabled={saving || !members.length}
@@ -173,24 +173,24 @@ export default function CoachHistoryPanel({ classId, onClassIdChange }) {
         )}
       </section>
 
-      <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-        <h2 className="text-lg font-black">Đã ghi</h2>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+        <h2 className="text-lg font-black text-balance text-slate-900">Đã ghi</h2>
         {histories.length ? (
           <ul className="mt-4 space-y-3">
             {histories.map((item) => (
-              <li key={item.id} className="rounded-2xl border border-gray-200 px-4 py-3">
-                <p className="font-black text-gray-900">{item.memberName}</p>
-                <p className="mt-1 text-xs font-bold text-gray-500">
+              <li key={item.id} className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="font-black text-slate-900">{item.memberName}</p>
+                <p className="mt-1 text-xs font-bold text-slate-500">
                   {item.courseName}
                   <span className="mx-1">·</span>
                   <span className="tabular-nums">{formatDateTime(item.recordedAt)}</span>
                 </p>
-                <p className="mt-2 text-sm whitespace-pre-line text-gray-700">{item.content}</p>
+                <p className="mt-2 text-sm whitespace-pre-line text-slate-700">{item.content}</p>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-4 text-sm text-gray-600">Chưa có lịch sử tập cho lớp này.</p>
+          <p className="mt-4 text-sm text-slate-600">Chưa có lịch sử tập cho lớp này.</p>
         )}
       </section>
     </div>
