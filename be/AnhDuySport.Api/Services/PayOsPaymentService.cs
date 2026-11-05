@@ -11,7 +11,7 @@ using PayOS.Models.Webhooks;
 
 namespace AnhDuySport.Api.Services;
 
-public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, IServiceProvider services)
+public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, IServiceProvider services, ILogger<PayOsPaymentService> logger)
 {
     private const int CheckoutAmount = 10_000;
 
@@ -286,6 +286,8 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
             payment.Invoice.Status = "paid";
         }
 
+        var thankCourse = false;
+        var thankFirstPackage = false;
         if (payment.ClassId is int classId)
         {
             var enrollment = await db.ClassEnrollments
@@ -296,6 +298,7 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
                 : await MemberScheduleConflict.FindAsync(db, payment.UserId, classId, DateTime.Now.AddMinutes(-PaymentTimeout.Minutes));
             if (scheduleBlock is null)
             {
+                thankCourse = !alreadyEnrolled;
                 if (enrollment is null)
                 {
                     db.ClassEnrollments.Add(new ClassEnrollment
@@ -312,7 +315,12 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
                     enrollment.EnrolledAt = DateTime.Now;
                 }
 
-                await ClassMembershipBonus.GrantAsync(db, payment, DateTime.Now);
+                thankFirstPackage = !payment.SkipMembershipBonus
+                    && !await db.Memberships.AnyAsync(item => item.UserId == payment.UserId);
+                if (!payment.SkipMembershipBonus)
+                {
+                    await ClassMembershipBonus.GrantAsync(db, payment, DateTime.Now);
+                }
             }
             else
             {
@@ -338,6 +346,49 @@ public class PayOsPaymentService(AppDbContext db, IConfiguration configuration, 
             CreatedAt = DateTime.Now,
         });
         await db.SaveChangesAsync();
+        if (payment.ClassId is not null && (thankCourse || thankFirstPackage))
+        {
+            var firstPackage = thankFirstPackage && await db.Memberships.AnyAsync(item => item.UserId == payment.UserId);
+            var className = await db.Classes.AsNoTracking()
+                .Where(item => item.ClassId == payment.ClassId)
+                .Select(item => item.ClassName)
+                .FirstOrDefaultAsync() ?? "";
+            var member = await db.UserAccounts.AsNoTracking().FirstOrDefaultAsync(item => item.UserId == payment.UserId);
+            if (member is not null && !string.IsNullOrWhiteSpace(member.Email) && member.Email.Contains('@'))
+            {
+                var notifications = services.GetRequiredService<EmailNotificationService>();
+                if (thankCourse)
+                {
+                    await TrySendThankYouAsync(() => notifications.SendCourseRegisteredAsync(member, className), member.UserId);
+                }
+
+                if (firstPackage)
+                {
+                    var package = await db.Memberships.AsNoTracking()
+                        .Where(item => item.UserId == payment.UserId)
+                        .OrderBy(item => item.MembershipId)
+                        .FirstOrDefaultAsync();
+                    if (package is not null)
+                    {
+                        await TrySendThankYouAsync(
+                            () => notifications.SendFirstPackageAsync(member, package.PlanName, package.StartDate, package.EndDate),
+                            member.UserId);
+                    }
+                }
+            }
+        }
+    }
+
+    private async Task TrySendThankYouAsync(Func<Task> send, int userId)
+    {
+        try
+        {
+            await send();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Không gửi được email đăng ký cho học viên {UserId}", userId);
+        }
     }
 
     private async Task MarkCancelAsync(Payment payment, string reason)

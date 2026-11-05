@@ -510,7 +510,7 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor, Ema
         await SaveSessionsAsync();
         await transaction.CommitAsync();
 
-        // Chỉ báo email cho hai HLV (học viên đã có thông báo trong hệ thống); lỗi gửi không làm hỏng việc đã lưu.
+        // Email cho hai HLV và học viên đang học lớp; lỗi gửi không làm hỏng việc đã lưu.
         var coaches = await db.UserAccounts.AsNoTracking().Where(user => user.UserId == coachId || user.UserId == oldCoachId).ToListAsync();
         var incoming = coaches.FirstOrDefault(user => user.UserId == coachId);
         var outgoing = coaches.FirstOrDefault(user => user.UserId == oldCoachId);
@@ -522,6 +522,20 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor, Ema
         if (outgoing is not null && !string.IsNullOrWhiteSpace(outgoing.Email))
         {
             await TrySendAsync(() => email.SendCoachClassReleasedAsync(outgoing, item.ClassName, newCoach, first, remaining.Count, note), oldCoachId);
+        }
+
+        var memberSummary = $"Từ ngày {first:dd/MM/yyyy}, {remaining.Count} buổi còn lại do HLV {newCoach} dạy (thay HLV {oldCoach}).";
+        if (!string.IsNullOrWhiteSpace(note))
+        {
+            memberSummary += $" Lý do: {TextFormat.Sentence(note)}";
+        }
+
+        var members = await db.UserAccounts.AsNoTracking()
+            .Where(user => memberIds.Contains(user.UserId) && user.Email != null && user.Email.Contains("@"))
+            .ToListAsync();
+        foreach (var member in members)
+        {
+            await TrySendAsync(() => email.SendMemberScheduleChangedAsync(member, item.ClassName, memberSummary), member.UserId);
         }
 
         return await LoadDtoAsync(item.ClassId);

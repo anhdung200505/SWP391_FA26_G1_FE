@@ -14,6 +14,40 @@ public static class ClassMembershipBonus
 {
     public const string BronzeCode = "PKG-001";
 
+    // Gói gắn vào đơn đăng ký lớp.
+    // Chưa có gói: không chọn thì tặng Đồng; chọn Bạc/Vàng thì lên cấp với giá giảm.
+    // Đã có gói: chọn gói thì gia hạn hoặc lên hạng, giá giảm như đăng ký kèm lớp; không chọn thì không cấp thêm gói.
+    // Chưa có gói thì hội viên là bắt buộc, kể cả khi client gửi renewMembership = false.
+    public static async Task<ClassPackageChoice> ResolveForClassAsync(
+        AppDbContext db, int userId, string? membershipPackageId, bool renewMembership, DateOnly today)
+    {
+        var owned = await HighestOwnedPackageAsync(db, userId, today);
+        if (owned is null)
+        {
+            var upgrade = await QuoteUpgradeAsync(db, membershipPackageId);
+            return new ClassPackageChoice(upgrade.Package, upgrade.Price, false);
+        }
+
+        if (!renewMembership)
+        {
+            return new ClassPackageChoice(null, 0, true);
+        }
+
+        // Gia hạn hoặc lên hạng kèm lớp: dùng giá giảm upgrade_discount_percent, giống lúc chưa có gói.
+        var packageId = string.IsNullOrWhiteSpace(membershipPackageId)
+            ? owned.MembershipPackageId.ToString()
+            : membershipPackageId;
+        var quoted = await QuoteUpgradeAsync(db, packageId);
+        if (quoted.Package is null)
+        {
+            return new ClassPackageChoice(owned, owned.Fee, false);
+        }
+
+        return new ClassPackageChoice(quoted.Package, quoted.Price, false);
+    }
+
+    public sealed record ClassPackageChoice(MembershipPackage? Package, decimal Price, bool SkipBonus);
+
     // Giá gói lên cấp khi chọn cùng lúc đăng ký lớp. Không chọn → (null, 0).
     public static async Task<(MembershipPackage? Package, decimal Price)> QuoteUpgradeAsync(AppDbContext db, string? packageId)
     {
@@ -140,6 +174,9 @@ public static class ClassMembershipBonus
         }
 
         // Đang có gói (active hoặc đang chờ) → bắt đầu sau ngày hết hạn cuối cùng.
+        var alreadyHad = await db.Memberships.AnyAsync(item => item.UserId == payment.UserId
+            && (item.Status == "active" || item.Status == "scheduled")
+            && item.EndDate >= today);
         var lastEnd = await db.Memberships
             .Where(item => item.UserId == payment.UserId
                 && (item.Status == "active" || item.Status == "scheduled")
@@ -154,7 +191,11 @@ public static class ClassMembershipBonus
             PaymentId = isFree ? null : payment.PaymentId,
             IsFree = isFree,
             MembershipPackageId = package.MembershipPackageId,
-            PlanName = isFree ? $"{package.PackageName} (tặng kèm lớp)" : $"{package.PackageName} (ưu đãi kèm lớp)",
+            PlanName = isFree
+                ? $"{package.PackageName} (tặng kèm lớp)"
+                : alreadyHad
+                    ? $"{package.PackageName} (gia hạn kèm lớp)"
+                    : $"{package.PackageName} (ưu đãi kèm lớp)",
             StartDate = start,
             EndDate = MembershipDuration.EndFrom(start, package.ValidityMonths), // 1 tháng = 30 ngày
             Status = start <= today ? "active" : "scheduled",
