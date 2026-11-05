@@ -29,3 +29,24 @@
 .animate-step-in {
   animation: stepIn 0.35s ease-out both;
 }
+/* Chuyển trang trong khung học viên: nội dung hiện nhẹ, thanh bên giữ nguyên. */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageEnter 0.22s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+}

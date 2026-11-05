@@ -29,9 +29,9 @@ import AiQuotaPage from './pages/management/AiQuotaPage';
 import EnrollmentConsultationsPage from './pages/management/EnrollmentConsultationsPage';
 import CenterCheckInPage from './pages/management/CenterCheckInPage';
 import PrivateRequestsPage from './pages/management/PrivateRequestsPage';
-import PrivateClassPage from './pages/PrivateClassPage';
 import CoachCoursePage from './pages/CoachCoursePage';
 import MemberCoursePlanPage from './pages/MemberCoursePlanPage';
+import StudentLayout from './components/workspace/StudentLayout';
 
 function Protected({ children, allowedRoles }) {
   return <RequireAuth allowedRoles={allowedRoles}>{children}</RequireAuth>;
@@ -60,52 +60,21 @@ export default function App() {
             {/* Route Hồ sơ cá nhân */}
             <Route path="/ho-so" element={<Protected><ProfilePage /></Protected>} />
 
-            {/* Route Dashboard Học viên */}
-            <Route 
-              path="/hoc-vien-dashboard" 
-              element={
-                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
-                  <HocVienDashboardPage />
-                </Protected>
-              } 
-            />
+            {/* Khung chung cho mọi trang học viên: thanh bên giữ nguyên khi chuyển trang */}
+            <Route element={<Protected allowedRoles={['MEMBER', 'ADMIN']}><StudentLayout /></Protected>}>
+              <Route path="/hoc-vien-dashboard" element={<HocVienDashboardPage />} />
+              <Route path="/dang-ky-khoa-hoc" element={<ClassRegistrationPage />} />
+              <Route
+                path="/hoc-vien/bai-tap-lop"
+                element={<Protected allowedRoles={['MEMBER']}><MemberCoursePlanPage /></Protected>}
+              />
+              <Route
+                path="/hoc-vien/giao-an-ai"
+                element={<Protected allowedRoles={['MEMBER']}><AiWorkoutPage /></Protected>}
+              />
+            </Route>
 
-            {/* Route Xác nhận Đăng ký Khóa học */}
-            <Route 
-              path="/dang-ky-khoa-hoc" 
-              element={
-                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
-                  <ClassRegistrationPage />
-                </Protected>
-              } 
-            />
-
-            <Route
-              path="/hoc-vien/bai-tap-lop"
-              element={
-                <Protected allowedRoles={['MEMBER']}>
-                  <MemberCoursePlanPage />
-                </Protected>
-              }
-            />
-
-            <Route
-              path="/hoc-vien/hoc-1-1"
-              element={
-                <Protected allowedRoles={['MEMBER']}>
-                  <PrivateClassPage />
-                </Protected>
-              }
-            />
-
-            <Route
-              path="/hoc-vien/giao-an-ai"
-              element={
-                <Protected allowedRoles={['MEMBER']}>
-                  <AiWorkoutPage />
-                </Protected>
-              }
-            />
+            <Route path="/hoc-vien/hoc-1-1" element={<Navigate to="/dang-ky-khoa-hoc?type=private" replace />} />
 
             <Route
               path="/hlv/lop-hoc"
