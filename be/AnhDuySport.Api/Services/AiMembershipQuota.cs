@@ -6,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
 
-// Chat AI (gợi ý giáo án) chỉ mở khi hội viên đang hiệu lực từ Hạng Đồng trở lên.
+// Chat AI chỉ mở khi gói đang hiệu lực được đăng ký kèm lớp (Hạng Đồng tặng hoặc mua cùng hóa đơn lớp).
+// Hội viên mua riêng để dùng cơ sở vật chất không dùng AI.
 // Đồng: 5 lượt tạo lại, 50.000 token. Bạc: 10 lượt, 100.000 token. Vàng: 25 lượt, 250.000 token.
 public static class AiMembershipQuota
 {
@@ -18,6 +19,12 @@ public static class AiMembershipQuota
 
     public static bool IsEligible(string? packageCode) =>
         packageCode is BronzeCode or SilverCode or GoldCode;
+
+    // Gói sinh ra từ đơn có lớp, hoặc Hạng Đồng tặng kèm lớp.
+    public static bool BundledWithClass(Membership membership) =>
+        membership.IsFree
+        || membership.Payment?.ClassId is not null
+        || membership.PlanName.Contains("kèm lớp", StringComparison.OrdinalIgnoreCase);
 
     public static (int Regenerations, int Tokens) LimitsOf(string packageCode) => packageCode switch
     {
@@ -37,14 +44,15 @@ public static class AiMembershipQuota
 
         var membership = await db.Memberships
             .Include(item => item.Package)
+            .Include(item => item.Payment)
             .Where(item => item.UserId == userId && item.Status == "active" && item.EndDate >= today)
             .OrderByDescending(item => item.Package != null ? item.Package.Fee : 0)
             .FirstOrDefaultAsync();
         var package = membership?.Package;
-        if (membership is null || package is null || !IsEligible(package.PackageCode))
+        if (membership is null || package is null || !IsEligible(package.PackageCode) || !BundledWithClass(membership))
         {
             throw new InvalidOperationException(
-                "Chat AI chỉ mở cho học viên đã đăng ký hội viên đang hiệu lực từ Hạng Đồng trở lên.");
+                "Gợi ý tập AI chỉ mở khi gói hội viên đang hiệu lực được đăng ký kèm lớp.");
         }
 
         var tokensUsed = await db.AiTokenUsages
