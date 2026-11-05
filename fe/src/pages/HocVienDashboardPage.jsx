@@ -30,7 +30,7 @@ const SIDEBAR_ITEMS = [
   { key: 'history', label: 'Lịch sử thanh toán', href: '/hoc-vien/lich-su-thanh-toan' },
 ];
 
-const REGISTER_TAB = { key: 'register', label: 'Đăng ký khóa học', href: '/dang-ky-khoa-hoc' };
+const REGISTER_TAB = { key: 'register', label: 'Đăng ký hội viên', href: '/dang-ky-khoa-hoc' };
 const COURSE_PLAN_TAB = { key: 'course-plan', label: 'Bài tập lớp', href: '/hoc-vien/bai-tap-lop' };
 const PERSONAL_AI_TAB = { key: 'personal-ai', label: 'Gợi ý tập', href: '/hoc-vien/giao-an-ai' };
 const MEMBER_ONLY_TABS = new Set(['schedule', 'support']);
@@ -159,26 +159,29 @@ export default function HocVienDashboardPage() {
   const livePendingCheckouts = pendingCheckouts.filter((item) => item.deadline > now);
 
   const sidebarItems = useMemo(() => {
+    const withClass = Boolean(membershipData?.membershipWithClass);
     if (loading) {
-      return SIDEBAR_ITEMS.flatMap((item) => {
-        if (item.key === 'overview') return [item, PERSONAL_AI_TAB];
-        return item.key === 'history' ? [item] : [];
-      });
+      return SIDEBAR_ITEMS.flatMap((item) => (item.key === 'history' || item.key === 'overview' ? [item] : []));
     }
     const enrolled = myClasses.length > 0;
     const items = enrolled
       ? [...SIDEBAR_ITEMS]
       : SIDEBAR_ITEMS.flatMap((item) => {
-          if (item.key === 'classes') return [PERSONAL_AI_TAB, REGISTER_TAB];
+          if (item.key === 'classes') return [REGISTER_TAB];
           if (MEMBER_ONLY_TABS.has(item.key)) return [];
           return [item];
         });
     if (enrolled) {
       const classIndex = items.findIndex((item) => item.key === 'classes');
-      items.splice(classIndex === -1 ? 1 : classIndex + 1, 0, COURSE_PLAN_TAB, PERSONAL_AI_TAB, REGISTER_TAB);
+      const extras = [COURSE_PLAN_TAB, REGISTER_TAB];
+      if (withClass) extras.splice(1, 0, PERSONAL_AI_TAB);
+      items.splice(classIndex === -1 ? 1 : classIndex + 1, 0, ...extras);
+    } else if (withClass) {
+      const registerIndex = items.findIndex((item) => item.key === 'register');
+      items.splice(registerIndex === -1 ? 1 : registerIndex, 0, PERSONAL_AI_TAB);
     }
     return items;
-  }, [loading, myClasses.length]);
+  }, [loading, myClasses.length, membershipData?.membershipWithClass]);
 
   const selectTab = (key) => {
     const item = sidebarItems.find((entry) => entry.key === key);
@@ -326,18 +329,18 @@ export default function HocVienDashboardPage() {
                 <div>
                   <h2 className={sectionTitle}>Gợi ý tập cá nhân</h2>
                   <p className={sectionSub}>
-                    {currentMembership
-                      ? 'Nhập chỉ số và mục tiêu để AI đề xuất lịch tập riêng. Không phải bài tập của lớp.'
-                      : 'Gợi ý tập cần gói hội viên đang hiệu lực. Gói có khi đăng ký khóa học.'}
+                    {membershipData?.membershipWithClass
+                      ? 'Nhập chỉ số và mục tiêu để AI đề xuất lịch tập riêng. Chỉ mở khi gói hội viên được đăng ký kèm lớp.'
+                      : 'Gợi ý tập chỉ mở khi đăng ký hội viên kèm lớp. Gói mua riêng để dùng cơ sở vật chất không có AI.'}
                   </p>
                 </div>
-                {currentMembership ? (
+                {membershipData?.membershipWithClass ? (
                   <Link to="/hoc-vien/giao-an-ai" className={`${btnPrimary} self-start`}>
                     Mở gợi ý tập
                   </Link>
                 ) : (
                   <Link to="/dang-ky-khoa-hoc" className={`${btnPrimary} self-start`}>
-                    Đăng ký khóa học
+                    Đăng ký hội viên kèm lớp
                   </Link>
                 )}
               </div>
