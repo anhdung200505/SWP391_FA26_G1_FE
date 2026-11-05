@@ -97,7 +97,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
     return (
       <div className="py-16 text-center">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#e31b23] border-t-transparent mb-2"></div>
-        <p className="text-xs font-bold text-slate-400">Đang tải danh sách đơn...</p>
+        <p className="text-xs font-bold text-slate-500">Đang tải danh sách đơn...</p>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
   if (!filteredList || filteredList.length === 0) {
     return (
       <div className="py-16 text-center">
-        <p className="text-xs font-bold text-slate-400">Không tìm thấy đơn nào phù hợp.</p>
+        <p className="text-xs font-bold text-slate-500">Không tìm thấy đơn nào phù hợp.</p>
       </div>
     );
   }
@@ -114,7 +114,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse text-xs">
         <thead>
-          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider">
+          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs">
             <th className="p-4">Khách hàng / Học viên</th>
             <th className="p-4">Tiêu đề / Phân loại</th>
             <th className="p-4 min-w-[280px]">Nội dung yêu cầu</th>
@@ -135,12 +135,12 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
                   <div className="font-bold text-slate-900">
                     {item.memberName || item.fullName || 'Khách hàng'}
                   </div>
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-xs text-slate-500">
                     {item.memberEmail || item.email || 'N/A'}
                   </div>
                   {(item.phone || item.memberPhone) && (
-                    <div className="text-[11px] font-semibold text-slate-600 mt-0.5">
-                      📞 {item.phone || item.memberPhone}
+                    <div className="text-xs font-semibold text-slate-600 mt-0.5">
+                      {item.phone || item.memberPhone}
                     </div>
                   )}
                 </td>
@@ -148,16 +148,16 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
                 <td className="p-4 align-top">
                   <div className="font-bold text-slate-800">{item.title || 'Yêu cầu hỗ trợ'}</div>
                   {requestType && (
-                    <span className="inline-block bg-sky-50 text-sky-800 border border-sky-200 text-[10px] font-bold px-2 py-0.5 rounded mt-1">
+                    <span className="inline-block bg-sky-50 text-sky-800 border border-sky-200 text-xs font-bold px-2 py-0.5 rounded mt-1">
                       Loại: {requestType}
                     </span>
                   )}
                   {item.receptionistCategory && (
-                    <span className="inline-block bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded mt-1 ml-1">
+                    <span className="inline-block bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-2 py-0.5 rounded mt-1 ml-1">
                       {item.receptionistCategory}
                     </span>
                   )}
-                  <div className="text-[10px] text-slate-400 mt-1">
+                  <div className="text-xs text-slate-500 mt-1">
                     {item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : ''}
                   </div>
                 </td>
@@ -167,7 +167,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
                     {content}
                   </div>
                   {item.resolutionNote && (
-                    <div className="mt-1.5 text-[11px] text-emerald-800 bg-emerald-50 p-2 rounded-lg border border-emerald-100 whitespace-pre-line leading-relaxed">
+                    <div className="mt-1.5 text-xs text-emerald-800 bg-emerald-50 p-2 rounded-lg border border-emerald-100 whitespace-pre-line leading-relaxed">
                       <strong>Kết quả tư vấn:</strong> {item.resolutionNote}
                     </div>
                   )}
@@ -175,7 +175,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
 
                 <td className="p-4 align-top">
                   <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black border ${
                       isResolved
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
                         : isEscalated
@@ -183,7 +183,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
                         : 'bg-amber-50 text-amber-600 border-amber-200'
                     }`}
                   >
-                    {isResolved ? '✓ Đã xử lý' : isEscalated ? '↑ Đã chuyển quản lý' : '⏳ Chờ xử lý'}
+                    {isResolved ? 'Đã xử lý' : isEscalated ? 'Đã chuyển quản lý' : 'Chờ xử lý'}
                   </span>
                 </td>
 
@@ -191,7 +191,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
                   {isResolved || isEscalated ? (
                     <button
                       onClick={() => openModal(item, 'view')}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] px-3 py-1.5 rounded-lg cursor-pointer"
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg cursor-pointer"
                     >
                       Xem kết quả
                     </button>
@@ -199,24 +199,24 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
                     <div className="flex justify-end">
                       <button
                         onClick={() => openModal(item, 'handle_enrollment')}
-                        className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3 py-1.5 rounded-lg cursor-pointer"
+                        className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-xs px-3 py-1.5 rounded-lg cursor-pointer"
                       >
-                        ✓ Giải quyết tư vấn
+                        Giải quyết tư vấn
                       </button>
                     </div>
                   ) : (
                     <div className="flex justify-end gap-1.5">
                       <button
                         onClick={() => openModal(item, 'handle_service', 'resolve')}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-lg cursor-pointer"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-2.5 py-1.5 rounded-lg cursor-pointer"
                       >
-                        ✓ Giải quyết
+                        Giải quyết
                       </button>
                       <button
                         onClick={() => openModal(item, 'handle_service', 'escalate')}
-                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-lg cursor-pointer"
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-2.5 py-1.5 rounded-lg cursor-pointer"
                       >
-                        ⬆️ Chuyển QTTT
+                        Chuyển QTTT
                       </button>
                     </div>
                   )}
@@ -229,10 +229,10 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
 
       {/* MODAL THAO TÁC */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
             <h3 className="text-base font-black text-slate-900 border-b pb-2">
-              {modalType === 'view' && '📌 Chi tiết yêu cầu'}
+              {modalType === 'view' && 'Chi tiết yêu cầu'}
               {modalType === 'handle_service' && 'Xử lý đơn hỗ trợ học viên'}
               {modalType === 'handle_enrollment' && 'Giải quyết đơn tư vấn ghi danh'}
             </h3>
@@ -248,14 +248,14 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
 
             {errorMsg && (
               <div className="p-2.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-bold">
-                ⚠️ {errorMsg}
+                {errorMsg}
               </div>
             )}
 
             {modalType === 'handle_service' && (
               <form onSubmit={handleSubmitService} className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-700 mb-1">
                     Hành động
                   </label>
                   <select
@@ -263,14 +263,14 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
                     onChange={(e) => setAction(e.target.value)}
                     className="w-full text-xs p-2.5 rounded-lg border border-slate-300 font-semibold"
                   >
-                    <option value="resolve">✓ Giải quyết (Lưu kết quả)</option>
-                    <option value="escalate">⬆️ Chuyển lên Quản trị trung tâm</option>
+                    <option value="resolve">Giải quyết (lưu kết quả)</option>
+                    <option value="escalate">Chuyển lên Quản trị trung tâm</option>
                   </select>
                 </div>
 
                 {action !== 'escalate' && (
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                    <label className="block text-sm font-bold text-slate-700 mb-1">
                       Danh mục hỗ trợ
                     </label>
                     <select
@@ -285,7 +285,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
                 )}
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-700 mb-1">
                     {action === 'escalate' ? 'Lý do chuyển cấp' : 'Ghi chú kết quả xử lý'}
                   </label>
                   <textarea
@@ -312,7 +312,7 @@ export default function ReceptionistTable({ loading, filteredList, activeTab, on
             {modalType === 'handle_enrollment' && (
               <form onSubmit={handleSubmitEnrollment} className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-700 mb-1">
                     KẾT QUẢ TƯ VẤN <span className="text-red-500">*</span>
                   </label>
                   <textarea

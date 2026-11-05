@@ -112,10 +112,8 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
 
             <div className="mt-5 grid grid-cols-2 lg:grid-cols-3 gap-5 bg-white p-6 rounded-3xl border border-gray-200 shadow-xs text-xs">
               <div>
-                <span className="text-gray-400 font-bold block">Môn · Level</span>
-                <strong className="text-slate-900 text-sm">
-                  {klass.sportName} · {klass.level}
-                </strong>
+                <span className="text-gray-400 font-bold block">Môn</span>
+                <strong className="text-slate-900 text-sm">{klass.sportName}</strong>
               </div>
               <div>
                 <span className="text-gray-400 font-bold block">Coach</span>
