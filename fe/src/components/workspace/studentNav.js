@@ -16,11 +16,12 @@ const openItems = [
   { id: 'overview', label: 'Tổng quan', to: '/hoc-vien-dashboard', end: true },
   { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
   { id: 'register', label: 'Đăng ký khóa học', to: '/dang-ky-khoa-hoc' },
+  { id: 'membership', label: 'Đăng ký thành viên', to: '/dang-ky-thanh-vien', end: true },
   { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien/lich-su-thanh-toan', end: true },
 ];
 
-// Chưa biết học viên có lớp hay không: dùng menu cơ bản để không nháy thêm/bớt mục khi dữ liệu về.
-const pendingItems = openItems;
+// Chưa biết học viên có lớp hay không: dùng menu cơ bản (chưa có mục chỉ dành cho người chưa có lớp).
+const pendingItems = openItems.filter((item) => item.id !== 'membership');
 
 // Bài tập lớp và Gợi ý tập gộp thành nhóm "Học tập". Chỉ còn một mục thì giữ mục đơn.
 const STUDY_IDS = ['course-plan', 'personal-ai'];
