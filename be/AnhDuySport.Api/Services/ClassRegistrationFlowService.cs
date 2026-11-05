@@ -9,7 +9,13 @@ namespace AnhDuySport.Api.Services;
 // Lỗi nghiệp vụ (trả 400). InvalidOperationException của .NET/EF vẫn ra 500.
 public sealed class RegistrationException(string message) : InvalidOperationException(message);
 
-public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, AuthService auth, PayOsPaymentService payOs)
+public class ClassRegistrationFlowService(
+    AppDbContext db,
+    CurrentActor actor,
+    AuthService auth,
+    PayOsPaymentService payOs,
+    EmailNotificationService email,
+    ILogger<ClassRegistrationFlowService> logger)
 {
     public async Task<IReadOnlyList<CenterDto>> AccessCentersAsync()
     {
@@ -363,14 +369,17 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             throw new RegistrationException("Lớp học không còn nhận đăng ký.");
         }
 
-        var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.MembershipPackageId);
-        if (upgrade.Package is not null)
+        var choice = await ClassMembershipBonus.ResolveForClassAsync(
+            db, member.UserId, request.MembershipPackageId, request.RenewMembership, today);
+        if (choice.Package is not null)
         {
-            await ClassMembershipBonus.EnsureNotDowngradeAsync(db, member.UserId, upgrade.Package, today);
+            await ClassMembershipBonus.EnsureNotDowngradeAsync(db, member.UserId, choice.Package, today);
         }
 
         var pending = await FindPendingPaymentAsync(member.UserId, classId);
-        if (pending is not null && pending.UpgradePackageId == upgrade.Package?.MembershipPackageId)
+        if (pending is not null
+            && pending.UpgradePackageId == choice.Package?.MembershipPackageId
+            && pending.SkipMembershipBonus == choice.SkipBonus)
         {
             return await ToRegistrationDtoAsync(pending, item.ClassName, true);
         }
@@ -392,7 +401,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         try
         {
             var created = await CreatePendingPaymentAsync(
-                member, request, classId, item.ClassName, item.Tuition, upgrade, registeredBy, classAssignedBy);
+                member, request, classId, item.ClassName, item.Tuition, choice, registeredBy, classAssignedBy);
             return await ToRegistrationDtoAsync(created, item.ClassName, false);
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
@@ -662,6 +671,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         var now = DateTime.Now;
         var className = payment.Class?.ClassName ?? "";
         var hasSeat = true;
+        var newlyEnrolled = false;
         string? scheduleBlock = null;
         if (payment.ClassId is int classId)
         {
@@ -693,7 +703,8 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             // Lớp đã hủy (vd. lớp 1-1 quá hạn thanh toán) thì tiền về sau coi như lớp đầy: không ghi danh, chờ hoàn tiền.
             hasSeat = scheduleBlock is null
                 && (alreadyEnrolled || (classStatus != "cancelled" && (capacity is null || enrolledCount < capacity)));
-            if (hasSeat && !alreadyEnrolled)
+            newlyEnrolled = hasSeat && !alreadyEnrolled;
+            if (newlyEnrolled)
             {
                 if (enrollment is null)
                 {
@@ -763,14 +774,23 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             CreatedAt = now,
         });
 
-        // Lớp đầy (chờ hoàn tiền) thì không cấp gói.
-        if (payment.ClassId is not null && hasSeat)
+        // Lớp đầy (chờ hoàn tiền) hoặc học viên không tick gia hạn thì không cấp gói.
+        var grantPackage = payment.ClassId is not null && hasSeat && !payment.SkipMembershipBonus;
+        var hadPackage = grantPackage
+            && await db.Memberships.AnyAsync(item => item.UserId == payment.UserId);
+        if (grantPackage)
         {
             await ClassMembershipBonus.GrantAsync(db, payment, now);
         }
 
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
+        if (payment.ClassId is not null && hasSeat)
+        {
+            var firstPackage = grantPackage && !hadPackage && await db.Memberships.AnyAsync(item => item.UserId == payment.UserId);
+            await SendRegistrationEmailsAsync(payment.UserId, className, newlyEnrolled, firstPackage);
+        }
+
         return await BuildStatusAsync(payment);
     }
 
@@ -897,14 +917,16 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         }
 
         var now = DateTime.Now;
-        var upgrade = await ClassMembershipBonus.QuoteUpgradeAsync(db, request.MembershipPackageId);
+        var hadPackage = await db.Memberships.AnyAsync(item => item.UserId == user.UserId);
+        var choice = await ClassMembershipBonus.ResolveForClassAsync(
+            db, user.UserId, request.MembershipPackageId, request.RenewMembership, today);
         await using var transaction = await db.Database.BeginTransactionAsync();
         var invoice = new Invoice
         {
             UserId = user.UserId,
             InvoiceCode = $"HD{now:yyyyMMddHHmmss}{user.UserId}",
             IssuedAt = now,
-            TotalAmount = (trainingClass.Course?.Price ?? 0) + upgrade.Price,
+            TotalAmount = (trainingClass.Course?.Price ?? 0) + choice.Price,
             Status = "paid",
         };
         db.Invoices.Add(invoice);
@@ -920,8 +942,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             PaidAt = now,
             Status = "paid",
             RegisteredByUserId = user.UserId,
-            UpgradePackageId = upgrade.Package?.MembershipPackageId,
-            UpgradeAmount = upgrade.Price,
+            UpgradePackageId = choice.SkipBonus ? null : choice.Package?.MembershipPackageId,
+            UpgradeAmount = choice.Price,
+            SkipMembershipBonus = choice.SkipBonus,
         };
         db.Payments.Add(payment);
         ClassRegistrationLogs.Add(
@@ -954,7 +977,10 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             CreatedAt = now,
         });
         await db.SaveChangesAsync();
-        await ClassMembershipBonus.GrantAsync(db, payment, now);
+        if (!payment.SkipMembershipBonus)
+        {
+            await ClassMembershipBonus.GrantAsync(db, payment, now);
+        }
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = user.UserId,
@@ -966,6 +992,9 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         });
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
+        var firstPackage = !payment.SkipMembershipBonus && !hadPackage
+            && await db.Memberships.AnyAsync(item => item.UserId == user.UserId);
+        await SendRegistrationEmailsAsync(user.UserId, trainingClass.ClassName, courseEnrolled: true, firstPackage);
 
         var session = await auth.IssueAsync(user);
         return new RegistrationPaymentResponse(
@@ -980,6 +1009,53 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             payment.Amount,
             payment.Amount - payment.UpgradeAmount,
             await ClassMembershipBonus.QuoteOfPaymentAsync(db, payment));
+    }
+
+    private async Task SendRegistrationEmailsAsync(int userId, string className, bool courseEnrolled, bool firstPackage)
+    {
+        if (!courseEnrolled && !firstPackage)
+        {
+            return;
+        }
+
+        var member = await db.UserAccounts.AsNoTracking().FirstOrDefaultAsync(item => item.UserId == userId);
+        if (member is null || string.IsNullOrWhiteSpace(member.Email) || !member.Email.Contains('@'))
+        {
+            return;
+        }
+
+        if (courseEnrolled)
+        {
+            await TrySendAsync(() => email.SendCourseRegisteredAsync(member, className), member.UserId);
+        }
+
+        if (!firstPackage)
+        {
+            return;
+        }
+
+        var package = await db.Memberships.AsNoTracking()
+            .Where(item => item.UserId == userId)
+            .OrderBy(item => item.MembershipId)
+            .FirstOrDefaultAsync();
+        if (package is not null)
+        {
+            await TrySendAsync(
+                () => email.SendFirstPackageAsync(member, package.PlanName, package.StartDate, package.EndDate),
+                member.UserId);
+        }
+    }
+
+    private async Task TrySendAsync(Func<Task> send, int userId)
+    {
+        try
+        {
+            await send();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Không gửi được email đăng ký cho học viên {UserId}", userId);
+        }
     }
 
     internal static readonly Dictionary<string, string> PaymentMethods = new(StringComparer.OrdinalIgnoreCase)
@@ -1115,7 +1191,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
         int classId,
         string className,
         decimal tuition,
-        (MembershipPackage? Package, decimal Price) upgrade,
+        ClassMembershipBonus.ClassPackageChoice choice,
         RegistrationActor registeredBy,
         string classAssignedBy)
     {
@@ -1190,7 +1266,7 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             UserId = userId,
             InvoiceCode = $"INV-{now.Year}-{number:D4}",
             IssuedAt = now,
-            TotalAmount = tuition + upgrade.Price,
+            TotalAmount = tuition + choice.Price,
             Status = "issued",
         };
         var payment = new Payment
@@ -1198,21 +1274,24 @@ public class ClassRegistrationFlowService(AppDbContext db, CurrentActor actor, A
             Invoice = invoice,
             UserId = userId,
             ClassId = classId,
-            Amount = tuition + upgrade.Price,
+            Amount = tuition + choice.Price,
             PaymentMethod = "payos",
             Status = "pending",
             RegisteredByUserId = registeredBy.UserId,
-            UpgradePackageId = upgrade.Package?.MembershipPackageId,
-            UpgradeAmount = upgrade.Price,
+            UpgradePackageId = choice.SkipBonus ? null : choice.Package?.MembershipPackageId,
+            UpgradeAmount = choice.Price,
+            SkipMembershipBonus = choice.SkipBonus,
         };
         db.Payments.Add(payment);
         ClassRegistrationLogs.Add(db, userId, classId, ClassRegistrationLogs.Register, registeredBy, now, payment,
             classAssignedBy: classAssignedBy);
         await db.SaveChangesAsync();
 
-        var upgradeText = upgrade.Package is null
-            ? ""
-            : $", lên cấp {upgrade.Package.PackageName} {upgrade.Price:N0}";
+        var upgradeText = choice.SkipBonus
+            ? ", không gia hạn gói"
+            : choice.Package is null
+                ? ""
+                : $", {(request.RenewMembership ? "gia hạn" : "lên cấp")} {choice.Package.PackageName} {choice.Price:N0}";
         db.ActivityLogs.Add(new ActivityLog
         {
             ActorUserId = registeredBy.UserId,

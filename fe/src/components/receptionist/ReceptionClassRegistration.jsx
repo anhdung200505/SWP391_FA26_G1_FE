@@ -48,12 +48,18 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedClass, setSelectedClass] = useState(null);
   const [pickedPackage, setSelectedPackage] = useState(null);
+  const [skipPackage, setSkipPackage] = useState(false);
 
   // Gói cao nhất học viên đang có để khóa các gói rẻ hơn
   const [ownedPackageId, setOwnedPackageId] = useState(null);
   const ownedPackage = packages.find((pkg) => String(pkg.id) === String(ownedPackageId)) || null;
+  const canSkipPackage = includeClass && !!ownedPackage;
   const isPackageLocked = (pkg) => !!ownedPackage && (pkg?.fee || 0) < (ownedPackage.fee || 0);
-  const selectedPackage = pickedPackage && isPackageLocked(pickedPackage) ? ownedPackage : pickedPackage;
+  const selectedPackage = canSkipPackage && skipPackage
+    ? null
+    : pickedPackage && isPackageLocked(pickedPackage)
+      ? ownedPackage
+      : pickedPackage;
 
   // Form Thông tin cá nhân học viên bổ sung
   const [dateOfBirth, setDateOfBirth] = useState('2000-01-01');
@@ -102,9 +108,8 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
         // 3. Tải gói hội viên hiện có của member
         const memRes = await getMemberMembership(foundMember.id).catch(() => null);
-        if (memRes?.highestPackageId) {
-          setOwnedPackageId(memRes.highestPackageId);
-        }
+        setOwnedPackageId(memRes?.highestPackageId || null);
+        setSkipPackage(Boolean(memRes?.highestPackageId));
       } catch (err) {
         showErr(err.message || 'Không thể tải dữ liệu gói hội viên và lớp học.');
       } finally {
@@ -218,7 +223,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     const isBronze = pkg.name?.toLowerCase().includes('đồng') || pkg.code === 'PKG-001';
     const isSilver = pkg.name?.toLowerCase().includes('bạc') || pkg.code === 'PKG-002';
 
-    if (isBronze) return 0;
+    if (isBronze) return ownedPackage ? pkg.fee || 0 : 0;
     if (isSilver) return (pkg.fee || 0) * 0.5;
     if (pkg.upgradeDiscountPercent) {
       return (pkg.fee || 0) * ((100 - pkg.upgradeDiscountPercent) / 100);
@@ -228,7 +233,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
   // Tính tổng tiền thanh toán = Giá gói + Học phí lớp
   const calculateTotalFee = () => {
-    const packageFee = calculatePackagePrice(selectedPackage);
+    const packageFee = canSkipPackage && skipPackage ? 0 : calculatePackagePrice(selectedPackage);
     const classTuition = includeClass ? selectedClass?.tuition || 0 : 0;
     return packageFee + classTuition;
   };
@@ -281,13 +286,13 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
   // 3. Submit Tạo Đơn Giữ Chỗ
   const handleCreatePendingRegistration = async (e) => {
     e.preventDefault();
-    if (!selectedPackage?.id) return showErr('Vui lòng chọn một gói hội viên.');
+    if (!(canSkipPackage && skipPackage) && !selectedPackage?.id) return showErr('Vui lòng chọn một gói hội viên.');
     if (includeClass && !selectedClass?.id) return showErr('Vui lòng chọn lớp học huấn luyện.');
     if (includeClass && blockedClasses.has(String(selectedClass.id))) {
       return showErr(blockedClasses.get(String(selectedClass.id)));
     }
 
-    const isBronze = selectedPackage.name?.toLowerCase().includes('đồng') || selectedPackage.code === 'PKG-001';
+    const isBronze = selectedPackage?.name?.toLowerCase().includes('đồng') || selectedPackage?.code === 'PKG-001';
 
     setLoading(true);
     try {
@@ -295,7 +300,12 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         ...(includeClass ? { sportId: selectedSportId || sportsList[0]?.id || '1' } : {}),
         ...(includeClass && selectedClass?.id ? { classId: selectedClass.id } : {}),
         ...(includeClass && selectedClass?.nextSlot?.id ? { slotId: selectedClass.nextSlot.id } : {}),
-        ...(!isBronze && selectedPackage?.id ? { membershipPackageId: selectedPackage.id } : {}),
+        ...(canSkipPackage && skipPackage
+          ? { renewMembership: false }
+          : {
+              ...(canSkipPackage ? { renewMembership: true } : {}),
+              ...(selectedPackage?.id && !(!ownedPackage && isBronze) ? { membershipPackageId: selectedPackage.id } : {}),
+            }),
         fullName: foundMember.fullName,
         phone: foundMember.phone,
         ...(dateOfBirth ? { dateOfBirth } : {}),
@@ -547,18 +557,42 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   <div className="pb-2 border-b border-slate-100">
                     <h3 className="text-sm font-black text-slate-900">Gói hội viên</h3>
                     <p className="mt-1 text-xs text-slate-500">
-                      Khi đăng ký kèm lớp, Hạng Đồng là gói bắt buộc và được tặng. Hạng Bạc hoặc Hạng Vàng là nâng hạng thay cho gói tặng.
+                      {includeClass && ownedPackage
+                        ? `Học viên đang có ${ownedPackage.name}. Chọn gói nếu muốn gia hạn hoặc nâng hạng, giá vẫn được giảm. Chọn Không gia hạn nếu chỉ đăng ký lớp.`
+                        : 'Khi đăng ký kèm lớp, Hạng Đồng là gói bắt buộc và được tặng. Hạng Bạc hoặc Hạng Vàng là nâng hạng thay cho gói tặng.'}
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3">
+                    {canSkipPackage && (
+                      <div
+                        onClick={() => setSkipPackage(true)}
+                        className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 cursor-pointer ${
+                          skipPackage ? 'border-[#e31b23] bg-red-50/40 shadow-xs' : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="package_select_reception"
+                          checked={skipPackage}
+                          onChange={() => setSkipPackage(true)}
+                          className="accent-[#e31b23] w-4 h-4 cursor-pointer"
+                        />
+                        <div>
+                          <p className="text-sm font-black text-slate-900">Không gia hạn</p>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            Giữ {ownedPackage.name}. Chỉ đóng học phí lớp, không cộng thêm gói.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {ownedPackage && (
                       <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                         Học viên đang có gói {ownedPackage.name} nên chỉ gia hạn {ownedPackage.name} hoặc nâng cấp lên hạng cao hơn.
                       </p>
                     )}
                     {packages.map((pkg) => {
-                      const isSelected = selectedPackage?.id === pkg.id;
+                      const isSelected = !(canSkipPackage && skipPackage) && selectedPackage?.id === pkg.id;
                       const isLocked = isPackageLocked(pkg);
                       const discountedPrice = calculatePackagePrice(pkg);
                       const isBronze = pkg.name?.toLowerCase().includes('đồng') || pkg.code === 'PKG-001';
@@ -568,7 +602,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                         <div
                           key={pkg.id}
                           onClick={() => {
-                            if (!isLocked) setSelectedPackage(pkg);
+                            if (isLocked) return;
+                            setSkipPackage(false);
+                            setSelectedPackage(pkg);
                           }}
                           className={`p-4 rounded-xl border-2 transition-all flex items-center justify-between ${
                             isLocked
@@ -595,7 +631,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                               <p className="text-[11px] text-slate-500 font-medium">
                                 Thời hạn: {pkg.validityMonths || 1} tháng
                               </p>
-                              {includeClass && isBronze && (
+                              {includeClass && isBronze && !ownedPackage && (
                                 <p className="text-[11px] font-semibold text-emerald-700">
                                   Gói bắt buộc khi đăng ký khóa học. Tặng kèm.
                                 </p>
@@ -612,11 +648,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
                           <div className="text-right">
                             {includeClass ? (
-                              isBronze ? (
+                              isBronze && !ownedPackage ? (
                                 <span className="text-xs font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded">
                                   Bắt buộc · 0đ
                                 </span>
-                              ) : (
+                              ) : discountedPrice < (pkg.fee || 0) ? (
                                 <div>
                                   <span className="text-xs font-black text-[#e31b23]">
                                     {formatFee(discountedPrice)}
@@ -628,6 +664,8 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                                     {isSilver ? 'Giảm 50%' : `Giảm ${pkg.upgradeDiscountPercent}%`}
                                   </span>
                                 </div>
+                              ) : (
+                                <span className="text-xs font-black text-slate-900">{formatFee(pkg.fee)}</span>
                               )
                             ) : (
                               <span className="text-xs font-black text-slate-900">
@@ -781,9 +819,13 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
                 <div className="space-y-3 text-xs">
                   <div className="flex justify-between text-slate-600">
-                    <span>Gói hội viên ({selectedPackage?.name || 'Chưa chọn'}):</span>
+                    <span>
+                      Gói hội viên ({canSkipPackage && skipPackage
+                        ? `Giữ ${ownedPackage.name}`
+                        : selectedPackage?.name || 'Chưa chọn'}):
+                    </span>
                     <span className="font-bold text-slate-800">
-                      {formatFee(calculatePackagePrice(selectedPackage))}
+                      {formatFee(canSkipPackage && skipPackage ? 0 : calculatePackagePrice(selectedPackage))}
                     </span>
                   </div>
 
@@ -807,7 +849,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                 <button
                   type="button"
                   onClick={handleCreatePendingRegistration}
-                  disabled={loading || !selectedPackage || (includeClass && !selectedClass)}
+                  disabled={loading || (!(canSkipPackage && skipPackage) && !selectedPackage) || (includeClass && !selectedClass)}
                   className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
                 >
                   {loading ? 'ĐANG TẠO ĐƠN...' : 'XÁC NHẬN & TẠO MÃ VIETQR →'}
