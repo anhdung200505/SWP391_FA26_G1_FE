@@ -101,6 +101,28 @@ public class PrivateClassFlowService(
 
         var coach = await FindSportCoachAsync(request.CoachUserId, course.SportId);
 
+        if (request.FullName is not null && string.IsNullOrWhiteSpace(request.FullName))
+        {
+            throw new RegistrationException("Họ tên không được để trống.");
+        }
+
+        if (request.DateOfBirth > DateOnly.FromDateTime(DateTime.Now))
+        {
+            throw new RegistrationException("Ngày sinh không hợp lệ.");
+        }
+
+        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : AccountPhone.Require(request.Phone);
+
+        // Gói hội viên kiểm tra ngay lúc gửi để học viên biết sớm; giá chốt lúc thanh toán.
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var choice = await ClassMembershipBonus.ResolveForClassAsync(db, member.UserId, request.MembershipPackageId, request.RenewMembership, today);
+        if (choice.Package is not null)
+        {
+            await ClassMembershipBonus.EnsureNotDowngradeAsync(db, member.UserId, choice.Package, today);
+        }
+
+        var packageId = int.TryParse(request.MembershipPackageId, out var parsedPackage) ? parsedPackage : (int?)null;
+
         var created = await AppLock.RunAsync(db, $"private-member-{member.UserId}", async () =>
         {
             var plan = await BuildPlanAsync(course, member.UserId, start, schedule, coach.UserId);
@@ -132,6 +154,12 @@ public class PrivateClassFlowService(
                 CoachUserId = coach.UserId,
                 StartDate = start,
                 Note = note,
+                MembershipPackageId = packageId,
+                RenewMembership = request.RenewMembership,
+                FullName = request.FullName?.Trim(),
+                Phone = phone,
+                DateOfBirth = request.DateOfBirth,
+                Gender = request.Gender,
                 Status = "pending",
                 CreatedAt = DateTime.Now,
                 Slots = schedule
@@ -222,7 +250,16 @@ public class PrivateClassFlowService(
         var sportId = await db.Courses.Where(course => course.CourseId == request.CourseId).Select(course => course.SportId).FirstAsync();
         return await registration.SubmitRegistrationAsync(
             memberUserId,
-            new CreateClassRegistrationRequest(sportId.ToString(), classId.ToString()),
+            new CreateClassRegistrationRequest(
+                sportId.ToString(),
+                classId.ToString(),
+                null,
+                request.FullName,
+                request.Phone,
+                request.DateOfBirth,
+                request.Gender,
+                request.MembershipPackageId?.ToString(),
+                request.RenewMembership),
             allowPrivate: true);
     }
 
@@ -837,6 +874,10 @@ public class PrivateClassFlowService(
         var courses = await db.Courses.AsNoTracking().Include(course => course.Sport)
             .Where(course => courseIds.Contains(course.CourseId))
             .ToDictionaryAsync(course => course.CourseId);
+        var packageIds = items.Where(item => item.MembershipPackageId != null).Select(item => item.MembershipPackageId!.Value).Distinct().ToList();
+        var packageNames = await db.MembershipPackages.AsNoTracking()
+            .Where(package => packageIds.Contains(package.MembershipPackageId))
+            .ToDictionaryAsync(package => package.MembershipPackageId, package => package.PackageName);
         var slotIds = items.SelectMany(item => item.Slots).Select(slot => slot.TimeSlotId).Distinct().ToList();
         var timeSlots = await db.TimeSlots.AsNoTracking().Where(slot => slotIds.Contains(slot.TimeSlotId)).ToDictionaryAsync(slot => slot.TimeSlotId);
 
@@ -899,7 +940,10 @@ public class PrivateClassFlowService(
                 item.ClassId?.ToString(),
                 item.ApprovalExpiresAt,
                 room?.RoomId.ToString(),
-                room?.RoomName);
+                room?.RoomName,
+                item.MembershipPackageId?.ToString(),
+                item.MembershipPackageId is int pkg ? packageNames.GetValueOrDefault(pkg) : null,
+                item.RenewMembership);
         }).ToList();
     }
 }

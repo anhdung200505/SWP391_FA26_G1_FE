@@ -89,14 +89,14 @@ export default function WeekSlotTable({ weekStart, onWeekStart, sessions = [], r
   })();
 
   const navButton =
-    'rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 cursor-pointer';
+    'rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23]';
 
   return (
-    <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-xs sm:p-6">
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
       <div className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-black uppercase text-balance text-slate-900">Thời khóa biểu tuần</h2>
-          <p className="mt-1 text-xs font-bold text-slate-400 tabular-nums">
+          <h2 className="text-lg font-black text-balance text-slate-900">Thời khóa biểu tuần</h2>
+          <p className="mt-1 text-sm font-bold text-slate-500 tabular-nums">
             Tuần {shortDate(days[0].date)} – {shortDate(days[6].date)}/{days[6].date.getFullYear()} · {weekSessions.length} buổi
           </p>
         </div>
@@ -108,7 +108,7 @@ export default function WeekSlotTable({ weekStart, onWeekStart, sessions = [], r
             type="button"
             onClick={() => onWeekStart(mondayOf(new Date()))}
             disabled={isThisWeek}
-            className="rounded-xl bg-[#12141d] px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-[#e31b23] disabled:bg-slate-300 disabled:cursor-default cursor-pointer"
+            className="rounded-xl bg-[#12141d] px-3.5 py-2 text-sm font-bold text-white transition-colors hover:bg-[#e31b23] disabled:bg-slate-300 disabled:cursor-default cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23]"
           >
             Tuần này
           </button>
@@ -119,7 +119,7 @@ export default function WeekSlotTable({ weekStart, onWeekStart, sessions = [], r
       </div>
 
       {rows.length === 0 ? (
-        <p className="py-10 text-center text-sm text-pretty text-gray-500">Đang tải khung giờ.</p>
+        <p className="py-10 text-center text-sm text-pretty text-slate-500">Đang tải khung giờ.</p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-slate-200">
           <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-sm">
