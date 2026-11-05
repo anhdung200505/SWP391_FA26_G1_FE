@@ -68,6 +68,7 @@ export default function App() {
               {/* Trang quảng bá cho học viên chưa kích hoạt gói */}
               <Route path="/hoc-vien-kham-pha" element={<HocVienKhamPhaPage />} />
               <Route path="/dang-ky-khoa-hoc" element={<ClassRegistrationPage />} />
+              <Route path="/dang-ky-thanh-vien" element={<ClassRegistrationPage membershipOnly />} />
               <Route path="/hoc-vien/lich-su-thanh-toan" element={<PaymentHistoryPage />} />
               <Route
                 path="/hoc-vien/bai-tap-lop"

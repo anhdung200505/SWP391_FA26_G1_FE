@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useStudentShell } from '../components/workspace/studentShell';
+import { useHasClassRegistration } from '../components/workspace/studentNav';
 import {
   getClassDetail,
   getClasses,
@@ -58,11 +59,14 @@ const fieldClass =
 const primaryButtonClass =
   'rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300';
 
-export default function ClassRegistrationPage() {
+// membershipOnly: trang "Đăng ký thành viên" chỉ mua/gia hạn gói hội viên, không chọn lớp.
+export default function ClassRegistrationPage({ membershipOnly = false }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  // Học viên chưa có lớp vào trang mua thành viên: nhắc rằng đăng ký khóa học sẽ được tặng Hạng Đồng.
+  const noClassYet = useHasClassRegistration(membershipOnly) === false && membershipOnly;
 
   // Lấy ID từ URL Query Param hoặc State
   const initialClassId = searchParams.get('classId') || location.state?.classId;
@@ -90,7 +94,7 @@ export default function ClassRegistrationPage() {
 
   // mode=renew: chỉ mua gói, không chọn lớp.
   // Đăng ký khóa học: lớp bắt buộc, Hạng Đồng luôn kèm (gói bắt buộc, tặng). Bạc/Vàng là nâng hạng thay gói tặng.
-  const renewOnly = searchParams.get('mode') === 'renew';
+  const renewOnly = membershipOnly || searchParams.get('mode') === 'renew';
   const includeClass = !renewOnly;
   const includeMembership = true;
 
@@ -409,6 +413,13 @@ export default function ClassRegistrationPage() {
 
     // Nếu chỉ mua gói hội viên
     if (!includeClass) {
+      if (
+        noClassYet &&
+        isBronzePackage(selectedPackage) &&
+        !window.confirm('Hạng Đồng được tặng miễn phí khi bạn đăng ký khóa học. Bạn vẫn muốn mua riêng Hạng Đồng bây giờ?')
+      ) {
+        return;
+      }
       setSubmitting(true);
       try {
         const res = await createMembershipRenewal(user?.id, selectedPackage.id);
@@ -480,7 +491,7 @@ export default function ClassRegistrationPage() {
     setPaymentStatusData(null);
   };
 
-  const pageTitle = renewOnly ? 'Gia hạn gói hội viên' : 'Đăng ký khóa học';
+  const pageTitle = membershipOnly ? 'Đăng ký thành viên' : renewOnly ? 'Gia hạn gói hội viên' : 'Đăng ký khóa học';
   const packageSummaryName = canSkipPackage && skipPackage
     ? `Giữ ${ownedPackage.name}, không gia hạn`
     : !selectedPackage
@@ -498,7 +509,11 @@ export default function ClassRegistrationPage() {
     <>
       <h1 className="text-2xl font-black text-balance">{pageTitle}</h1>
       <p className="mt-2 max-w-2xl text-sm text-pretty text-slate-500">
-        {renewOnly
+        {membershipOnly
+          ? ownedPackage
+            ? `Bạn đang có ${ownedPackage.name}. Chọn gói để gia hạn hoặc nâng lên hạng cao hơn. Bước này không đăng ký lớp.`
+            : 'Chọn gói hội viên phù hợp để dùng các tiện ích của trung tâm. Bước này không đăng ký lớp, bạn có thể đăng ký khóa học sau.'
+          : renewOnly
           ? 'Chọn gói để gia hạn hoặc nâng hạng. Bước này không đăng ký lớp.'
           : !type
             ? 'Chọn hình thức học: lớp nhóm có sẵn hoặc học 1-1 với huấn luyện viên riêng.'
@@ -647,6 +662,19 @@ export default function ClassRegistrationPage() {
         )}
         <form onSubmit={handleSubmitRegistration} className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="space-y-4">
+            {noClassYet && (
+              <div className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-pretty text-emerald-900">
+                  <span className="font-bold">Đăng ký khóa học sẽ được tặng Hạng Đồng.</span> Bạn không cần mua riêng nếu định học một lớp. Nâng lên Hạng Bạc hoặc Vàng cùng lúc đăng ký lớp còn được giảm giá.
+                </p>
+                <Link
+                  to="/dang-ky-khoa-hoc"
+                  className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                >
+                  Xem khóa học
+                </Link>
+              </div>
+            )}
             {includeClass && (
               <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
                 <h2 className="text-lg font-black">Lớp học</h2>
@@ -723,7 +751,9 @@ export default function ClassRegistrationPage() {
             <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
               <h2 className="text-lg font-black">Gói hội viên</h2>
               <p className="mt-1 text-sm text-pretty text-slate-500">
-                {renewOnly
+                {membershipOnly && !ownedPackage
+                  ? 'Chọn một gói. Thời hạn tính từ lúc thanh toán thành công.'
+                  : renewOnly
                   ? 'Gia hạn đúng gói đang có, hoặc nâng lên hạng cao hơn.'
                   : 'Hạng Đồng là gói bắt buộc khi đăng ký khóa học và được tặng kèm lớp. Chọn Hạng Bạc hoặc Hạng Vàng nếu muốn nâng hạng thay cho gói tặng.'}
               </p>
@@ -786,6 +816,11 @@ export default function ClassRegistrationPage() {
                               {pkg.name}
                               {isLocked ? ' · thấp hơn gói đang có' : ''}
                             </span>
+                            {noClassYet && isBronzePackage(pkg) && (
+                              <span className="mt-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                                Được tặng khi đăng ký khóa học
+                              </span>
+                            )}
                             <span className="mt-0.5 block text-sm text-slate-500">Thời hạn {pkg.validityMonths || 1} tháng</span>
                             {!renewOnly && isBronzePackage(pkg) && !ownedPackage && (
                               <span className="mt-1 block text-sm font-semibold text-emerald-700">
