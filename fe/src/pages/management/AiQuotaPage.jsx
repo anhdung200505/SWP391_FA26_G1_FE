@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAiTokenUsage, updatePackageAiQuota } from '../../api/managementApi';
 import ManagementShell from '../../components/management/ManagementShell';
+import {
+  estimateTokenCost,
+  formatEstimatedVnd,
+  loadUsdVndRate,
+} from '../../components/management/aiTokenCost';
 
 const fieldClass =
   'mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2 tabular-nums';
@@ -25,9 +30,17 @@ export default function AiQuotaPage() {
   const [savingId, setSavingId] = useState('');
   const [rowErrors, setRowErrors] = useState({});
   const [notice, setNotice] = useState('');
+  const [vndPerUsd, setVndPerUsd] = useState(null);
 
   useEffect(() => {
     document.title = 'Hạn mức gợi ý tập · AnhDuy Sport';
+    let ignore = false;
+    loadUsdVndRate().then((result) => {
+      if (!ignore) setVndPerUsd(result.rate);
+    });
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -95,6 +108,7 @@ export default function AiQuotaPage() {
 
   const packages = report?.packages || [];
   const members = report?.members || [];
+  const totalCost = estimateTokenCost(report?.totalTokensUsed, vndPerUsd);
 
   return (
     <ManagementShell
@@ -154,6 +168,9 @@ export default function AiQuotaPage() {
         <>
           <p className="mt-5 text-sm font-bold text-gray-700 tabular-nums">
             Tổng token đã dùng: {formatCount(report.totalTokensUsed)}
+            <span className="mt-1 block font-semibold text-slate-900">
+              Chi phí ước tính: {formatEstimatedVnd(totalCost)}
+            </span>
           </p>
 
           <section className="mt-4">
@@ -246,7 +263,7 @@ export default function AiQuotaPage() {
                       <th className="px-4 py-3">Học viên</th>
                       <th className="px-4 py-3">Gói</th>
                       <th className="px-4 py-3">Lượt tạo lại</th>
-                      <th className="px-4 py-3">Token kỳ này</th>
+                      <th className="px-4 py-3">Token kỳ hội viên</th>
                       <th className="px-4 py-3">Tổng token</th>
                     </tr>
                   </thead>
