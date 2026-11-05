@@ -9,21 +9,18 @@ const enrolledItems = [
   { id: 'register', label: 'Đăng ký khóa học', to: '/dang-ky-khoa-hoc' },
   { id: 'schedule', label: 'Lịch học', to: '/hoc-vien-dashboard#schedule' },
   { id: 'support', label: 'Đơn hỗ trợ', to: '/hoc-vien-dashboard#support' },
-  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien-dashboard#history' },
+  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien/lich-su-thanh-toan', end: true },
 ];
 
 const openItems = [
   { id: 'overview', label: 'Tổng quan', to: '/hoc-vien-dashboard', end: true },
   { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
   { id: 'register', label: 'Đăng ký khóa học', to: '/dang-ky-khoa-hoc' },
-  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien-dashboard#history' },
+  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien/lich-su-thanh-toan', end: true },
 ];
 
-const pendingItems = [
-  { id: 'overview', label: 'Tổng quan', to: '/hoc-vien-dashboard', end: true },
-  { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
-  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien-dashboard#history' },
-];
+// Chưa biết học viên có lớp hay không: dùng menu cơ bản để không nháy thêm/bớt mục khi dữ liệu về.
+const pendingItems = openItems;
 
 // Bài tập lớp và Gợi ý tập gộp thành nhóm "Học tập". Chỉ còn một mục thì giữ mục đơn.
 const STUDY_IDS = ['course-plan', 'personal-ai'];
