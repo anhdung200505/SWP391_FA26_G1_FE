@@ -31,10 +31,14 @@ var connectionString = builder.Configuration["connectionString"]
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddSingleton<AppLinks>();
+builder.Services.AddSingleton<EmailQueue>();
 builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddHostedService<EmailDeliveryService>();
 builder.Services.AddHostedService<PendingRegistrationCleanupService>();
 // Mỗi phút đối chiếu đơn gói hội viên với payOS (webhook không tới được máy local).
 builder.Services.AddHostedService<MembershipPaymentSyncService>();
+builder.Services.AddHostedService<MembershipExpiryNoticeService>();
 builder.Services.AddScoped<CurrentActor>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailNotificationService>();
@@ -160,6 +164,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     await CenterCheckInSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await PrivateClassSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await SessionChangeSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await MembershipNoticeSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await PaymentBonusSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await startup.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 

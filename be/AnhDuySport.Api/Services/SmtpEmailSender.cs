@@ -6,7 +6,7 @@ namespace AnhDuySport.Api.Services;
 
 public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment environment, ILogger<SmtpEmailSender> logger)
 {
-    public async Task SendAsync(string to, string subject, string body)
+    public async Task SendAsync(string to, string subject, string body, string? linkUrl = null, string? linkLabel = null)
     {
         var host = configuration["Email:Host"];
         var userName = configuration["Email:User"];
@@ -24,7 +24,7 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
                 throw new InvalidOperationException("Chưa cấu hình máy chủ email.");
             }
 
-            var path = await SaveToMailboxAsync(to, subject, body);
+            var path = await SaveToMailboxAsync(to, subject, TextWithLink(body, linkUrl, linkLabel));
             logger.LogWarning("SMTP chưa có tài khoản gửi. Thư được lưu tại {Path}", path);
             return;
         }
@@ -34,7 +34,7 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
         message.From.Add(new MailboxAddress(string.IsNullOrWhiteSpace(fromName) ? DefaultFromName : fromName, from));
         message.To.Add(MailboxAddress.Parse(to));
         message.Subject = subject;
-        message.Body = BuildBody(subject, body);
+        message.Body = BuildBody(subject, body, linkUrl, linkLabel);
 
         using var client = new SmtpClient();
         var port = int.TryParse(configuration["Email:Port"], out var parsedPort) ? parsedPort : 587;
@@ -53,17 +53,92 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
                 throw new InvalidOperationException(SmtpFailureMessage(exception), exception);
             }
 
-            var path = await SaveToMailboxAsync(to, subject, body);
+            var path = await SaveToMailboxAsync(to, subject, TextWithLink(body, linkUrl, linkLabel));
             logger.LogWarning(exception, "SMTP không gửi được. Thư được lưu tại {Path}", path);
+        }
+    }
+
+    // Một lần đăng nhập SMTP cho cả lô, để đổi lịch không mở lại kết nối theo từng học viên.
+    public async Task SendManyAsync(IReadOnlyList<QueuedEmail> messages, CancellationToken cancellationToken = default)
+    {
+        if (messages.Count == 0)
+        {
+            return;
+        }
+
+        var host = configuration["Email:Host"];
+        var userName = configuration["Email:User"];
+        var password = configuration["Email:Password"];
+        var from = configuration["Email:From"];
+        if (string.IsNullOrWhiteSpace(from))
+        {
+            from = userName;
+        }
+
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(from))
+        {
+            if (!environment.IsDevelopment())
+            {
+                throw new InvalidOperationException("Chưa cấu hình máy chủ email.");
+            }
+
+            foreach (var item in messages)
+            {
+                var path = await SaveToMailboxAsync(item.To, item.Subject, TextWithLink(item.Body, item.LinkUrl, item.LinkLabel));
+                logger.LogWarning("SMTP chưa có tài khoản gửi. Thư được lưu tại {Path}", path);
+            }
+
+            return;
+        }
+
+        var fromName = configuration["Email:FromName"];
+        var port = int.TryParse(configuration["Email:Port"], out var parsedPort) ? parsedPort : 587;
+        using var client = new SmtpClient();
+        try
+        {
+            await client.ConnectAsync(host, port, SecureSocketOptions.StartTls, cancellationToken);
+            await client.AuthenticateAsync(userName, password.Replace(" ", ""), cancellationToken);
+            foreach (var item in messages)
+            {
+                var message = new MimeMessage();
+                message.From.Add(new MailboxAddress(string.IsNullOrWhiteSpace(fromName) ? DefaultFromName : fromName, from));
+                message.To.Add(MailboxAddress.Parse(item.To));
+                message.Subject = item.Subject;
+                message.Body = BuildBody(item.Subject, item.Body, item.LinkUrl, item.LinkLabel);
+                try
+                {
+                    await client.SendAsync(message, cancellationToken);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogWarning(exception, "SMTP không gửi được thư tới {Recipient}", item.To);
+                }
+            }
+
+            await client.DisconnectAsync(true, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "SMTP không kết nối được để gửi {Count} thư.", messages.Count);
+            if (!environment.IsDevelopment())
+            {
+                return;
+            }
+
+            foreach (var item in messages)
+            {
+                await SaveToMailboxAsync(item.To, item.Subject, TextWithLink(item.Body, item.LinkUrl, item.LinkLabel));
+            }
         }
     }
 
     private const string DefaultFromName = "AnhDuySport";
 
     // Thư HTML có logo nhúng (cid), kèm bản chữ thuần cho ứng dụng mail không hiện HTML.
-    private MimeEntity BuildBody(string subject, string body)
+    // linkUrl là nút bấm trong thư (học viên mở thẳng lịch học hoặc trang gia hạn).
+    private MimeEntity BuildBody(string subject, string body, string? linkUrl, string? linkLabel)
     {
-        var builder = new BodyBuilder { TextBody = body };
+        var builder = new BodyBuilder { TextBody = TextWithLink(body, linkUrl, linkLabel) };
         var logoPath = Path.Combine(environment.ContentRootPath, "Assets", "email-logo.png");
         if (!File.Exists(logoPath))
         {
@@ -81,17 +156,33 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
             logoTag = $"<img src=\"cid:{logo.ContentId}\" width=\"64\" height=\"64\" alt=\"AnhDuy Sport\" style=\"display:block;border:0;\">";
         }
 
-        builder.HtmlBody = HtmlTemplate(logoTag, subject, body);
+        builder.HtmlBody = HtmlTemplate(logoTag, subject, body, linkUrl, linkLabel);
         return builder.ToMessageBody();
     }
 
-    private static string HtmlTemplate(string logoTag, string subject, string body)
+    private static string TextWithLink(string body, string? linkUrl, string? linkLabel)
+    {
+        if (!IsWebLink(linkUrl))
+        {
+            return body;
+        }
+
+        var label = string.IsNullOrWhiteSpace(linkLabel) ? "Xem chi tiết" : linkLabel.Trim();
+        return $"{body}{Environment.NewLine}{Environment.NewLine}{label}: {linkUrl}";
+    }
+
+    private static bool IsWebLink(string? linkUrl) =>
+        !string.IsNullOrWhiteSpace(linkUrl)
+        && (linkUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || linkUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase));
+
+    private static string HtmlTemplate(string logoTag, string subject, string body, string? linkUrl, string? linkLabel)
     {
         var encoded = System.Net.WebUtility.HtmlEncode(body.Replace("\r\n", "\n"));
         // Mã OTP 6 số tô nổi để học viên dễ đọc.
         encoded = System.Text.RegularExpressions.Regex.Replace(encoded, @"\b\d{6}\b",
             match => $"<span style=\"display:inline-block;padding:6px 14px;margin:4px 0;border-radius:10px;background:#fff1f1;border:1px solid #f5c2c4;color:#e31b23;font-size:24px;font-weight:800;letter-spacing:6px;\">{match.Value}</span>");
-        var content = encoded.Replace("\n", "<br>");
+        var content = encoded.Replace("\n", "<br>") + LinkBlock(linkUrl, linkLabel);
         var title = System.Net.WebUtility.HtmlEncode(subject.Replace("[AnhDuy Sport]", "").Trim());
 
         return $"""
@@ -120,6 +211,23 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
               </table>
             </body>
             </html>
+            """;
+    }
+
+    private static string LinkBlock(string? linkUrl, string? linkLabel)
+    {
+        if (!IsWebLink(linkUrl))
+        {
+            return "";
+        }
+
+        var href = System.Net.WebUtility.HtmlEncode(linkUrl);
+        var label = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(linkLabel) ? "Xem chi tiết" : linkLabel.Trim());
+        return $"""
+            <p style="margin:20px 0 0;">
+              <a href="{href}" style="display:inline-block;background:#e31b23;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px;">{label}</a>
+            </p>
+            <p style="margin:10px 0 0;font-size:12px;line-height:1.6;color:#6b7280;">Nếu nút không bấm được, mở đường dẫn: <a href="{href}" style="color:#e31b23;">{href}</a></p>
             """;
     }
 
