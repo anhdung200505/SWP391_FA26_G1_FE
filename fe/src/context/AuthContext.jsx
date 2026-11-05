@@ -1,9 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
   confirmRegisterOtp as confirmRegisterOtpRequest,
+  confirmGmailLogin as confirmGmailLoginRequest,
+  getGoogleClientId,
   loginMember as loginMemberRequest,
   loginStaff as loginStaffRequest,
+  loginWithGoogle as loginWithGoogleRequest,
   registerGuest as registerRequest,
+  sendGmailOtp as sendGmailOtpRequest,
   sendRegisterOtp as sendRegisterOtpRequest,
   setUnauthorizedHandler,
 } from '../api/managementApi';
@@ -49,6 +53,19 @@ export function AuthProvider({ children }) {
   // Đăng nhập riêng cho Quản trị / Lễ tân
   const loginAsStaff = async (email, password) => {
     const result = await loginStaffRequest(email, password);
+    return store(result);
+  };
+
+  const loginWithGoogle = async (accessToken, portal = 'member', linkExisting = false) => {
+    const result = await loginWithGoogleRequest(accessToken, portal, linkExisting);
+    if (result?.requiresChoice) return result;
+    return store(result);
+  };
+
+  const sendGmailOtp = (email, portal = 'member') => sendGmailOtpRequest(email, portal);
+
+  const confirmGmailLogin = async (email, code, portal = 'member') => {
+    const result = await confirmGmailLoginRequest(email, code, portal);
     return store(result);
   };
 
@@ -106,6 +123,10 @@ export function AuthProvider({ children }) {
         login,
         loginAsMember,
         loginAsStaff,
+        loginWithGoogle,
+        getGoogleClientId,
+        sendGmailOtp,
+        confirmGmailLogin,
         register,
         sendOtp,
         confirmOtp,
