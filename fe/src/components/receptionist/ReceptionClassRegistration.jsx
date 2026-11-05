@@ -369,12 +369,8 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
       {/* HEADER BƯỚC THAO TÁC */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
         <div>
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#e31b23] bg-red-50 px-3 py-1 rounded-full">
-            ĐĂNG KÝ TẠI QUẦY LỄ TÂN
-          </span>
-          <h2 className="text-xl font-black text-slate-900 uppercase mt-1">
-            Đăng Ký Lớp Cho Học Viên & Guest
-          </h2>
+          <h2 className="text-lg font-black text-balance text-slate-900">Đăng ký lớp tại quầy</h2>
+          <p className="mt-1 text-sm text-slate-500">Đăng ký lớp cho học viên hoặc khách mới.</p>
         </div>
 
         {/* TIẾN TRÌNH 4 BƯỚC */}
@@ -384,11 +380,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
           </span>
           <span>→</span>
           <span className={`px-3 py-1 rounded-full ${step === 2 ? 'bg-[#e31b23] text-white' : 'bg-slate-100 text-slate-500'}`}>
-            2. Chọn Lớp
+            2. Chọn lớp
           </span>
           <span>→</span>
           <span className={`px-3 py-1 rounded-full ${step === 3 ? 'bg-[#e31b23] text-white' : 'bg-slate-100 text-slate-500'}`}>
-            3. Thanh Toán
+            3. Thanh toán
           </span>
           <span>→</span>
           <span className={`px-3 py-1 rounded-full ${step === 4 ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
@@ -399,13 +395,13 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
       {/* THÔNG BÁO LỖI / THÀNH CÔNG */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-bold animate-fadeIn">
-          ⚠️ {error}
+        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-sm font-bold">
+          {error}
         </div>
       )}
       {success && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl text-xs font-bold animate-fadeIn">
-          ✓ {success}
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl text-xs font-bold">
+          {success}
         </div>
       )}
 
@@ -427,9 +423,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
               <button
                 type="submit"
                 disabled={loading}
-                className="bg-slate-900 hover:bg-[#e31b23] text-white font-black text-xs uppercase px-6 py-3 rounded-2xl transition-all cursor-pointer disabled:opacity-50"
+                className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-sm px-6 py-3 rounded-2xl transition-all cursor-pointer disabled:opacity-50"
               >
-                {loading ? 'ĐANG TÌM...' : '🔍 TRA CỨU'}
+                {loading ? 'Đang tìm...' : 'Tra cứu'}
               </button>
             </div>
           </form>
@@ -437,7 +433,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
           {foundMember && (
             <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase bg-emerald-200 text-emerald-800 px-2.5 py-0.5 rounded">
+                <span className="text-xs font-black bg-emerald-200 text-emerald-800 px-2.5 py-0.5 rounded">
                   Đã tìm thấy thông tin
                 </span>
                 <span className="text-xs text-slate-500 font-mono">ID: {foundMember.id}</span>
@@ -450,9 +446,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
               </div>
               <button
                 onClick={() => setStep(2)}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase py-3 rounded-xl cursor-pointer"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-3 rounded-xl cursor-pointer"
               >
-                XÁC NHẬN CHỌN HỌC VIÊN NÀY & TIẾP TỤC →
+                Xác nhận chọn học viên này và tiếp tục →
               </button>
             </div>
           )}
@@ -460,10 +456,10 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
           {isRegisteringGuest && !foundMember && (
             <form onSubmit={handleCreateGuest} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
               <div className="border-b pb-2">
-                <h3 className="text-xs font-black text-slate-900 uppercase">
-                  ➕ Đăng ký nhanh tài khoản cho Khách Mới (Guest)
+                <h3 className="text-sm font-black text-slate-900">
+                  Đăng ký nhanh tài khoản cho khách mới
                 </h3>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-xs text-slate-500">
                   Không tìm thấy dữ liệu học viên. Tạo nhanh tài khoản để ghi danh.
                 </p>
               </div>
@@ -516,9 +512,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase py-3 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-sm py-3 rounded-xl transition-all cursor-pointer disabled:opacity-50"
               >
-                {loading ? 'ĐANG ĐĂNG KÝ...' : 'TẠO TÀI KHOẢN & TIẾP TỤC ĐĂNG KÝ LỚP'}
+                {loading ? 'Đang đăng ký...' : 'Tạo tài khoản và tiếp tục đăng ký lớp'}
               </button>
             </form>
           )}
@@ -531,7 +527,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
           {/* MỤC HỌC VIÊN ĐƯỢC CHỌN */}
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center text-xs">
             <div>
-              <span className="text-[10px] text-slate-400 uppercase font-bold block">HỌC VIÊN ĐƯỢC CHỌN:</span>
+              <span className="text-xs text-slate-500 font-bold block">Học viên được chọn</span>
               <strong className="text-sm font-black text-slate-900">{foundMember?.fullName}</strong> ({foundMember?.phone} | {foundMember?.email})
             </div>
             <button
@@ -580,14 +576,14 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                         />
                         <div>
                           <p className="text-sm font-black text-slate-900">Không gia hạn</p>
-                          <p className="text-[11px] text-slate-500 font-medium">
+                          <p className="text-xs text-slate-500 font-medium">
                             Giữ {ownedPackage.name}. Chỉ đóng học phí lớp, không cộng thêm gói.
                           </p>
                         </div>
                       </div>
                     )}
                     {ownedPackage && (
-                      <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                         Học viên đang có gói {ownedPackage.name} nên chỉ gia hạn {ownedPackage.name} hoặc nâng cấp lên hạng cao hơn.
                       </p>
                     )}
@@ -626,18 +622,18 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                             <div>
                               <p className="text-sm font-black text-slate-900">
                                 {pkg.name}
-                                {isLocked && <span className="ml-2 text-[10px] font-bold text-slate-500">🔒 Thấp hơn gói đang có</span>}
+                                {isLocked && <span className="ml-2 text-xs font-bold text-slate-500">Thấp hơn gói đang có</span>}
                               </p>
-                              <p className="text-[11px] text-slate-500 font-medium">
+                              <p className="text-xs text-slate-500 font-medium">
                                 Thời hạn: {pkg.validityMonths || 1} tháng
                               </p>
                               {includeClass && isBronze && !ownedPackage && (
-                                <p className="text-[11px] font-semibold text-emerald-700">
+                                <p className="text-xs font-semibold text-emerald-700">
                                   Gói bắt buộc khi đăng ký khóa học. Tặng kèm.
                                 </p>
                               )}
                               {Array.isArray(pkg.benefits) && pkg.benefits.length > 0 && (
-                                <ul className="mt-1 list-disc pl-4 text-[11px] text-slate-500">
+                                <ul className="mt-1 list-disc pl-4 text-xs text-slate-500">
                                   {pkg.benefits.map((benefit) => (
                                     <li key={benefit}>{benefit}</li>
                                   ))}
@@ -657,7 +653,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                                   <span className="text-xs font-black text-[#e31b23]">
                                     {formatFee(discountedPrice)}
                                   </span>
-                                  <span className="text-[10px] text-slate-400 line-through block font-semibold">
+                                  <span className="text-xs text-slate-500 line-through block font-semibold">
                                     {formatFee(pkg.fee)}
                                   </span>
                                   <span className="text-[9px] font-bold text-emerald-600 block">
@@ -679,10 +675,10 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   </div>
                 </div>
 
-                {/* 2. CHỌN LỚP HỌC (THÊM NÚT TICK KÈM LỚP) */}
+                {/* 2. Chọn lớp học (THÊM NÚT TICK KÈM LỚP) */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="text-sm font-black text-slate-900 uppercase">2. CHỌN LỚP HỌC</h3>
+                    <h3 className="text-base font-black text-slate-900">2. Chọn lớp học</h3>
 
                     {/* Checkbox Đăng ký kèm lớp */}
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-black text-slate-700 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shrink-0">
@@ -697,10 +693,10 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   </div>
 
                   {includeClass ? (
-                    <div className="space-y-4 animate-fadeIn">
+                    <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
+                          <label className="block text-sm font-bold text-slate-700 mb-1">
                             Chọn bộ môn *
                           </label>
                           <select
@@ -717,7 +713,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
+                          <label className="block text-sm font-bold text-slate-700 mb-1">
                             Chọn lớp học *
                           </label>
                           <select
@@ -753,15 +749,15 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                       {selectedClass ? (
                         <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
                           <div className="flex justify-between">
-                            <span className="text-slate-400 font-bold">Lớp đang chọn:</span>
+                            <span className="text-slate-500 font-bold">Lớp đang chọn:</span>
                             <span className="font-bold text-slate-900 text-sm">{selectedClass.name}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-400 font-bold">HLV Phụ trách:</span>
+                            <span className="text-slate-500 font-bold">HLV Phụ trách:</span>
                             <span className="font-semibold text-slate-700">{selectedClass.coachName || 'Đang cập nhật'}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-400 font-bold">Thời gian học:</span>
+                            <span className="text-slate-500 font-bold">Thời gian học:</span>
                             <span className="font-semibold text-slate-700">
                               {selectedClass.startDate} ~ {selectedClass.endDate}
                             </span>
@@ -772,11 +768,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-400 italic">Hiện bộ môn này chưa có lớp nào mở đăng ký.</p>
+                        <p className="text-xs text-slate-500 italic">Hiện bộ môn này chưa có lớp nào mở đăng ký.</p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-400 italic">
+                    <p className="text-xs text-slate-500 italic">
                       Chưa chọn đăng ký kèm lớp học (chỉ bán Gói hội viên).
                     </p>
                   )}
@@ -784,10 +780,10 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
                 {/* 3. BỔ SUNG THÔNG TIN HỌC VIÊN */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 uppercase">3. THÔNG TIN BỔ SUNG HỌC VIÊN</h3>
+                  <h3 className="text-base font-black text-slate-900">3. Thông tin bổ sung học viên</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
-                      <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">Ngày sinh</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Ngày sinh</label>
                       <input
                         type="date"
                         value={dateOfBirth}
@@ -796,7 +792,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">Giới tính</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Giới tính</label>
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value)}
@@ -813,7 +809,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
 
               {/* CỘT PHẢI: TÓM TẮT CHI PHÍ VÀ NÚT TẠO ĐƠN */}
               <div className="lg:col-span-5 bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-5 sticky top-6">
-                <h3 className="text-sm font-black text-slate-900 uppercase pb-3 border-b border-slate-100">
+                <h3 className="text-base font-black text-slate-900 pb-3 border-b border-slate-100">
                   Tóm tắt chi phí tại quầy
                 </h3>
 
@@ -839,7 +835,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   )}
 
                   <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
-                    <span className="text-sm font-black text-slate-900 uppercase">TỔNG THANH TOÁN:</span>
+                    <span className="text-base font-black text-slate-900">Tổng thanh toán</span>
                     <span className="text-2xl font-black text-[#e31b23]">
                       {formatFee(calculateTotalFee())}
                     </span>
@@ -850,12 +846,12 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   type="button"
                   onClick={handleCreatePendingRegistration}
                   disabled={loading || (!(canSkipPackage && skipPackage) && !selectedPackage) || (includeClass && !selectedClass)}
-                  className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider py-4 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-sm py-4 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {loading ? 'ĐANG TẠO ĐƠN...' : 'XÁC NHẬN & TẠO MÃ VIETQR →'}
+                  {loading ? 'Đang tạo đơn...' : 'Xác nhận và tạo mã VietQR →'}
                 </button>
 
-                <p className="text-[10px] text-slate-400 text-center font-medium">
+                <p className="text-xs text-slate-500 text-center font-medium">
                   Học viên quét mã VietQR. Trang tự cập nhật khi thanh toán xong.
                 </p>
               </div>
@@ -869,9 +865,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
         <div className="space-y-6">
           <div className="text-center">
             <span className="inline-flex items-center justify-center w-14 h-14 rounded-full text-2xl font-black mb-3 border bg-amber-50 text-amber-600 border-amber-200">
-              ⏳
+              <svg className="size-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
             </span>
-            <h3 className="text-xl font-black text-slate-900 uppercase">
+            <h3 className="text-lg font-black text-slate-900">
               {pendingOrder.isExisting ? 'Đơn đăng ký đã tồn tại' : 'Tạo đơn đăng ký thành công'}
             </h3>
             <p className="text-xs text-slate-500 mt-1">
@@ -884,31 +880,31 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-slate-50 p-6 rounded-2xl border border-slate-200">
             <div className="space-y-3 border-b md:border-b-0 md:border-r border-slate-200 pb-6 md:pb-0 md:pr-6 text-xs">
               <div>
-                <span className="text-slate-400 font-bold uppercase block">Mã hóa đơn</span>
+                <span className="text-slate-500 font-bold uppercase block">Mã hóa đơn</span>
                 <span className="text-base font-mono font-black text-[#e31b23]">
                   #{pendingOrder.invoiceCode || pendingOrder.paymentId}
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold uppercase block">Học viên</span>
+                <span className="text-slate-500 font-bold uppercase block">Học viên</span>
                 <span className="text-sm font-bold text-slate-800">{foundMember?.fullName}</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold uppercase block">Gói hội viên</span>
+                <span className="text-slate-500 font-bold uppercase block">Gói hội viên</span>
                 <span className="text-sm font-bold text-slate-800">
                   {pendingOrder.membershipPackage?.name || selectedPackage?.name || 'Hạng Đồng (tặng kèm lớp)'}
                 </span>
               </div>
               {(pendingOrder.className || (includeClass && selectedClass?.name)) && (
                 <div>
-                  <span className="text-slate-400 font-bold uppercase block">Khóa học đăng ký kèm</span>
+                  <span className="text-slate-500 font-bold uppercase block">Khóa học đăng ký kèm</span>
                   <span className="text-xs font-semibold text-slate-700">
                     {pendingOrder.className || selectedClass?.name}
                   </span>
                 </div>
               )}
               <div>
-                <span className="text-slate-400 font-bold uppercase block">Số tiền cần thanh toán</span>
+                <span className="text-slate-500 font-bold uppercase block">Số tiền cần thanh toán</span>
                 <span className="text-xl font-black text-emerald-600">{formatFee(pendingOrder.amount)}</span>
               </div>
             </div>
@@ -919,11 +915,11 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200 mb-2">
                     <img src={qrImage} alt="Mã VietQR payOS" className="w-52 h-52 object-contain" />
                   </div>
-                  <p className="text-[11px] font-bold text-slate-600">Quét mã VietQR bằng app ngân hàng</p>
+                  <p className="text-xs font-bold text-slate-600">Quét mã VietQR bằng app ngân hàng</p>
                   <p className={`text-xs font-black mt-1 ${secondsLeft <= 30 ? 'text-[#e31b23]' : 'text-amber-600'}`}>
                     Mã hết hạn sau {formatCountdown(secondsLeft)}
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-1">Trang tự cập nhật khi thanh toán xong.</p>
+                  <p className="text-xs text-slate-500 mt-1">Trang tự cập nhật khi thanh toán xong.</p>
                 </>
               ) : (
                 <p className="text-xs font-semibold text-slate-500 max-w-xs">
@@ -935,7 +931,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                   href={pendingOrder.paymentUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-3 text-[11px] font-bold text-[#e31b23] hover:underline"
+                  className="mt-3 text-xs font-bold text-[#e31b23] hover:underline"
                 >
                   Mở trang thanh toán payOS
                 </a>
@@ -949,7 +945,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                 type="button"
                 onClick={handleConfirmPaymentAtDesk}
                 disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase px-6 py-3 rounded-xl cursor-pointer disabled:opacity-50"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-6 py-3 rounded-xl cursor-pointer disabled:opacity-50"
               >
                 {loading ? 'Đang xác nhận...' : 'Đã thu tiền mặt'}
               </button>
@@ -957,7 +953,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
             <button
               type="button"
               onClick={backToClassStep}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs uppercase px-6 py-3 rounded-xl cursor-pointer"
+              className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-sm px-6 py-3 rounded-xl cursor-pointer"
             >
               Quay lại chọn lớp
             </button>
@@ -969,9 +965,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
       {step === 4 && (
         <div className="text-center py-8 space-y-4">
           <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto font-black">
-            ✓
+            <svg className="size-7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>
           </div>
-          <h3 className="text-lg font-black text-slate-900 uppercase">Ghi Danh Học Viên Thành Công!</h3>
+          <h3 className="text-lg font-black text-slate-900">Ghi danh học viên thành công</h3>
           <p className="text-xs text-slate-600 max-w-md mx-auto">
             Học viên <strong>{foundMember?.fullName}</strong> đã được ghi danh lớp thành công và kích hoạt gói hội viên.
           </p>
@@ -980,7 +976,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
             <button
               type="button"
               onClick={handleReset}
-              className="bg-[#e31b23] text-white font-black text-xs uppercase px-6 py-3 rounded-xl shadow cursor-pointer"
+              className="bg-[#e31b23] text-white font-bold text-sm px-6 py-3 rounded-xl shadow cursor-pointer"
             >
               Đăng ký học viên tiếp theo
             </button>
@@ -988,7 +984,7 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
               <button
                 type="button"
                 onClick={onRegistrationSuccess}
-                className="bg-slate-900 text-white font-black text-xs uppercase px-6 py-3 rounded-xl cursor-pointer"
+                className="bg-slate-900 text-white font-bold text-sm px-6 py-3 rounded-xl cursor-pointer"
               >
                 Xem học viên đã ghi danh
               </button>

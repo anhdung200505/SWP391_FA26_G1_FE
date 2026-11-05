@@ -148,7 +148,7 @@ export default function CourseAiPanel({ classId, onOpenHistory }) {
           rows={4}
           value={brief}
           onChange={(event) => setBrief(event.target.value)}
-          placeholder="Trình độ lớp, mục tiêu cuối khóa, nội dung muốn dạy, những gì cần tránh."
+          placeholder="Mục tiêu cuối khóa, nội dung muốn dạy, những gì cần tránh."
           className={fieldClass}
         />
         <div className="mt-4 flex flex-wrap gap-2">

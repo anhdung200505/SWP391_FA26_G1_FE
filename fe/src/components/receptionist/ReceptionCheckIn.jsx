@@ -120,9 +120,9 @@ export default function ReceptionCheckIn() {
 
   return (
     <section className="mt-6 space-y-6">
-      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
         <h2 className="text-xl font-black text-balance">Check-in trung tâm</h2>
-        <p className="mt-2 text-sm text-pretty text-gray-500">
+        <p className="mt-2 text-sm text-pretty text-slate-500">
           Nhập mã học viên, email hoặc số điện thoại. Chỉ cần gói hội viên còn hạn, không cần có lớp. Học viên có thể vào nhiều lần trong ngày.
         </p>
         <form onSubmit={submit} className="mt-5 flex gap-2">
@@ -135,7 +135,7 @@ export default function ReceptionCheckIn() {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             placeholder="Mã học viên, email hoặc số điện thoại"
-            className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#e31b23]"
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-[#e31b23]"
           />
           <button
             type="submit"
@@ -155,22 +155,22 @@ export default function ReceptionCheckIn() {
             <p className="font-black">{result.message}</p>
             <dl className="mt-3 grid gap-2 text-slate-700 sm:grid-cols-2">
               <div>
-                <dt className="text-xs font-bold uppercase text-slate-400">Học viên</dt>
+                <dt className="text-xs font-bold uppercase text-slate-500">Học viên</dt>
                 <dd className="font-semibold">{result.checkIn.fullName}</dd>
               </div>
               <div>
-                <dt className="text-xs font-bold uppercase text-slate-400">Điện thoại</dt>
+                <dt className="text-xs font-bold uppercase text-slate-500">Điện thoại</dt>
                 <dd className="font-semibold">{result.checkIn.phone || '—'}</dd>
               </div>
               <div>
-                <dt className="text-xs font-bold uppercase text-slate-400">Gói hội viên</dt>
+                <dt className="text-xs font-bold uppercase text-slate-500">Gói hội viên</dt>
                 <dd className="font-semibold">
                   {planTitle(result.checkIn.membershipName)}
                   {result.checkIn.membershipEndDate && ` · hết hạn ${formatDay(result.checkIn.membershipEndDate)}`}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-bold uppercase text-slate-400">Giờ vào / ra</dt>
+                <dt className="text-xs font-bold uppercase text-slate-500">Giờ vào / ra</dt>
                 <dd className="font-semibold">
                   {formatTime(result.checkIn.checkInAt)} → {result.checkIn.checkOutAt ? formatTime(result.checkIn.checkOutAt) : 'chưa ra'}
                 </dd>
@@ -180,7 +180,7 @@ export default function ReceptionCheckIn() {
               <button
                 type="button"
                 onClick={() => checkOut(result.checkIn.id)}
-                className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-[#e31b23] cursor-pointer"
+                className="mt-4 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-[#e31b23] cursor-pointer"
               >
                 Check-out học viên này
               </button>
@@ -189,11 +189,11 @@ export default function ReceptionCheckIn() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h3 className="text-lg font-black">Danh sách check-in</h3>
-            <p className="mt-1 text-xs text-gray-500">Lượt hôm trước quên check-out hiện "Không có giờ ra" (tự đóng lúc 00:00).</p>
+            <p className="mt-1 text-xs text-slate-500">Lượt hôm trước quên check-out hiện "Không có giờ ra" (tự đóng lúc 00:00).</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -204,14 +204,14 @@ export default function ReceptionCheckIn() {
                 setLoadingList(true);
                 setDate(event.target.value || today);
               }}
-              className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold outline-none focus:border-[#e31b23]"
+              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-[#e31b23]"
             />
             <input
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Tìm tên, mã, email, SĐT"
-              className="w-48 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-xs outline-none focus:border-[#e31b23]"
+              className="w-48 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#e31b23]"
             />
             <button
               type="button"
@@ -219,7 +219,7 @@ export default function ReceptionCheckIn() {
                 setLoadingList(true);
                 load();
               }}
-              className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-[#e31b23] cursor-pointer"
+              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-[#e31b23] cursor-pointer"
             >
               Làm mới
             </button>
@@ -234,8 +234,8 @@ export default function ReceptionCheckIn() {
               ['Đang ở trong', summary.inside],
               ['Đã hoàn tác', summary.voided],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <p className="text-[10px] font-extrabold uppercase text-gray-400">{label}</p>
+              <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase text-slate-500">{label}</p>
                 <p className="mt-1 text-2xl font-black text-slate-900">{value}</p>
               </div>
             ))}
@@ -252,7 +252,7 @@ export default function ReceptionCheckIn() {
                 setStatusFilter(item.id);
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-bold cursor-pointer ${
-                statusFilter === item.id ? 'bg-[#12141d] text-white' : 'bg-[#f4f5f7] text-gray-600'
+                statusFilter === item.id ? 'bg-[#12141d] text-white' : 'bg-[#f4f5f7] text-slate-600'
               }`}
             >
               {item.label}
@@ -263,14 +263,14 @@ export default function ReceptionCheckIn() {
         {listError && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{listError}</p>}
 
         {loadingList ? (
-          <p className="mt-6 text-center text-sm text-gray-400">Đang tải danh sách...</p>
+          <p className="mt-6 text-center text-sm text-slate-500">Đang tải danh sách...</p>
         ) : !list || list.items.length === 0 ? (
-          <p className="mt-6 text-center text-sm text-gray-400">Không có lượt check-in nào.</p>
+          <p className="mt-6 text-center text-sm text-slate-500">Không có lượt check-in nào.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-xs">
               <thead>
-                <tr className="border-b border-gray-200 text-[10px] font-extrabold uppercase text-gray-400">
+                <tr className="border-b border-slate-200 text-xs font-bold uppercase text-slate-500">
                   <th className="py-2 pr-3">Học viên</th>
                   <th className="py-2 pr-3">Gói hội viên</th>
                   <th className="py-2 pr-3">Giờ vào</th>
@@ -280,7 +280,7 @@ export default function ReceptionCheckIn() {
                   <th className="py-2 text-right" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 font-medium text-slate-700">
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                 {list.items.map((item) => {
                   const status = STATUS[item.status] || STATUS.left;
                   const canVoid = item.status !== 'voided' && (isAdmin || date === today);
@@ -288,19 +288,19 @@ export default function ReceptionCheckIn() {
                     <tr key={item.id}>
                       <td className="py-3 pr-3">
                         <p className="font-bold text-slate-900">{item.fullName}</p>
-                        <p className="text-[11px] text-gray-400">{item.phone || item.email || `#${item.memberUserId}`}</p>
+                        <p className="text-xs text-slate-500">{item.phone || item.email || `#${item.memberUserId}`}</p>
                       </td>
                       <td className="py-3 pr-3">
                         {planTitle(item.membershipName)}
-                        {item.membershipEndDate && <p className="text-[11px] text-gray-400">đến {formatDay(item.membershipEndDate)}</p>}
+                        {item.membershipEndDate && <p className="text-xs text-slate-500">đến {formatDay(item.membershipEndDate)}</p>}
                       </td>
                       <td className="py-3 pr-3 whitespace-nowrap">{formatTime(item.checkInAt)}</td>
                       <td className="py-3 pr-3 whitespace-nowrap">{item.checkOutAt ? formatTime(item.checkOutAt) : '—'}</td>
                       <td className="py-3 pr-3">
-                        <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${status.className}`}>
+                        <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-black ${status.className}`}>
                           {status.label}
                         </span>
-                        {item.status === 'voided' && item.voidReason && <p className="mt-1 max-w-[200px] text-[11px] text-gray-500">{item.voidReason}</p>}
+                        {item.status === 'voided' && item.voidReason && <p className="mt-1 max-w-[200px] text-xs text-slate-500">{item.voidReason}</p>}
                       </td>
                       <td className="py-3 pr-3">{item.checkedInBy || '—'}</td>
                       <td className="py-3 text-right whitespace-nowrap">
@@ -308,7 +308,7 @@ export default function ReceptionCheckIn() {
                           <button
                             type="button"
                             onClick={() => checkOut(item.id)}
-                            className="mr-2 rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-[#e31b23] cursor-pointer"
+                            className="mr-2 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-[#e31b23] cursor-pointer"
                           >
                             Check-out
                           </button>
@@ -317,7 +317,7 @@ export default function ReceptionCheckIn() {
                           <button
                             type="button"
                             onClick={() => setVoiding(item)}
-                            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] font-bold text-[#e31b23] hover:bg-red-50 cursor-pointer"
+                            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-[#e31b23] hover:bg-red-50 cursor-pointer"
                           >
                             Hoàn tác
                           </button>
@@ -363,11 +363,11 @@ function VoidDialog({ item, onClose, onDone }) {
       <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
         <div>
           <h3 className="text-lg font-black">Hoàn tác check-in</h3>
-          <p className="mt-1 text-xs font-bold text-gray-500">
+          <p className="mt-1 text-xs font-bold text-slate-500">
             {item.fullName} · vào lúc {formatTime(item.checkInAt)}
           </p>
         </div>
-        <label className="block text-xs font-extrabold uppercase text-gray-400">
+        <label className="block text-xs font-extrabold uppercase text-slate-500">
           Lý do (bắt buộc)
           <textarea
             value={reason}
@@ -375,18 +375,18 @@ function VoidDialog({ item, onClose, onDone }) {
             rows={3}
             maxLength={500}
             placeholder="VD: Check-in nhầm người"
-            className="mt-1.5 w-full resize-none rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium normal-case outline-none focus:border-[#e31b23]"
+            className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium normal-case outline-none focus:border-[#e31b23]"
           />
         </label>
         {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{error}</p>}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200 cursor-pointer">
+          <button type="button" onClick={onClose} className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-200 cursor-pointer">
             Không hoàn tác
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-[#e31b23] px-4 py-2 text-xs font-bold text-white disabled:opacity-50 cursor-pointer"
+            className="rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50 cursor-pointer"
           >
             {saving ? 'Đang hoàn tác...' : 'Xác nhận hoàn tác'}
           </button>

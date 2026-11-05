@@ -60,7 +60,10 @@ export default function MemberSchedule() {
     <div className="space-y-3">
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
       {loading ? (
-        <p className="text-sm text-gray-500">Đang tải lịch học...</p>
+        <div className="rounded-3xl border border-slate-200 bg-white py-12 text-center shadow-xs">
+          <div className="mb-2 inline-block size-8 animate-spin rounded-full border-4 border-[#e31b23] border-t-transparent"></div>
+          <p className="text-sm font-bold text-slate-500">Đang tải lịch học...</p>
+        </div>
       ) : (
         <WeekSlotTable
           weekStart={weekStart}
