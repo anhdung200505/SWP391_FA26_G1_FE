@@ -41,6 +41,10 @@ public class Membership
     [Column("is_free")]
     public bool IsFree { get; set; }
 
+    // Ngày kết thúc đã gửi thư nhắc hết hạn. Khác end_date hiện tại thì được gửi lại (sau khi gia hạn).
+    [Column("expiry_notice_end_date")]
+    public DateOnly? ExpiryNoticeEndDate { get; set; }
+
     public MembershipPackage? Package { get; set; }
     public Payment? Payment { get; set; }
 }
