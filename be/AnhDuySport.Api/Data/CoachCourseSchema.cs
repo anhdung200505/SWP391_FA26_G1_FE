@@ -44,6 +44,7 @@ public static class CoachCourseSchema
                 title        NVARCHAR(200)  NOT NULL,
                 dosage       NVARCHAR(120)  NOT NULL,
                 instructions NVARCHAR(2000) NOT NULL,
+                from_regeneration BIT       NOT NULL CONSTRAINT DF_coach_course_exercise_regen DEFAULT (0),
                 CONSTRAINT PK_coach_course_exercise PRIMARY KEY (exercise_id),
                 CONSTRAINT FK_coach_course_exercise_plan FOREIGN KEY (plan_id) REFERENCES coach_course_plan (plan_id) ON DELETE CASCADE,
                 CONSTRAINT FK_coach_course_exercise_session FOREIGN KEY (session_id) REFERENCES [session] (session_id)
@@ -74,5 +75,16 @@ public static class CoachCourseSchema
                 CONSTRAINT FK_coach_course_rubric_plan FOREIGN KEY (plan_id) REFERENCES coach_course_plan (plan_id) ON DELETE CASCADE,
                 CONSTRAINT CK_coach_course_rubric_score CHECK (max_score > 0 AND max_score <= 10)
             );
+
+            IF COL_LENGTH(N'dbo.coach_course_exercise', N'from_regeneration') IS NULL
+            ALTER TABLE dbo.coach_course_exercise ADD from_regeneration BIT NOT NULL CONSTRAINT DF_coach_course_exercise_regen DEFAULT (0);
+
+            IF COL_LENGTH(N'dbo.coach_training_history', N'session_id') IS NULL
+            ALTER TABLE dbo.coach_training_history ADD session_id INT NULL;
+
+            IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_coach_training_history_session')
+            AND COL_LENGTH(N'dbo.coach_training_history', N'session_id') IS NOT NULL
+            ALTER TABLE dbo.coach_training_history ADD CONSTRAINT FK_coach_training_history_session
+                FOREIGN KEY (session_id) REFERENCES [session] (session_id);
             """);
 }

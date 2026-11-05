@@ -604,12 +604,14 @@ CREATE TABLE coach_training_history (
     member_user_id      INT            NOT NULL,
     coach_user_id       INT            NOT NULL,
     class_id            INT            NOT NULL,
+    session_id          INT            NULL,
     content             NVARCHAR(2000) NOT NULL,
     recorded_at         DATETIME2(0)   NOT NULL,
     CONSTRAINT PK_coach_training_history PRIMARY KEY (training_history_id),
     CONSTRAINT FK_coach_training_history_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_coach_training_history_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
-    CONSTRAINT FK_coach_training_history_class FOREIGN KEY (class_id) REFERENCES class (class_id)
+    CONSTRAINT FK_coach_training_history_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+    CONSTRAINT FK_coach_training_history_session FOREIGN KEY (session_id) REFERENCES [session] (session_id)
 );
 GO
 
@@ -649,6 +651,7 @@ CREATE TABLE coach_course_exercise (
     title        NVARCHAR(200)  NOT NULL,
     dosage       NVARCHAR(120)  NOT NULL,
     instructions NVARCHAR(2000) NOT NULL,
+    from_regeneration BIT          NOT NULL CONSTRAINT DF_coach_course_exercise_regen DEFAULT (0),
     CONSTRAINT PK_coach_course_exercise PRIMARY KEY (exercise_id),
     CONSTRAINT FK_coach_course_exercise_plan FOREIGN KEY (plan_id) REFERENCES coach_course_plan (plan_id) ON DELETE CASCADE,
     CONSTRAINT FK_coach_course_exercise_session FOREIGN KEY (session_id) REFERENCES [session] (session_id)
@@ -1032,4 +1035,47 @@ CREATE INDEX IX_class_registration_log_class ON class_registration_log (class_id
 CREATE INDEX IX_class_registration_log_payment ON class_registration_log (payment_id);
 CREATE INDEX IX_notification_user_id ON notification (user_id);
 CREATE INDEX IX_audit_log_user_id ON audit_log (user_id);
+GO
+
+CREATE TABLE sport_course_material (
+    sport_id            INT            NOT NULL,
+    source_name         NVARCHAR(300)  NOT NULL CONSTRAINT DF_sport_material_source DEFAULT (N''),
+    source_url          NVARCHAR(500)  NOT NULL CONSTRAINT DF_sport_material_url DEFAULT (N''),
+    note                NVARCHAR(2000) NOT NULL CONSTRAINT DF_sport_material_note DEFAULT (N''),
+    updated_by_user_id  INT            NULL,
+    updated_at          DATETIME2(0)   NOT NULL CONSTRAINT DF_sport_material_updated DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_sport_course_material PRIMARY KEY (sport_id),
+    CONSTRAINT FK_sport_course_material_sport FOREIGN KEY (sport_id) REFERENCES sport (sport_id),
+    CONSTRAINT FK_sport_course_material_user FOREIGN KEY (updated_by_user_id) REFERENCES [user] (user_id)
+);
+GO
+
+CREATE TABLE sport_course_unit (
+    unit_id     INT IDENTITY(1,1) NOT NULL,
+    sport_id    INT            NOT NULL,
+    sort_order  INT            NOT NULL,
+    label       NVARCHAR(200)  NOT NULL,
+    work        NVARCHAR(MAX)  NOT NULL,
+    review      NVARCHAR(2000) NOT NULL CONSTRAINT DF_sport_course_unit_review DEFAULT (N''),
+    CONSTRAINT PK_sport_course_unit PRIMARY KEY (unit_id),
+    CONSTRAINT UQ_sport_course_unit UNIQUE (sport_id, sort_order),
+    CONSTRAINT FK_sport_course_unit_sport FOREIGN KEY (sport_id) REFERENCES sport (sport_id)
+);
+GO
+
+CREATE TABLE class_intake_note (
+    intake_note_id  INT IDENTITY(1,1) NOT NULL,
+    class_id        INT            NOT NULL,
+    member_user_id  INT            NOT NULL,
+    session_id      INT            NOT NULL,
+    coach_user_id   INT            NOT NULL,
+    comment         NVARCHAR(2000) NOT NULL,
+    updated_at      DATETIME2(0)   NOT NULL,
+    CONSTRAINT PK_class_intake_note PRIMARY KEY (intake_note_id),
+    CONSTRAINT UQ_class_intake_note UNIQUE (class_id, member_user_id),
+    CONSTRAINT FK_class_intake_note_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+    CONSTRAINT FK_class_intake_note_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_class_intake_note_session FOREIGN KEY (session_id) REFERENCES [session] (session_id),
+    CONSTRAINT FK_class_intake_note_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id)
+);
 GO

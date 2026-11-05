@@ -3,29 +3,42 @@ import { Link } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption, FlowTrail, RoleBadge, StatusBadge } from '../../components/management/ManagementBits';
 import { useAccountManagement } from '../../context/AccountManagementContext';
-import { ROLES, formatPhone, initials } from '../../data/accountManagement';
+import { formatPhone, initials } from '../../data/accountManagement';
+
+const ACCOUNT_TABS = [
+  { id: 'COACH', label: 'Huấn luyện viên', empty: 'Chưa có huấn luyện viên' },
+  { id: 'RECEPTIONIST', label: 'Lễ tân', empty: 'Chưa có lễ tân' },
+  { id: 'MEMBER', label: 'Học viên', empty: 'Chưa có học viên' },
+];
 
 export default function UserAccountListPage() {
-  const { users, roles, loading, error } = useAccountManagement();
-  const catalog = roles.length > 0 ? roles : ROLES;
+  const { users, loading, error } = useAccountManagement();
   const [query, setQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('COACH');
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     document.title = 'Danh sách tài khoản · AnhDuy Sport';
   }, []);
 
+  const activeTab = ACCOUNT_TABS.find((tab) => tab.id === roleFilter) ?? ACCOUNT_TABS[0];
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return users.filter((user) => {
-      const matchesRole = roleFilter === 'all' || user.roleId === roleFilter;
+      const matchesRole = user.roleId === roleFilter;
       const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
       const haystack = `${user.fullName} ${user.email} ${user.code} ${user.phone}`.toLowerCase();
       const matchesQuery = !keyword || haystack.includes(keyword);
       return matchesRole && matchesStatus && matchesQuery;
     });
   }, [users, query, roleFilter, statusFilter]);
+  const tabCounts = useMemo(() => {
+    const counts = { COACH: 0, RECEPTIONIST: 0, MEMBER: 0 };
+    users.forEach((user) => {
+      if (counts[user.roleId] != null) counts[user.roleId] += 1;
+    });
+    return counts;
+  }, [users]);
 
   return (
     <ManagementShell
@@ -55,7 +68,34 @@ export default function UserAccountListPage() {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 md:grid-cols-[1fr_180px_180px]">
+      <div className="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Nhóm tài khoản">
+        {ACCOUNT_TABS.map((tab) => {
+          const selected = roleFilter === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`account-tab-${tab.id}`}
+              aria-selected={selected}
+              aria-controls="account-list"
+              onClick={() => setRoleFilter(tab.id)}
+              className={`rounded-full px-4 py-2 text-sm font-bold ${
+                selected
+                  ? 'bg-[#e31b23] text-white shadow'
+                  : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {tab.label}
+              <span className={`ml-2 tabular-nums ${selected ? 'text-white/80' : 'text-slate-400'}`}>
+                {tabCounts[tab.id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 md:grid-cols-[1fr_180px]">
         <label className="block text-sm font-bold text-gray-700">
           Tìm kiếm
           <input
@@ -64,21 +104,6 @@ export default function UserAccountListPage() {
             placeholder="Tên, email hoặc mã hội viên"
             className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2"
           />
-        </label>
-        <label className="block text-sm font-bold text-gray-700">
-          Vai trò
-          <select
-            value={roleFilter}
-            onChange={(event) => setRoleFilter(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2"
-          >
-            <option value="all">Tất cả</option>
-            {catalog.filter((role) => role.id !== 'ADMIN').map((role) => (
-              <option key={role.id} value={role.id}>
-                {role.label}
-              </option>
-            ))}
-          </select>
         </label>
         <label className="block text-sm font-bold text-gray-700">
           Trạng thái
@@ -99,21 +124,24 @@ export default function UserAccountListPage() {
 
       {!loading && !error && filtered.length === 0 ? (
         <div className="mt-5 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center">
-          <p className="font-bold">Không có tài khoản khớp bộ lọc</p>
-          <button
-            type="button"
-            onClick={() => {
-              setQuery('');
-              setRoleFilter('all');
-              setStatusFilter('all');
-            }}
-            className="mt-3 text-sm font-bold text-[#e31b23]"
-          >
-            Xóa bộ lọc
-          </button>
+          <p className="font-bold">
+            {query.trim() || statusFilter !== 'all' ? 'Không có tài khoản khớp bộ lọc' : activeTab.empty}
+          </p>
+          {(query.trim() || statusFilter !== 'all') && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                setStatusFilter('all');
+              }}
+              className="mt-3 text-sm font-bold text-[#e31b23]"
+            >
+              Xóa bộ lọc
+            </button>
+          )}
         </div>
       ) : !loading && !error ? (
-        <>
+        <div id="account-list" role="tabpanel" aria-labelledby={`account-tab-${roleFilter}`}>
           <div className="mt-5 space-y-3 md:hidden">
             {filtered.map((user) => (
               <article key={user.id} className="rounded-2xl border border-gray-200 bg-white p-4">
@@ -189,7 +217,7 @@ export default function UserAccountListPage() {
               </tbody>
             </table>
           </div>
-        </>
+        </div>
       ) : null}
     </ManagementShell>
   );
