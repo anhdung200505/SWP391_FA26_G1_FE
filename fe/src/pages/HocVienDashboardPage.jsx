@@ -107,6 +107,19 @@ export default function HocVienDashboardPage() {
     fetchDashboardData();
   }, [user]);
 
+  // TỰ ĐỘNG CHUYỂN HƯỚNG SANG LEADING PAGE NẾU CHƯA CÓ GÓI VÀ CHƯA ĐĂNG KÝ LỚP
+  useEffect(() => {
+    if (!loading) {
+      const currentMembership = membershipData?.currentMembership;
+      const hasActiveMembership = Boolean(currentMembership);
+      const hasEnrolledClasses = myClasses.length > 0;
+
+      if (!hasActiveMembership && !hasEnrolledClasses) {
+        navigate('/hoc-vien-kham-pha', { replace: true });
+      }
+    }
+  }, [loading, membershipData, myClasses.length, navigate]);
+
   const hasPendingCheckouts = pendingCheckouts.some((item) => item.deadline > now);
   useEffect(() => {
     if (!hasPendingCheckouts) return undefined;
@@ -211,6 +224,14 @@ export default function HocVienDashboardPage() {
   }, [sidebarItems]);
 
   const currentItem = sidebarItems.find((item) => item.key === activeTab);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm font-semibold text-slate-500">
+        Đang tải dữ liệu...
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-100">
