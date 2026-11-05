@@ -130,9 +130,6 @@ export default function CourseDetailPage() {
                 ANHDUY SPORT • {courseStatic.category}
               </span>
             </span>
-            <span className="bg-black/70 backdrop-blur-md border border-gray-700 text-gray-200 font-extrabold text-xs px-3.5 py-1.5 uppercase tracking-wider rounded-sm">
-              {courseStatic.level}
-            </span>
           </div>
 
           <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-white uppercase tracking-tight leading-none drop-shadow-2xl mb-6">
@@ -274,10 +271,7 @@ export default function CourseDetailPage() {
                   className="bg-[#181d2a] rounded-3xl p-6 border border-gray-800 hover:border-[#e31b23]/60 transition-all duration-300 shadow-2xl flex flex-col justify-between group"
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-[#e31b23] bg-[#e31b23]/10 px-2.5 py-1 rounded-md border border-[#e31b23]/30">
-                        {item.level || 'MỌI CẤP ĐỘ'}
-                      </span>
+                    <div className="flex items-center justify-end mb-3">
                       <span className="text-xs font-bold text-emerald-400 bg-emerald-950/50 px-2.5 py-1 rounded-md border border-emerald-800/50">
                         Còn {item.availableSeats}/{item.capacity} chỗ
                       </span>

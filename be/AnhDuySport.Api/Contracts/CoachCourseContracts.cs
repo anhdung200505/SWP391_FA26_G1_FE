@@ -22,7 +22,11 @@ public sealed record CoachSessionLineDto(
     TimeOnly StartTime,
     TimeOnly EndTime,
     string Status,
-    string? Note);
+    string? Note,
+    string CoachName = "",
+    string RoomName = "",
+    string? CoachChange = null,
+    bool RoomChanged = false);
 
 public sealed record CoachClassDetailDto(
     string ClassId,

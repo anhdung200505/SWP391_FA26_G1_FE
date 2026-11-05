@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import SessionCoachLine from '../schedule/SessionCoachLine';
+import SessionRoomLine from '../schedule/SessionRoomLine';
 import {
   cancelSession,
   changeSessionCoach,
@@ -249,7 +250,9 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
                       <td className="p-4 min-w-[130px]">
                         <SessionCoachLine session={session} className="text-sm font-bold text-slate-800" />
                       </td>
-                      <td className="p-4 min-w-[120px] text-slate-600">📍 {session.roomName}</td>
+                      <td className="p-4 min-w-[120px]">
+                        <SessionRoomLine session={session} className="text-sm text-slate-600" />
+                      </td>
                       <td className="p-4 whitespace-nowrap">
                         <span className="font-bold text-slate-900">
                           {session.enrolledCount}/{session.capacity ?? '∞'}

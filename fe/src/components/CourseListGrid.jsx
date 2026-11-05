@@ -16,7 +16,6 @@ const coursesData = [
     id: 'swimming',
     slug: 'boi-loi',
     category: 'CÁ NHÂN',
-    level: 'BEGINNER',
     title: 'BƠI LỘI',
     desc: 'Xây dựng kỹ thuật bơi an toàn, kiểm soát hơi thở, sức bền và sự tự tin trong môi trường nước.',
     age: '6+',
@@ -26,7 +25,6 @@ const coursesData = [
     id: 'tabletennis',
     slug: 'bong-ban',
     category: 'CÁ NHÂN',
-    level: 'BEGINNER',
     title: 'BÓNG BÀN',
     desc: 'Rèn phản xạ nhanh, kiểm soát bóng, kỹ thuật xoáy và khả năng xử lý tình huống tốc độ cao.',
     age: '7-17',
@@ -36,7 +34,6 @@ const coursesData = [
     id: 'soccer',
     slug: 'bong-da',
     category: 'ĐỒNG ĐỘI',
-    level: 'MỌI CẤP ĐỘ',
     title: 'BÓNG ĐÁ',
     desc: 'Huấn luyện kỹ thuật cá nhân, phối hợp đội hình, thể lực nền và tinh thần thi đấu đồng đội.',
     age: '6-17',
@@ -46,7 +43,6 @@ const coursesData = [
     id: 'basketball',
     slug: 'bong-ro',
     category: 'ĐỒNG ĐỘI',
-    level: 'INTERMEDIATE',
     title: 'BÓNG RỔ',
     desc: 'Rèn kỹ năng kiểm soát bóng, ném rổ, phòng thủ và tư duy chiến thuật trong nhịp độ thi đấu cao.',
     age: '8-17',
@@ -56,7 +52,6 @@ const coursesData = [
     id: 'badminton',
     slug: 'cau-long',
     category: 'RACKET',
-    level: 'MỌI CẤP ĐỘ',
     title: 'CẦU LÔNG',
     desc: 'Nâng cao tốc độ di chuyển, kỹ thuật cầu và khả năng phối hợp chiến thuật đơn hoặc đôi.',
     age: '7-17',
@@ -66,7 +61,6 @@ const coursesData = [
     id: 'golf',
     slug: 'golf-3d',
     category: 'CÁ NHÂN',
-    level: 'INTERMEDIATE',
     title: 'GOLF 3D',
     desc: 'Làm chủ tư thế swing, kiểm soát lực đánh và etiquette sân golf trong môi trường hướng dẫn chuyên nghiệp.',
     age: '8-17',
@@ -76,7 +70,6 @@ const coursesData = [
     id: 'tennis',
     slug: 'quan-vot',
     category: 'RACKET',
-    level: 'INTERMEDIATE',
     title: 'QUẦN VỢT',
     desc: 'Tập trung vào footwork, cú đánh ổn định, phản xạ và tư duy thi đấu theo lộ trình chuyên nghiệp.',
     age: '8-17',
@@ -86,7 +79,6 @@ const coursesData = [
     id: 'taekwondo',
     slug: 'taekwondo',
     category: 'VÕ THUẬT',
-    level: 'FOUNDATION',
     title: 'TAEKWONDO',
     desc: 'Rèn kỷ luật, sức bền, phản xạ và kỹ thuật tự vệ qua hệ thống bài tập võ thuật chuẩn mực.',
     age: '6-17',
@@ -159,11 +151,6 @@ export default function CourseListGrid() {
                   className="w-full h-full object-cover object-center group-hover:scale-108 transition-transform duration-500 filter brightness-[0.9]"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#2a171d] via-transparent to-transparent"></div>
-
-                <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md text-white text-[10px] font-black px-2.5 py-1 uppercase tracking-widest border border-gray-700/60 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-[#e31b23] inline-block"></span>
-                  <span>{course.level}</span>
-                </div>
               </div>
 
               {/* KHỐI NỘI DUNG CHÍNH */}

@@ -119,6 +119,9 @@ public sealed class PayRegistrationRequest
     public string PaymentMethod { get; set; } = "";
     // Gói hội viên mua kèm lớp (id gói Bạc/Vàng), giá đã giảm được cộng vào hóa đơn. Bỏ trống hoặc Hạng Đồng → tặng Hạng Đồng.
     public string? MembershipPackageId { get; set; }
+
+    // Học viên đã có gói: true thì gia hạn đúng gói đó (giá gốc) cùng hóa đơn lớp.
+    public bool RenewMembership { get; set; }
 }
 
 public sealed record RegistrationPaymentResponse(
@@ -146,7 +149,9 @@ public sealed record CreateClassRegistrationRequest(
     DateOnly? DateOfBirth = null,
     [RegularExpression("^(Nam|Nữ|Khác)$")] string? Gender = null,
     // Gói hội viên mua kèm lớp (id gói Bạc/Vàng), giá đã giảm được cộng vào hóa đơn. Bỏ trống hoặc Hạng Đồng → tặng Hạng Đồng.
-    string? MembershipPackageId = null);
+    string? MembershipPackageId = null,
+    // Học viên đã có gói: true thì gia hạn đúng gói đó (giá gốc). false thì chỉ đăng ký lớp, không tặng thêm gói.
+    bool RenewMembership = false);
 
 // Amount = Tuition + MembershipPackage.Price.
 // PaymentUrl: trang thanh toán payOS. PayosQrCode: chuỗi VietQR do payOS trả. PayosQrImage: ảnh PNG của mã đó (data URL), dùng thẳng làm src của <img>.
