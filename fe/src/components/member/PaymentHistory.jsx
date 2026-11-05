@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getMyPayments } from '../../api/managementApi';
 import { onDataChanged } from '../../api/dataChanged';
+import { cardClass, cardHeadClass, sectionTitle, sectionSub, emptyBox, spinnerClass } from './memberUi';
 
 const POLL_MS = 5000;
 
@@ -65,28 +66,26 @@ export default function PaymentHistory() {
   }, [payments, load]);
 
   return (
-    <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-      <div className="pb-4 mb-6 border-b border-slate-100">
-        <h2 className="text-lg font-black text-slate-900 uppercase">LỊCH SỬ THANH TOÁN</h2>
-        <p className="text-xs text-slate-400 font-medium mt-0.5">Mua khóa học, mua, gia hạn và nâng hạng gói hội viên</p>
+    <section className={cardClass}>
+      <div className={cardHeadClass}>
+        <h2 className={sectionTitle}>Lịch sử thanh toán</h2>
+        <p className={sectionSub}>Mua khóa học, mua, gia hạn và nâng hạng gói hội viên</p>
       </div>
 
-      {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">⚠️ {error}</div>}
+      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
 
       {loading ? (
         <div className="py-12 text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#e31b23] border-t-transparent mb-2" />
-          <p className="text-xs font-bold text-slate-400">Đang tải lịch sử thanh toán...</p>
+          <div className={`${spinnerClass} mb-2`} />
+          <p className="text-sm font-bold text-slate-500">Đang tải lịch sử thanh toán...</p>
         </div>
       ) : payments.length === 0 ? (
-        <div className="py-6 text-center text-xs text-slate-400 font-medium bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-          Bạn chưa có giao dịch thanh toán nào.
-        </div>
+        <div className={emptyBox}>Bạn chưa có giao dịch thanh toán nào.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-xs border-collapse">
+          <table className="w-full min-w-[760px] text-left text-sm border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs">
                 <th className="p-3">Nội dung</th>
                 <th className="p-3">Hóa đơn</th>
                 <th className="p-3">Ngày lập</th>
@@ -103,17 +102,17 @@ export default function PaymentHistory() {
                   <tr key={item.id}>
                     <td className="p-3 min-w-[200px]">
                       <p className="font-bold text-slate-900">{item.title}</p>
-                      <span className={`inline-block mt-1 border text-[10px] font-bold px-2 py-0.5 rounded ${kind.className}`}>{kind.label}</span>
+                      <span className={`inline-block mt-1 border text-xs font-bold px-2 py-0.5 rounded ${kind.className}`}>{kind.label}</span>
                     </td>
                     <td className="p-3 font-mono text-slate-500">#{item.invoiceCode}</td>
                     <td className="p-3 text-slate-600 whitespace-nowrap">
                       {formatDateTime(item.createdAt)}
-                      {item.paidAt && <span className="block text-[10px] text-slate-400">Trả lúc {formatDateTime(item.paidAt)}</span>}
+                      {item.paidAt && <span className="block text-xs text-slate-500">Trả lúc {formatDateTime(item.paidAt)}</span>}
                     </td>
                     <td className="p-3 text-slate-600 whitespace-nowrap">{METHOD[item.paymentMethod] || item.paymentMethod}</td>
                     <td className="p-3 text-right font-bold text-emerald-600 whitespace-nowrap">{item.amount?.toLocaleString('vi-VN')}đ</td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${status.className}`}>{status.label}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold border whitespace-nowrap ${status.className}`}>{status.label}</span>
                     </td>
                   </tr>
                 );

@@ -23,19 +23,19 @@ export default function ReceptionistModals({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-fadeIn">
+      <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <h3 className="text-sm font-black text-slate-900 uppercase">
-            {modalType === 'edit_enrollment' && 'CẬP NHẬT ĐƠN TƯ VẤN KHÁCH HÀNG'}
-            {modalType === 'classify' && 'PHÂN LOẠI YÊU CẦU HỌC VIÊN'}
-            {modalType === 'resolve_member' && 'LƯU KẾT QUẢ XỬ LÝ ĐƠN HỖ TRỢ'}
-            {modalType === 'resolve_account' && 'XỬ LÝ SỰ CỐ TÀI KHOẢN & GỬI EMAIL'}
-            {modalType === 'provide_consultation' && 'CUNG CẤP TƯ VẤN & GỬI EMAIL'}
-            {modalType === 'escalate' && 'CHUYỂN ĐƠN LÊN QUẢN TRỊ TRUNG TÂM'}
-            {modalType === 'escalate_enrollment' && 'CHUYỂN ĐƠN TƯ VẤN GHI DANH LÊN QUẢN LÝ'}
-            {modalType === 'view_result' && 'KẾT QUẢ XỬ LÝ ĐƠN'}
+          <h3 className="text-base font-black text-slate-900">
+            {modalType === 'edit_enrollment' && 'Cập nhật đơn tư vấn khách hàng'}
+            {modalType === 'classify' && 'Phân loại yêu cầu học viên'}
+            {modalType === 'resolve_member' && 'Lưu kết quả xử lý đơn hỗ trợ'}
+            {modalType === 'resolve_account' && 'Xử lý sự cố tài khoản và gửi email'}
+            {modalType === 'provide_consultation' && 'Cung cấp tư vấn và gửi email'}
+            {modalType === 'escalate' && 'Chuyển đơn lên quản trị trung tâm'}
+            {modalType === 'escalate_enrollment' && 'Chuyển đơn tư vấn ghi danh lên quản lý'}
+            {modalType === 'view_result' && 'Kết quả xử lý đơn'}
           </h3>
-          <button onClick={closeModal} className="text-slate-400 hover:text-slate-700 font-bold text-base p-1 cursor-pointer">
+          <button onClick={closeModal} className="text-slate-500 hover:text-slate-700 font-bold text-base p-1 cursor-pointer">
             ✕
           </button>
         </div>
@@ -99,9 +99,9 @@ export default function ReceptionistModals({
             <button
               type="submit"
               disabled={submitting || !enrollForm.resolutionNote.trim()}
-              className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
+              className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-sm py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
             >
-              {submitting ? 'ĐANG LƯU...' : 'LƯU & ĐÁNH DẤU HOÀN TẤT'}
+              {submitting ? 'Đang lưu...' : 'Lưu và đánh dấu hoàn tất'}
             </button>
           </form>
         )}
@@ -123,9 +123,9 @@ export default function ReceptionistModals({
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-slate-900 hover:bg-[#e31b23] text-white font-black uppercase text-xs py-3 rounded-xl cursor-pointer disabled:opacity-50"
+              className="w-full bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-sm py-3 rounded-xl cursor-pointer disabled:opacity-50"
             >
-              {submitting ? 'ĐANG LƯU...' : 'XÁC NHẬN PHÂN LOẠI'}
+              {submitting ? 'Đang lưu...' : 'Xác nhận phân loại'}
             </button>
           </form>
         )}
@@ -147,9 +147,9 @@ export default function ReceptionistModals({
             <button
               type="submit"
               disabled={submitting || !actionNote.trim()}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
             >
-              {submitting ? 'ĐANG LƯU...' : 'LƯU KẾT QUẢ'}
+              {submitting ? 'Đang lưu...' : 'Lưu kết quả'}
             </button>
           </form>
         )}
@@ -171,9 +171,9 @@ export default function ReceptionistModals({
             <button
               type="submit"
               disabled={submitting || !actionNote.trim()}
-              className="w-full bg-sky-600 hover:bg-sky-700 text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
+              className="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
             >
-              {submitting ? 'ĐANG XỬ LÝ...' : 'XỬ LÝ & GỬI EMAIL THÔNG BÁO'}
+              {submitting ? 'Đang xử lý...' : 'Xử lý và gửi email thông báo'}
             </button>
           </form>
         )}
@@ -195,9 +195,9 @@ export default function ReceptionistModals({
             <button
               type="submit"
               disabled={submitting || !actionNote.trim()}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
             >
-              {submitting ? 'ĐANG GỬI...' : 'GỬI TƯ VẤN & EMAIL THÔNG BÁO'}
+              {submitting ? 'Đang gửi...' : 'Gửi tư vấn và email thông báo'}
             </button>
           </form>
         )}
@@ -223,9 +223,9 @@ export default function ReceptionistModals({
             <button
               type="submit"
               disabled={submitting || !actionNote.trim()}
-              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black uppercase text-xs py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
+              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm py-3 rounded-xl shadow cursor-pointer disabled:opacity-50"
             >
-              {submitting ? 'ĐANG GỬI...' : 'XÁC NHẬN CHUYỂN QUẢN LÝ'}
+              {submitting ? 'Đang gửi...' : 'Xác nhận chuyển quản lý'}
             </button>
           </form>
         )}
@@ -234,17 +234,17 @@ export default function ReceptionistModals({
         {modalType === 'view_result' && (
           <div className="space-y-3 text-xs">
             <div>
-              <span className="font-bold text-slate-400 block text-[10px]">Tiêu đề đơn:</span>
+              <span className="font-bold text-slate-500 block text-xs">Tiêu đề đơn:</span>
               <p className="font-extrabold text-slate-900">{selectedItem.title}</p>
             </div>
             <div>
-              <span className="font-bold text-slate-400 block text-[10px]">Thời gian xử lý:</span>
+              <span className="font-bold text-slate-500 block text-xs">Thời gian xử lý:</span>
               <p className="font-semibold text-slate-700">
                 {selectedItem.resolvedAt ? new Date(selectedItem.resolvedAt).toLocaleString('vi-VN') : 'N/A'}
               </p>
             </div>
             <div>
-              <span className="font-bold text-slate-400 block text-[10px]">Ghi chú kết quả (Resolution Note):</span>
+              <span className="font-bold text-slate-500 block text-xs">Ghi chú kết quả (Resolution Note):</span>
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 mt-1 whitespace-pre-line text-slate-800 font-medium">
                 {selectedItem.resolutionNote || 'Không có nội dung ghi chú.'}
               </div>
@@ -252,7 +252,7 @@ export default function ReceptionistModals({
             <button
               type="button"
               onClick={closeModal}
-              className="w-full bg-slate-900 text-white font-black uppercase text-xs py-3 rounded-xl cursor-pointer"
+              className="w-full bg-slate-900 text-white font-bold text-sm py-3 rounded-xl cursor-pointer"
             >
               Đóng
             </button>

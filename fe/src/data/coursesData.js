@@ -34,7 +34,6 @@ export const fontDetails = {
     subtitle: 'Table Tennis Excellence',
     heroBg: tabletennisHero,
     category: 'CÁ NHÂN',
-    level: 'BEGINNER & ADVANCED',
     age: '7-17 Tuổi',
     desc: 'Chương trình đào tạo bóng bàn giúp học viên rèn luyện phản xạ nhanh, kiểm soát độ xoáy của bóng, bộ chân di chuyển linh hoạt và chiến thuật thi đấu tốc độ cao.',
     stats: [
@@ -66,7 +65,6 @@ export const fontDetails = {
     subtitle: 'Swimming & Aquatics',
     heroBg: swimmingHero,
     category: 'CÁ NHÂN',
-    level: 'EVERY LEVEL',
     age: '6+ Tuổi',
     desc: 'Đào tạo kỹ năng sinh tồn dưới nước, hoàn thiện 4 kỹ thuật bơi chuẩn Olympic trong môi trường hồ bơi 50m an toàn trang bị hệ thống lọc UV + Ozone.',
     stats: [
@@ -98,7 +96,6 @@ export const fontDetails = {
     subtitle: 'Basketball Academy',
     heroBg: basketballHero,
     category: 'ĐỒNG ĐỘI',
-    level: 'INTERMEDIATE',
     age: '8-17 Tuổi',
     desc: 'Rèn luyện kỹ năng kiểm soát bóng, ném rổ, phòng thủ và tư duy chiến thuật đồng đội trong môi trường thi đấu đạt tiêu chuẩn FIBA.',
     stats: [
@@ -130,7 +127,6 @@ export const fontDetails = {
     subtitle: 'Football Junior',
     heroBg: soccerHero,
     category: 'ĐỒNG ĐỘI',
-    level: 'MỌI CẤP ĐỘ',
     age: '6-17 Tuổi',
     desc: 'Huấn luyện kỹ thuật cá nhân, chuyền bóng, sút bóng, phối hợp đội hình và xây dựng tinh thần đồng đội kết hợp đào tạo EQ.',
     stats: [
@@ -162,7 +158,6 @@ export const fontDetails = {
     subtitle: 'Badminton Excellence',
     heroBg: badmintonHero,
     category: 'RACKET',
-    level: 'MỌI CẤP ĐỘ',
     age: '7-17 Tuổi',
     desc: 'Nâng cao tốc độ di chuyển, kỹ thuật đập/phông cầu chuyên sâu và khả năng phối hợp chiến thuật đánh đơn hoặc đánh đôi.',
     stats: [
@@ -194,7 +189,6 @@ export const fontDetails = {
     subtitle: 'Golf Simulator & Green',
     heroBg: golfHero,
     category: 'CÁ NHÂN',
-    level: 'INTERMEDIATE',
     age: '8-17 Tuổi',
     desc: 'Làm chủ tư thế swing, kiểm soát lực đánh chính xác bằng hệ thống mô phỏng XSwing 3D hiện đại kết hợp tập luyện gạt bóng trên sân Putting Green.',
     stats: [
@@ -226,7 +220,6 @@ export const fontDetails = {
     subtitle: 'Tennis Academy',
     heroBg: tennisHero,
     category: 'RACKET',
-    level: 'INTERMEDIATE',
     age: '8-17 Tuổi',
     desc: 'Tập trung vào di chuyển bộ chân (footwork), cú đánh ổn định, phản xạ và tư duy thi đấu trên mặt sân Acrylic chuyên nghiệp.',
     stats: [
@@ -258,7 +251,6 @@ export const fontDetails = {
     subtitle: 'Martial Arts & Discipline',
     heroBg: taekwondoHero,
     category: 'VÕ THUẬT',
-    level: 'FOUNDATION',
     age: '6-17 Tuổi',
     desc: 'Rèn luyện tính kỷ luật, thể lực, độ linh hoạt, kỹ năng tự vệ và tinh thần thượng võ trong phòng tập Studio tường gương trang bị thảm giảm chấn.',
     stats: [

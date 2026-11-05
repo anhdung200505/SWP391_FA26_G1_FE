@@ -133,6 +133,53 @@ export default function WorkspaceShell({
   );
 }
 
+// Mục cha có các mục con (item.children, mỗi mục con có `to`). Tự mở khi đang ở một trong các trang con.
+function NavGroup({ item }) {
+  const { pathname } = useLocation();
+  const childActive = item.children.some((child) => pathname === child.to.split('#')[0]);
+  const [manual, setManual] = useState(null);
+  // Người dùng tự mở/đóng chỉ có hiệu lực cho tới khi vào hoặc rời các trang con.
+  const expanded = manual && manual.for === childActive ? manual.value : childActive;
+  const panelId = `nav-group-${item.id}`;
+
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        onClick={() => setManual({ for: childActive, value: !expanded })}
+        className={`flex w-full items-center rounded-lg border-l-2 border-transparent px-3 py-2.5 text-left text-sm font-semibold hover:bg-white/5 hover:text-white ${focusRing} ${
+          childActive ? 'text-white' : 'text-white/70'
+        }`}
+      >
+        <span className="flex-1">{item.label}</span>
+        <svg
+          className={`size-4 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>
+      {expanded && (
+        <div id={panelId} className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-2">
+          {item.children.map((child) => (
+            <NavLink key={child.id} to={child.to} end={child.end} className={({ isActive }) => itemClass(isActive)}>
+              {child.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
   return (
     <div className="flex h-full flex-col pb-[env(safe-area-inset-bottom)] overflow-y-auto">
@@ -148,7 +195,9 @@ function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
 
       <nav aria-label={role} className="space-y-1 px-3 flex-1">
         {items.map((item) =>
-          item.to ? (
+          item.children ? (
+            <NavGroup key={item.id} item={item} />
+          ) : item.to ? (
             <NavLink key={item.id} to={item.to} end={item.end} className={({ isActive }) => itemClass(isActive)}>
               {item.label}
             </NavLink>

@@ -256,12 +256,12 @@ export default function ReceptionistPage() {
 
   return (
     <div className="space-y-6 text-slate-800">
-      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:flex-row sm:p-8 sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-black text-balance text-slate-900 sm:text-2xl">
+          <h1 className="text-2xl font-black text-balance text-slate-900 sm:text-3xl">
             Hỗ trợ và tư vấn
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">
+          <p className="mt-1 text-sm text-pretty text-slate-500">
             Quản lý và xử lý các yêu cầu tư vấn tuyển sinh và hỗ trợ kỹ thuật từ học viên.
           </p>
         </div>
@@ -271,24 +271,24 @@ export default function ReceptionistPage() {
           disabled={loading}
           className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer self-start sm:self-auto disabled:opacity-50"
         >
-          <span>🔄 Làm mới dữ liệu</span>
+          <span>Làm mới dữ liệu</span>
         </button>
       </div>
 
       {/* ALERTS */}
       {errorNotice && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold animate-fadeIn">
-          ⚠️ {errorNotice}
+        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-sm font-bold">
+          {errorNotice}
         </div>
       )}
       {successNotice && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold animate-fadeIn">
-          ✓ {successNotice}
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl text-sm font-bold">
+          {successNotice}
         </div>
       )}
 
       {/* TABS & BỘ LỌC TÌM KIẾM */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex gap-2 border-b md:border-b-0 pb-2 md:pb-0 border-slate-100">
           <button
             type="button"
@@ -296,7 +296,7 @@ export default function ReceptionistPage() {
             className={`rounded-lg px-4 py-2 text-sm font-semibold tabular-nums transition-colors ${
               activeTab === 'enrollment'
                 ? 'bg-[#12141d] text-white'
-                : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
             }`}
           >
             Tư vấn tuyển sinh ({enrollments.length})
@@ -308,7 +308,7 @@ export default function ReceptionistPage() {
             className={`rounded-lg px-4 py-2 text-sm font-semibold tabular-nums transition-colors ${
               activeTab === 'service'
                 ? 'bg-[#12141d] text-white'
-                : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
             }`}
           >
             Hỗ trợ học viên ({serviceRequests.length})
@@ -337,7 +337,7 @@ export default function ReceptionistPage() {
       </div>
 
       {/* BẢNG DỮ LIỆU HIỂN THỊ */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
         <ReceptionistTable
           loading={loading}
           filteredList={filteredList}
