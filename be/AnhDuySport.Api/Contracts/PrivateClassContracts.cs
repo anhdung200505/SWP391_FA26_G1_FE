@@ -33,6 +33,22 @@ public sealed class CreatePrivateRequest : PrivateAvailabilityRequest
 
     [StringLength(500)]
     public string? Note { get; set; }
+
+    // Gói hội viên mua kèm và thông tin học viên: cùng ý nghĩa với đăng ký lớp nhóm, áp khi thanh toán sau khi quản lý duyệt.
+    public string? MembershipPackageId { get; set; }
+
+    public bool RenewMembership { get; set; }
+
+    [StringLength(200)]
+    public string? FullName { get; set; }
+
+    [RegularExpression(@"^\+?[0-9 ]{8,20}$")]
+    public string? Phone { get; set; }
+
+    public DateOnly? DateOfBirth { get; set; }
+
+    [RegularExpression("^(Nam|Nữ|Khác)$")]
+    public string? Gender { get; set; }
 }
 
 public sealed record RejectPrivateRequest([StringLength(500)] string? Reason = null);
@@ -81,6 +97,9 @@ public sealed record PrivateRequestDto(
     DateTime? ApprovalExpiresAt,
     string? RoomId,
     string? RoomName,
+    string? MembershipPackageId,
+    string? MembershipPackageName,
+    bool RenewMembership,
     bool? CanApprove = null,
     string? BlockReason = null,
     IReadOnlyList<PrivateSessionPreviewDto>? PlannedSessions = null);

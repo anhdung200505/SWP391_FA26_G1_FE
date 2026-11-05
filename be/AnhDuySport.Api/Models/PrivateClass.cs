@@ -48,6 +48,25 @@ public class PrivateClassRequest
     [Column("approval_expires_at")]
     public DateTime? ApprovalExpiresAt { get; set; }
 
+    // Gói hội viên chọn kèm yêu cầu và thông tin học viên: lưu lúc gửi, áp vào đơn thanh toán và hồ sơ khi thanh toán (như đăng ký lớp nhóm).
+    [Column("membership_package_id")]
+    public int? MembershipPackageId { get; set; }
+
+    [Column("renew_membership")]
+    public bool RenewMembership { get; set; }
+
+    [Column("full_name")]
+    public string? FullName { get; set; }
+
+    [Column("phone")]
+    public string? Phone { get; set; }
+
+    [Column("date_of_birth")]
+    public DateOnly? DateOfBirth { get; set; }
+
+    [Column("gender")]
+    public string? Gender { get; set; }
+
     public List<PrivateClassRequestSlot> Slots { get; set; } = [];
 }
 
