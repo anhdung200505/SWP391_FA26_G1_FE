@@ -20,7 +20,6 @@ import {
 import { formatFee } from '../data/accountManagement';
 import PrivateRegistrationForm from '../components/private/PrivateRegistrationForm';
 
-// Đơn chờ thanh toán chỉ giữ 3 phút (khớp với backend), quá hạn thì hủy và quay lại form đăng ký.
 const PAYMENT_TIMEOUT_SECONDS = 180;
 const PAID_REDIRECT_SECONDS = 5;
 const MY_COURSES_PATH = '/hoc-vien-dashboard';
@@ -34,7 +33,7 @@ const TYPE_OPTIONS = [
       <>
         <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
         <circle cx="10" cy="7" r="4" />
-        <path d="M21 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+        <path d="M21 21v-2a4 4 0 0 1 0 7.75" />
       </>
     ),
   },
@@ -57,55 +56,60 @@ const formatCountdown = (seconds) =>
 const fieldClass =
   'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2';
 const primaryButtonClass =
-  'rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300';
+  'rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 transition-colors hover:bg-[#b1131a]';
 
-// membershipOnly: trang "Đăng ký thành viên" chỉ mua/gia hạn gói hội viên, không chọn lớp.
 export default function ClassRegistrationPage({ membershipOnly = false }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  // Học viên chưa có lớp vào trang mua thành viên: nhắc rằng đăng ký khóa học sẽ được tặng Hạng Đồng.
+
+  // Kiểm tra trạng thái đăng ký của học viên
+  const hasClassRegistration = useHasClassRegistration();
   const noClassYet = useHasClassRegistration(membershipOnly) === false && membershipOnly;
 
-  // Lấy ID từ URL Query Param hoặc State
+  // AUTO REDIRECT: Nếu học viên chưa đăng ký lớp/gói (hasClassRegistration === false) -> Đẩy sang route Khám phá tương ứng
+  useEffect(() => {
+    if (hasClassRegistration === false) {
+      const targetPath = membershipOnly
+        ? '/dang-ky-thanh-vien-kham-pha'
+        : '/dang-ky-khoa-hoc-kham-pha';
+      
+      // Giữ nguyên các search query params (như ?classId=... hay ?packageId=...)
+      const currentQuery = location.search || '';
+      navigate(`${targetPath}${currentQuery}`, { replace: true, state: location.state });
+    }
+  }, [hasClassRegistration, membershipOnly, navigate, location.search, location.state]);
+
   const initialClassId = searchParams.get('classId') || location.state?.classId;
   const initialPackageId = searchParams.get('packageId') || location.state?.packageId;
-  // Hình thức học: group (lớp nhóm) hoặc private (1-1). Chưa chọn thì hiện hai lựa chọn; mở từ một lớp cụ thể thì vào thẳng lớp nhóm.
+
   const [type, setType] = useState(() => {
     const requested = searchParams.get('type');
     if (requested === 'group' || requested === 'private') return requested;
     return initialClassId || initialPackageId ? 'group' : '';
   });
-  // Bấm lại menu "Đăng ký khóa học" (URL không còn ?type) thì về màn chọn hình thức.
+
   const typeParam = searchParams.get('type');
   useEffect(() => {
     if (typeParam === 'group' || typeParam === 'private') setType(typeParam);
     else if (!initialClassId && !initialPackageId) setType('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeParam]);
+  }, [typeParam, initialClassId, initialPackageId]);
 
-  // State danh sách
   const [sportsList, setSportsList] = useState([]);
   const [classList, setClassList] = useState([]);
-  // Lớp học viên đã ghi danh: không cho chọn lại (backend cũng chặn trùng lớp, trùng khóa và trùng lịch).
   const [blockedClasses, setBlockedClasses] = useState(() => new Map());
   const [packages, setPackages] = useState([]);
 
-  // mode=renew: chỉ mua gói, không chọn lớp.
-  // Đăng ký khóa học: lớp bắt buộc, Hạng Đồng luôn kèm (gói bắt buộc, tặng). Bạc/Vàng là nâng hạng thay gói tặng.
   const renewOnly = membershipOnly || searchParams.get('mode') === 'renew';
   const includeClass = !renewOnly;
   const includeMembership = true;
 
-  // State lựa chọn
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedClass, setSelectedClass] = useState(null);
   const [pickedPackage, setSelectedPackage] = useState(null);
-  // Đã có gói: mặc định không gia hạn, học viên chọn một gói trong danh sách nếu muốn.
   const [skipPackage, setSkipPackage] = useState(false);
 
-  // Gói cao nhất học viên đang có: khóa các gói rẻ hơn.
   const [ownedPackageId, setOwnedPackageId] = useState(null);
   const ownedPackage = packages.find((pkg) => String(pkg.id) === String(ownedPackageId)) || null;
   const canSkipPackage = includeClass && !!ownedPackage;
@@ -121,27 +125,25 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Form Thông tin cá nhân
+  // State cho Custom Warning Modal thay vì window.confirm
+  const [showBronzeWarningModal, setShowBronzeWarningModal] = useState(false);
+
   const [fullName, setFullName] = useState(user?.fullName || user?.userName || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('Nam');
 
-  // Kết quả & Thanh toán từ Server
   const [registrationResult, setRegistrationResult] = useState(null);
   const [paymentStatusData, setPaymentStatusData] = useState(null);
   const [now, setNow] = useState(() => Date.now());
   const [redirectLeft, setRedirectLeft] = useState(PAID_REDIRECT_SECONDS);
   const [membershipAfterPay, setMembershipAfterPay] = useState(null);
 
-  // 1. Fetch danh sách Gói hội viên, Thông tin Lớp học ban đầu & Danh sách Bộ môn
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
         setError('');
-
-        // 1.1 Fetch danh sách Gói hội viên
         const pkgs = await getPackages().catch(() => []);
         if (Array.isArray(pkgs)) {
           setPackages(pkgs);
@@ -157,7 +159,6 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
           }
         }
 
-        // 1.2 Fetch thông tin lớp chi tiết nếu có initialClassId
         if (initialClassId) {
           const classDetail = await getClassDetail(initialClassId);
           setSelectedClass(classDetail);
@@ -166,7 +167,6 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
           }
         }
 
-        // 1.3 Fetch danh sách Bộ môn
         const sportsData = await getSports('1').catch(() => []);
         if (Array.isArray(sportsData) && sportsData.length > 0) {
           setSportsList(sportsData);
@@ -178,11 +178,9 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
         setLoading(false);
       }
     }
-
     fetchData();
   }, [initialClassId, initialPackageId]);
 
-  // 2. Tự động tải danh sách Lớp học MỖI KHI selectedSportId THAY ĐỔI và BẬT TICK KÈM LỚP
   useEffect(() => {
     if (!selectedSportId || !includeClass || (!renewOnly && type !== 'group')) return;
 
@@ -220,7 +218,7 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
     }
 
     loadClassesForSport();
-  }, [selectedSportId, includeClass, type, renewOnly]);
+  }, [selectedSportId, includeClass, type, renewOnly, user?.id, selectedClass]);
 
   const handleSportChange = (sportId) => {
     setSelectedSportId(sportId);
@@ -231,9 +229,8 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
       if (!fullName) setFullName(user.fullName || user.userName || '');
       if (!phone) setPhone(user.phone || '');
     }
-  }, [user]);
+  }, [user, fullName, phone]);
 
-  // Polling kiểm tra trạng thái thanh toán từ API
   useEffect(() => {
     if (!registrationResult?.paymentId) return;
 
@@ -258,10 +255,8 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
     setSkipPackage(Boolean(ownedPackageId));
   }, [ownedPackageId]);
 
-  // Gói cao nhất đang có để khóa các gói thấp hơn
   useEffect(() => {
     if (!user?.id) return undefined;
-
     let active = true;
     getMemberMembership(user.id)
       .then((res) => {
@@ -273,10 +268,8 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
     };
   }, [user?.id]);
 
-  // Khôi phục đơn chưa thanh toán nếu có
   useEffect(() => {
     if (!user?.id) return undefined;
-
     let active = true;
     const restorePending = async () => {
       const pending = await getPendingCheckouts().catch(() => []);
@@ -304,10 +297,8 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
     ? Math.max(0, Math.ceil((registrationResult.deadline - now) / 1000))
     : 0;
 
-  // Đếm ngược giữ đơn
   useEffect(() => {
     if (!registrationResult?.deadline || isPaid) return undefined;
-
     const result = registrationResult;
     const tick = setInterval(async () => {
       const current = Date.now();
@@ -336,7 +327,6 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
     return () => clearInterval(tick);
   }, [registrationResult, isPaid, user?.id]);
 
-  // Tự chuyển trang khi thanh toán xong
   useEffect(() => {
     if (!isPaid) return undefined;
     let active = true;
@@ -390,7 +380,26 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
     return packageFee + classTuition;
   };
 
-  // Submit Đăng ký
+  const processMembershipRenewal = async () => {
+    setSubmitting(true);
+    try {
+      const res = await createMembershipRenewal(user?.id, selectedPackage.id);
+      setRegistrationResult({
+        ...res,
+        kind: 'membership',
+        packageName: res.planName,
+        payosQrImage: res.qrImage,
+        paymentUrl: res.checkoutUrl,
+        deadline: Date.now() + (res.expiresInSeconds ?? PAYMENT_TIMEOUT_SECONDS) * 1000,
+      });
+      setNow(Date.now());
+    } catch (err) {
+      setError(err.message || 'Không tạo được đơn gia hạn. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmitRegistration = async (e) => {
     e.preventDefault();
     if (submitting) return;
@@ -411,36 +420,15 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
       return;
     }
 
-    // Nếu chỉ mua gói hội viên
     if (!includeClass) {
-      if (
-        noClassYet &&
-        isBronzePackage(selectedPackage) &&
-        !window.confirm('Hạng Đồng được tặng miễn phí khi bạn đăng ký khóa học. Bạn vẫn muốn mua riêng Hạng Đồng bây giờ?')
-      ) {
+      if (noClassYet && isBronzePackage(selectedPackage)) {
+        setShowBronzeWarningModal(true);
         return;
       }
-      setSubmitting(true);
-      try {
-        const res = await createMembershipRenewal(user?.id, selectedPackage.id);
-        setRegistrationResult({
-          ...res,
-          kind: 'membership',
-          packageName: res.planName,
-          payosQrImage: res.qrImage,
-          paymentUrl: res.checkoutUrl,
-          deadline: Date.now() + (res.expiresInSeconds ?? PAYMENT_TIMEOUT_SECONDS) * 1000,
-        });
-        setNow(Date.now());
-      } catch (err) {
-        setError(err.message || 'Không tạo được đơn gia hạn. Vui lòng thử lại.');
-      } finally {
-        setSubmitting(false);
-      }
+      await processMembershipRenewal();
       return;
     }
 
-    // Đăng ký cả gói + lớp học
     if (!fullName.trim() || !phone.trim()) {
       setError('Vui lòng điền đầy đủ họ và tên và số điện thoại.');
       return;
@@ -613,31 +601,31 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
         </section>
       ) : !renewOnly && !type ? (
         <div className="mt-6 space-y-4">
-        {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {TYPE_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setType(option.value)}
-              className="group flex cursor-pointer flex-col rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-xs transition-colors hover:border-[#e31b23] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23]"
-            >
-              <span className="flex size-12 items-center justify-center rounded-2xl bg-red-50 text-[#e31b23] transition-colors group-hover:bg-[#e31b23] group-hover:text-white">
-                <svg className="size-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-                  {option.icon}
-                </svg>
-              </span>
-              <span className="mt-4 block text-lg font-black text-slate-900">{option.title}</span>
-              <span className="mt-1 block text-sm text-pretty text-slate-500">{option.description}</span>
-              <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-[#e31b23]">
-                Chọn hình thức này
-                <svg className="size-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
-            </button>
-          ))}
-        </div>
+          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {TYPE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setType(option.value)}
+                className="group flex cursor-pointer flex-col rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-xs transition-colors hover:border-[#e31b23] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23]"
+              >
+                <span className="flex size-12 items-center justify-center rounded-2xl bg-red-50 text-[#e31b23] transition-colors group-hover:bg-[#e31b23] group-hover:text-white">
+                  <svg className="size-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                    {option.icon}
+                  </svg>
+                </span>
+                <span className="mt-4 block text-lg font-black text-slate-900">{option.title}</span>
+                <span className="mt-1 block text-sm text-pretty text-slate-500">{option.description}</span>
+                <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-[#e31b23]">
+                  Chọn hình thức này
+                  <svg className="size-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : !renewOnly && type === 'private' ? (
         <div className="mt-6">
@@ -655,282 +643,323 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
         </div>
       ) : (
         <>
-        {!renewOnly && (
-          <button type="button" onClick={() => setType('')} className="mt-6 cursor-pointer text-sm font-bold text-slate-500 hover:text-[#e31b23]">
-            ← Chọn hình thức khác
-          </button>
-        )}
-        <form onSubmit={handleSubmitRegistration} className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="space-y-4">
-            {noClassYet && (
-              <div className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-pretty text-emerald-900">
-                  <span className="font-bold">Đăng ký khóa học sẽ được tặng Hạng Đồng.</span> Bạn không cần mua riêng nếu định học một lớp. Nâng lên Hạng Bạc hoặc Vàng cùng lúc đăng ký lớp còn được giảm giá.
-                </p>
-                <Link
-                  to="/dang-ky-khoa-hoc"
-                  className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
-                >
-                  Xem khóa học
-                </Link>
-              </div>
-            )}
-            {includeClass && (
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-                <h2 className="text-lg font-black">Lớp học</h2>
-                <p className="mt-1 text-sm text-slate-500">Chọn môn và lớp muốn đăng ký.</p>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm font-bold text-slate-700">
-                    Bộ môn
-                    <select value={selectedSportId} onChange={(event) => handleSportChange(event.target.value)} className={fieldClass}>
-                      {sportsList.map((sport) => (
-                        <option key={sport.id} value={sport.id}>{sport.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-sm font-bold text-slate-700">
-                    Lớp
-                    <select
-                      value={selectedClass?.id || ''}
-                      disabled={loadingClasses || classList.length === 0}
-                      onChange={(event) => {
-                        const next = classList.find((item) => item.id === event.target.value);
-                        if (next) setSelectedClass(next);
-                      }}
-                      className={fieldClass}
-                    >
-                      {loadingClasses ? (
-                        <option value="">Đang tải lớp...</option>
-                      ) : classList.length > 0 ? (
-                        <>
-                          {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
-                          {classList.map((item) => {
-                            const reason = blockedClasses.get(String(item.id));
-                            return (
-                              <option key={item.id} value={item.id} disabled={Boolean(reason)}>
-                                {item.name} ({formatFee(item.tuition)}){reason ? ` · ${reason}` : ''}
-                              </option>
-                            );
-                          })}
-                        </>
-                      ) : (
-                        <option value="">Chưa có lớp mở cho môn này</option>
-                      )}
-                    </select>
-                  </label>
+          {!renewOnly && (
+            <button type="button" onClick={() => setType('')} className="mt-6 cursor-pointer text-sm font-bold text-slate-500 hover:text-[#e31b23]">
+              ← Chọn hình thức khác
+            </button>
+          )}
+          <form onSubmit={handleSubmitRegistration} className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="space-y-4">
+              {noClassYet && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-pretty text-emerald-900">
+                    <span className="font-bold">Đăng ký khóa học sẽ được tặng Hạng Đồng.</span> Bạn không cần mua riêng nếu định học một lớp. Nâng lên Hạng Bạc hoặc Vàng cùng lúc đăng ký lớp còn được giảm giá.
+                  </p>
+                  <Link
+                    to="/dang-ky-khoa-hoc-kham-pha"
+                    className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                  >
+                    Xem khóa học
+                  </Link>
                 </div>
-                {selectedClass ? (
-                  <dl className="mt-4 grid gap-2 rounded-2xl bg-[#f4f5f7] p-4 text-sm sm:grid-cols-2">
-                    <div>
-                      <dt className="text-slate-500">Lớp</dt>
-                      <dd className="font-bold">{selectedClass.name}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Huấn luyện viên</dt>
-                      <dd className="font-semibold">{selectedClass.coachName || 'Đang cập nhật'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Thời gian</dt>
-                      <dd className="font-semibold">{selectedClass.startDate} – {selectedClass.endDate}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Học phí</dt>
-                      <dd className="font-black text-[#b1131a]">{formatFee(selectedClass.tuition)}</dd>
-                    </div>
-                  </dl>
-                ) : (
-                  <p className="mt-4 text-sm text-slate-500">
-                    {classList.length > 0
-                      ? 'Các lớp của môn này trùng lớp đã đăng ký, cùng khóa hoặc trùng lịch.'
-                      : 'Môn này chưa có lớp đang mở.'}
+              )}
+              {includeClass && (
+                <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h2 className="text-lg font-black">Lớp học</h2>
+                  <p className="mt-1 text-sm text-slate-500">Chọn môn và lớp muốn đăng ký.</p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <label className="block text-sm font-bold text-slate-700">
+                      Bộ môn
+                      <select value={selectedSportId} onChange={(event) => handleSportChange(event.target.value)} className={fieldClass}>
+                        {sportsList.map((sport) => (
+                          <option key={sport.id} value={sport.id}>{sport.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-sm font-bold text-slate-700">
+                      Lớp
+                      <select
+                        value={selectedClass?.id || ''}
+                        disabled={loadingClasses || classList.length === 0}
+                        onChange={(event) => {
+                          const next = classList.find((item) => item.id === event.target.value);
+                          if (next) setSelectedClass(next);
+                        }}
+                        className={fieldClass}
+                      >
+                        {loadingClasses ? (
+                          <option value="">Đang tải lớp...</option>
+                        ) : classList.length > 0 ? (
+                          <>
+                            {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
+                            {classList.map((item) => {
+                              const reason = blockedClasses.get(String(item.id));
+                              return (
+                                <option key={item.id} value={item.id} disabled={Boolean(reason)}>
+                                  {item.name} ({formatFee(item.tuition)}){reason ? ` · ${reason}` : ''}
+                                </option>
+                              );
+                            })}
+                          </>
+                        ) : (
+                          <option value="">Chưa có lớp mở cho môn này</option>
+                        )}
+                      </select>
+                    </label>
+                  </div>
+                  {selectedClass ? (
+                    <dl className="mt-4 grid gap-2 rounded-2xl bg-[#f4f5f7] p-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-slate-500">Lớp</dt>
+                        <dd className="font-bold">{selectedClass.name}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">Huấn luyện viên</dt>
+                        <dd className="font-semibold">{selectedClass.coachName || 'Đang cập nhật'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">Thời gian</dt>
+                        <dd className="font-semibold">{selectedClass.startDate} – {selectedClass.endDate}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">Học phí</dt>
+                        <dd className="font-black text-[#b1131a]">{formatFee(selectedClass.tuition)}</dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <p className="mt-4 text-sm text-slate-500">
+                      {classList.length > 0
+                        ? 'Các lớp của môn này trùng lớp đã đăng ký, cùng khóa hoặc trùng lịch.'
+                        : 'Môn này chưa có lớp đang mở.'}
+                    </p>
+                  )}
+                </section>
+              )}
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+                <h2 className="text-lg font-black">Gói hội viên</h2>
+                <p className="mt-1 text-sm text-pretty text-slate-500">
+                  {membershipOnly && !ownedPackage
+                    ? 'Chọn một gói. Thời hạn tính từ lúc thanh toán thành công.'
+                    : renewOnly
+                    ? 'Gia hạn đúng gói đang có, hoặc nâng lên hạng cao hơn.'
+                    : 'Hạng Đồng là gói bắt buộc khi đăng ký khóa học và được tặng kèm lớp. Chọn Hạng Bạc hoặc Hạng Vàng nếu muốn nâng hạng thay cho gói tặng.'}
+                </p>
+                {ownedPackage && (
+                  <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                    Bạn đang có {ownedPackage.name} nên chỉ gia hạn {ownedPackage.name} hoặc nâng lên hạng cao hơn.
                   </p>
                 )}
-              </section>
-            )}
-
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-              <h2 className="text-lg font-black">Gói hội viên</h2>
-              <p className="mt-1 text-sm text-pretty text-slate-500">
-                {membershipOnly && !ownedPackage
-                  ? 'Chọn một gói. Thời hạn tính từ lúc thanh toán thành công.'
-                  : renewOnly
-                  ? 'Gia hạn đúng gói đang có, hoặc nâng lên hạng cao hơn.'
-                  : 'Hạng Đồng là gói bắt buộc khi đăng ký khóa học và được tặng kèm lớp. Chọn Hạng Bạc hoặc Hạng Vàng nếu muốn nâng hạng thay cho gói tặng.'}
-              </p>
-              {ownedPackage && (
-                <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-                  Bạn đang có {ownedPackage.name} nên chỉ gia hạn {ownedPackage.name} hoặc nâng lên hạng cao hơn.
-                </p>
-              )}
-              <div className="mt-4 space-y-3">
-                {canSkipPackage && (
-                  <label className={`block cursor-pointer rounded-2xl border p-4 ${skipPackage ? 'border-[#e31b23] bg-red-50/50' : 'border-slate-200 bg-white'}`}>
-                    <span className="flex items-start gap-3">
-                      <input
-                        type="radio"
-                        name="package_select"
-                        checked={skipPackage}
-                        onChange={() => setSkipPackage(true)}
-                        className="mt-1 accent-[#e31b23]"
-                      />
-                      <span>
-                        <span className="block text-sm font-black text-slate-900">Không gia hạn</span>
-                        <span className="mt-0.5 block text-sm text-slate-500">
-                          Giữ {ownedPackage.name}. Chỉ đóng học phí lớp, không cộng thêm gói.
+                <div className="mt-4 space-y-3">
+                  {canSkipPackage && (
+                    <label className={`block cursor-pointer rounded-2xl border p-4 ${skipPackage ? 'border-[#e31b23] bg-red-50/50' : 'border-slate-200 bg-white'}`}>
+                      <span className="flex items-start gap-3">
+                        <input
+                          type="radio"
+                          name="package_select"
+                          checked={skipPackage}
+                          onChange={() => setSkipPackage(true)}
+                          className="mt-1 accent-[#e31b23]"
+                        />
+                        <span>
+                          <span className="block text-sm font-black text-slate-900">Không gia hạn</span>
+                          <span className="mt-0.5 block text-sm text-slate-500">
+                            Giữ {ownedPackage.name}. Chỉ đóng học phí lớp, không cộng thêm gói.
+                          </span>
                         </span>
                       </span>
-                    </span>
-                  </label>
-                )}
-                {packages.map((pkg) => {
-                  const isSelected = !(canSkipPackage && skipPackage) && selectedPackage?.id === pkg.id;
-                  const isLocked = isPackageLocked(pkg);
-                  const price = calculatePackagePrice(pkg);
-                  return (
-                    <label
-                      key={pkg.id}
-                      className={`block rounded-2xl border p-4 ${
-                        isLocked
-                          ? 'cursor-not-allowed border-slate-200 bg-slate-100 opacity-60'
-                          : isSelected
-                            ? 'cursor-pointer border-[#e31b23] bg-red-50/50'
-                            : 'cursor-pointer border-slate-200 bg-white'
-                      }`}
-                    >
-                      <span className="flex items-start justify-between gap-3">
-                        <span className="flex items-start gap-3">
-                          <input
-                            type="radio"
-                            name="package_select"
-                            checked={isSelected}
-                            disabled={isLocked}
-                            onChange={() => {
-                              if (isLocked) return;
-                              setSkipPackage(false);
-                              setSelectedPackage(pkg);
-                            }}
-                            className="mt-1 accent-[#e31b23]"
-                          />
-                          <span>
-                            <span className="block text-sm font-black text-slate-900">
-                              {pkg.name}
-                              {isLocked ? ' · thấp hơn gói đang có' : ''}
+                    </label>
+                  )}
+                  {packages.map((pkg) => {
+                    const isSelected = !(canSkipPackage && skipPackage) && selectedPackage?.id === pkg.id;
+                    const isLocked = isPackageLocked(pkg);
+                    const price = calculatePackagePrice(pkg);
+                    return (
+                      <label
+                        key={pkg.id}
+                        className={`block rounded-2xl border p-4 ${
+                          isLocked
+                            ? 'cursor-not-allowed border-slate-200 bg-slate-100 opacity-60'
+                            : isSelected
+                              ? 'cursor-pointer border-[#e31b23] bg-red-50/50'
+                              : 'cursor-pointer border-slate-200 bg-white'
+                        }`}
+                      >
+                        <span className="flex items-start justify-between gap-3">
+                          <span className="flex items-start gap-3">
+                            <input
+                              type="radio"
+                              name="package_select"
+                              checked={isSelected}
+                              disabled={isLocked}
+                              onChange={() => {
+                                if (isLocked) return;
+                                setSkipPackage(false);
+                                setSelectedPackage(pkg);
+                              }}
+                              className="mt-1 accent-[#e31b23]"
+                            />
+                            <span>
+                              <span className="block text-sm font-black text-slate-900">
+                                {pkg.name}
+                                {isLocked ? ' · thấp hơn gói đang có' : ''}
+                              </span>
+                              {noClassYet && isBronzePackage(pkg) && (
+                                <span className="mt-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                                  Được tặng khi đăng ký khóa học
+                                </span>
+                              )}
+                              <span className="mt-0.5 block text-sm text-slate-500">Thời hạn {pkg.validityMonths || 1} tháng</span>
+                              {!renewOnly && isBronzePackage(pkg) && !ownedPackage && (
+                                <span className="mt-1 block text-sm font-semibold text-emerald-700">
+                                  Gói bắt buộc khi đăng ký khóa học. Tặng kèm, không tính thêm phí.
+                                </span>
+                              )}
+                              {!renewOnly && !isBronzePackage(pkg) && !isLocked && (
+                                <span className="mt-1 block text-sm text-slate-500">
+                                  {ownedPackage
+                                    ? 'Gia hạn hoặc nâng hạng khi đăng ký kèm lớp, vẫn được giảm giá.'
+                                    : 'Nâng hạng thay cho Hạng Đồng tặng kèm.'}
+                                </span>
+                              )}
                             </span>
-                            {noClassYet && isBronzePackage(pkg) && (
-                              <span className="mt-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
-                                Được tặng khi đăng ký khóa học
+                          </span>
+                          <span className="shrink-0 text-right text-sm font-black">
+                            {includeClass && isBronzePackage(pkg) && !ownedPackage ? (
+                              <span className="text-emerald-700">0đ</span>
+                            ) : includeClass && Number(pkg.upgradeDiscountPercent) > 0 ? (
+                              <span>
+                                <span className="block text-[#b1131a]">{formatFee(price)}</span>
+                                <span className="block text-xs font-semibold text-slate-400 line-through">{formatFee(pkg.fee)}</span>
+                                <span className="block text-xs font-semibold text-emerald-700">Giảm {pkg.upgradeDiscountPercent}%</span>
                               </span>
-                            )}
-                            <span className="mt-0.5 block text-sm text-slate-500">Thời hạn {pkg.validityMonths || 1} tháng</span>
-                            {!renewOnly && isBronzePackage(pkg) && !ownedPackage && (
-                              <span className="mt-1 block text-sm font-semibold text-emerald-700">
-                                Gói bắt buộc khi đăng ký khóa học. Tặng kèm, không tính thêm phí.
-                              </span>
-                            )}
-                            {!renewOnly && !isBronzePackage(pkg) && !isLocked && (
-                              <span className="mt-1 block text-sm text-slate-500">
-                                {ownedPackage
-                                  ? 'Gia hạn hoặc nâng hạng khi đăng ký kèm lớp, vẫn được giảm giá.'
-                                  : 'Nâng hạng thay cho Hạng Đồng tặng kèm.'}
-                              </span>
+                            ) : (
+                              formatFee(pkg.fee)
                             )}
                           </span>
                         </span>
-                        <span className="shrink-0 text-right text-sm font-black">
-                          {includeClass && isBronzePackage(pkg) && !ownedPackage ? (
-                            <span className="text-emerald-700">0đ</span>
-                          ) : includeClass && Number(pkg.upgradeDiscountPercent) > 0 ? (
-                            <span>
-                              <span className="block text-[#b1131a]">{formatFee(price)}</span>
-                              <span className="block text-xs font-semibold text-slate-400 line-through">{formatFee(pkg.fee)}</span>
-                              <span className="block text-xs font-semibold text-emerald-700">Giảm {pkg.upgradeDiscountPercent}%</span>
-                            </span>
-                          ) : (
-                            formatFee(pkg.fee)
-                          )}
-                        </span>
-                      </span>
-                      {Array.isArray(pkg.benefits) && pkg.benefits.length > 0 && (
-                        <ul className="mt-3 list-disc space-y-1 pl-9 text-sm text-slate-600">
-                          {pkg.benefits.map((benefit) => (
-                            <li key={benefit}>{benefit}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            </section>
-
-            {includeClass && (
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-                <h2 className="text-lg font-black">Thông tin học viên</h2>
-                <p className="mt-1 text-sm text-slate-500">Dùng để ghi trên hóa đơn.</p>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm font-bold text-slate-700 sm:col-span-2">
-                    Họ và tên
-                    <input value={fullName} onChange={(event) => setFullName(event.target.value)} className={fieldClass} placeholder="Nguyễn Văn A" />
-                  </label>
-                  <label className="block text-sm font-bold text-slate-700">
-                    Số điện thoại
-                    <input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" className={fieldClass} placeholder="0901234567" />
-                  </label>
-                  <label className="block text-sm font-bold text-slate-700">
-                    Ngày sinh
-                    <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className={fieldClass} />
-                  </label>
-                  <label className="block text-sm font-bold text-slate-700">
-                    Giới tính
-                    <select value={gender} onChange={(event) => setGender(event.target.value)} className={fieldClass}>
-                      <option value="Nam">Nam</option>
-                      <option value="Nữ">Nữ</option>
-                      <option value="Khác">Khác</option>
-                    </select>
-                  </label>
+                        {Array.isArray(pkg.benefits) && pkg.benefits.length > 0 && (
+                          <ul className="mt-3 list-disc space-y-1 pl-9 text-sm text-slate-600">
+                            {pkg.benefits.map((benefit) => (
+                              <li key={benefit}>{benefit}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
               </section>
-            )}
-          </div>
 
-          <aside className="rounded-3xl border border-slate-200 bg-white p-5 lg:sticky lg:top-4">
-            <h2 className="text-lg font-black">Tóm tắt</h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-600">Gói hội viên</dt>
-                <dd className="text-right font-bold">{packageSummaryName}</dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-600">Phí gói</dt>
-                <dd className="font-bold">
-                  {formatFee(packageFeeNow())}
-                </dd>
-              </div>
-              {includeClass && selectedClass && (
-                <div className="flex items-start justify-between gap-3">
-                  <dt className="text-slate-600">Học phí {selectedClass.name}</dt>
-                  <dd className="font-bold">{formatFee(selectedClass.tuition || 0)}</dd>
-                </div>
+              {includeClass && (
+                <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h2 className="text-lg font-black">Thông tin học viên</h2>
+                  <p className="mt-1 text-sm text-slate-500">Dùng để ghi trên hóa đơn.</p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <label className="block text-sm font-bold text-slate-700 sm:col-span-2">
+                      Họ và tên
+                      <input value={fullName} onChange={(event) => setFullName(event.target.value)} className={fieldClass} placeholder="Nguyễn Văn A" />
+                    </label>
+                    <label className="block text-sm font-bold text-slate-700">
+                      Số điện thoại
+                      <input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" className={fieldClass} placeholder="0901234567" />
+                    </label>
+                    <label className="block text-sm font-bold text-slate-700">
+                      Ngày sinh
+                      <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className={fieldClass} />
+                    </label>
+                    <label className="block text-sm font-bold text-slate-700">
+                      Giới tính
+                      <select value={gender} onChange={(event) => setGender(event.target.value)} className={fieldClass}>
+                        <option value="Nam">Nam</option>
+                        <option value="Nữ">Nữ</option>
+                        <option value="Khác">Khác</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
               )}
-              <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-3">
-                <dt className="font-black text-slate-900">Tổng thanh toán</dt>
-                <dd className="text-xl font-black text-[#b1131a]">{formatFee(calculateTotalFee())}</dd>
-              </div>
-            </dl>
-            {error && <p className="mt-4 text-sm font-semibold text-[#b1131a]">{error}</p>}
-            <button
-              type="submit"
-              disabled={submitting || (includeClass && !selectedClass) || (!(canSkipPackage && skipPackage) && !selectedPackage)}
-              className={`${primaryButtonClass} mt-4 w-full`}
-            >
-              {submitting ? 'Đang tạo đơn...' : 'Tạo mã thanh toán'}
-            </button>
-            <p className="mt-3 text-sm text-slate-500">Thanh toán qua VietQR / payOS.</p>
-          </aside>
-        </form>
+            </div>
+
+            <aside className="rounded-3xl border border-slate-200 bg-white p-5 lg:sticky lg:top-4">
+              <h2 className="text-lg font-black">Tóm tắt</h2>
+              <dl className="mt-4 space-y-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-slate-600">Gói hội viên</dt>
+                  <dd className="text-right font-bold">{packageSummaryName}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-slate-600">Phí gói</dt>
+                  <dd className="font-bold">
+                    {formatFee(packageFeeNow())}
+                  </dd>
+                </div>
+                {includeClass && selectedClass && (
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-slate-600">Học phí {selectedClass.name}</dt>
+                    <dd className="font-bold">{formatFee(selectedClass.tuition || 0)}</dd>
+                  </div>
+                )}
+                <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-3">
+                  <dt className="font-black text-slate-900">Tổng thanh toán</dt>
+                  <dd className="text-xl font-black text-[#b1131a]">{formatFee(calculateTotalFee())}</dd>
+                </div>
+              </dl>
+              {error && <p className="mt-4 text-sm font-semibold text-[#b1131a]">{error}</p>}
+              <button
+                type="submit"
+                disabled={submitting || (includeClass && !selectedClass) || (!(canSkipPackage && skipPackage) && !selectedPackage)}
+                className={`${primaryButtonClass} mt-4 w-full`}
+              >
+                {submitting ? 'Đang tạo đơn...' : 'Tạo mã thanh toán'}
+              </button>
+              <p className="mt-3 text-sm text-slate-500">Thanh toán qua VietQR / payOS.</p>
+            </aside>
+          </form>
         </>
+      )}
+
+      {/* Modal Cảnh báo Mua riêng Hạng Đồng */}
+      {showBronzeWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl transition-all">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <svg className="size-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="mt-4 text-lg font-black text-slate-900">Nhắc nhở về Hạng Đồng</h3>
+            <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+              Hạng Đồng được <span className="font-bold text-emerald-600">tặng miễn phí</span> khi bạn đăng ký bất kỳ khóa học nào tại trung tâm.
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              Bạn vẫn muốn mua riêng Hạng Đồng ngay bây giờ chứ?
+            </p>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBronzeWarningModal(false);
+                  navigate('/dang-ky-khoa-hoc-kham-pha');
+                }}
+                className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-800"
+              >
+                Xem khóa học ngay
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowBronzeWarningModal(false);
+                  await processMembershipRenewal();
+                }}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-100"
+              >
+                Vẫn mua Hạng Đồng
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
 }
-
