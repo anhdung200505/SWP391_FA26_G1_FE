@@ -74,6 +74,34 @@ export function loginMember(email, password, portal = 'member') {
   });
 }
 
+export function getGoogleClientId() {
+  return request('/auth/google-client', { anonymous: true });
+}
+
+export function loginWithGoogle(accessToken, portal = 'member', linkExisting = false) {
+  return request('/auth/google', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ accessToken, portal, linkExisting }),
+  });
+}
+
+export function sendGmailOtp(email, portal = 'member') {
+  return request('/auth/gmail/otp', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, portal }),
+  });
+}
+
+export function confirmGmailLogin(email, code, portal = 'member') {
+  return request('/auth/gmail/confirm', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, code, portal }),
+  });
+}
+
 export function registerGuest(payload) {
   return request('/auth/register', {
     method: 'POST',
@@ -87,6 +115,22 @@ export function sendRegisterOtp(payload) {
     method: 'POST',
     anonymous: true,
     body: JSON.stringify(payload),
+  });
+}
+
+export function forgotPassword(email) {
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(email, code, newPassword) {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, code, newPassword }),
   });
 }
 

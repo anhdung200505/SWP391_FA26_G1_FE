@@ -24,12 +24,16 @@ builder.Configuration.AddJsonFile(payOsConfigPath, optional: true, reloadOnChang
 var emailConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "email.json"));
 builder.Configuration.AddJsonFile(emailConfigPath, optional: true, reloadOnChange: true);
 
+var googleConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "google.json"));
+builder.Configuration.AddJsonFile(googleConfigPath, optional: true, reloadOnChange: true);
+
 var connectionString = builder.Configuration["connectionString"]
     ?? builder.Configuration.GetConnectionString("AnhDuySport")
     ?? throw new InvalidOperationException("Thiếu chuỗi kết nối AnhDuySport.");
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddSingleton<AppLinks>();
 builder.Services.AddSingleton<EmailQueue>();
