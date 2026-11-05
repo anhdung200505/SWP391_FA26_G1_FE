@@ -14,6 +14,7 @@ const PAGE_LABELS = {
   '/hoc-vien/bai-tap-lop': 'Bài tập lớp',
   '/hoc-vien/giao-an-ai': 'Gợi ý tập',
   '/dang-ky-khoa-hoc': 'Đăng ký khóa học',
+  '/dang-ky-thanh-vien': 'Đăng ký thành viên',
   '/hoc-vien/lich-su-thanh-toan': 'Lịch sử thanh toán',
 };
 
