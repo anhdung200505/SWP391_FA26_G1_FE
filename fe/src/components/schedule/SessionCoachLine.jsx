@@ -5,7 +5,7 @@ const LABELS = {
   permanent: 'Đổi HLV',
 };
 
-export default function SessionCoachLine({ session, className = 'text-xs text-gray-500' }) {
+export default function SessionCoachLine({ session, className = 'text-xs text-slate-500' }) {
   const label = LABELS[session.coachChange];
   // classCoachName là HLV phụ trách hiện tại của lớp, chỉ đúng là "HLV được thay" với buổi chưa diễn ra.
   const upcoming = String(session.date || session.sessionDate || '').slice(0, 10) >= new Date().toLocaleDateString('sv-SE');
@@ -23,7 +23,7 @@ export default function SessionCoachLine({ session, className = 'text-xs text-gr
       </span>
       {session.coachName}
       {session.coachChange === 'substitute' && upcoming && session.classCoachName && (
-        <span className="block text-[11px] text-gray-400">Thay HLV {session.classCoachName}</span>
+        <span className="block text-[11px] text-slate-400">Thay HLV {session.classCoachName}</span>
       )}
     </p>
   );

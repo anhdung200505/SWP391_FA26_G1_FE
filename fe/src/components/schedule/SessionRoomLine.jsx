@@ -1,5 +1,5 @@
 // Dòng phòng của một buổi học. Phòng khác phòng mặc định của lớp (roomChanged) thì có nhãn Đổi phòng.
-export default function SessionRoomLine({ session, fallback = '', className = 'text-xs text-gray-500' }) {
+export default function SessionRoomLine({ session, fallback = '', className = 'text-xs text-slate-500' }) {
   return (
     <p className={className}>
       {session.roomChanged && (

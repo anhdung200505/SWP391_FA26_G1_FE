@@ -79,18 +79,18 @@ export default function AssignmentPanel({ classId, sessions }) {
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-      <section className="rounded-3xl border border-gray-200 bg-white p-5">
-        <h2 className="text-lg font-black">Bài tập theo buổi</h2>
-        {loading && <p className="mt-4 text-sm text-gray-500">Đang tải...</p>}
-        {!loading && items.length === 0 && <p className="mt-4 text-sm text-gray-600">Chưa có bài tập. Thêm ở cột bên cạnh.</p>}
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+        <h2 className="text-lg font-black text-balance text-slate-900">Bài tập theo buổi</h2>
+        {loading && <p className="mt-4 text-sm text-slate-500">Đang tải...</p>}
+        {!loading && items.length === 0 && <p className="mt-4 text-sm text-slate-600">Chưa có bài tập. Thêm ở cột bên cạnh.</p>}
         <ul className="mt-4 space-y-3">
           {items.map((item) => (
-            <li key={item.assignmentId} className="rounded-2xl border border-gray-200 px-4 py-3">
+            <li key={item.assignmentId} className="rounded-2xl border border-slate-200 px-4 py-3">
               <p className="font-black">{item.title}</p>
-              <p className="mt-1 text-xs font-semibold text-gray-500">{item.sessionLabel}</p>
-              {item.description && <p className="mt-2 text-sm whitespace-pre-line text-gray-700">{item.description}</p>}
-              {item.dueAt && <p className="mt-2 text-xs text-gray-500">Hạn {formatDateTime(item.dueAt)}</p>}
+              <p className="mt-1 text-xs font-semibold text-slate-500">{item.sessionLabel}</p>
+              {item.description && <p className="mt-2 text-sm whitespace-pre-line text-slate-700">{item.description}</p>}
+              {item.dueAt && <p className="mt-2 text-xs text-slate-500">Hạn {formatDateTime(item.dueAt)}</p>}
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
@@ -116,9 +116,9 @@ export default function AssignmentPanel({ classId, sessions }) {
         </ul>
       </section>
 
-      <section className="rounded-3xl border border-gray-200 bg-white p-5">
-        <h2 className="text-lg font-black">{editingId ? 'Sửa bài tập' : 'Thêm bài tập'}</h2>
-        <label className="mt-4 block text-sm font-bold text-gray-700">
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+        <h2 className="text-lg font-black text-balance text-slate-900">{editingId ? 'Sửa bài tập' : 'Thêm bài tập'}</h2>
+        <label className="mt-4 block text-sm font-bold text-slate-700">
           Buổi
           <select
             value={form.sessionId}
@@ -132,7 +132,7 @@ export default function AssignmentPanel({ classId, sessions }) {
             ))}
           </select>
         </label>
-        <label className="mt-3 block text-sm font-bold text-gray-700">
+        <label className="mt-3 block text-sm font-bold text-slate-700">
           Tiêu đề
           <input
             value={form.title}
@@ -140,7 +140,7 @@ export default function AssignmentPanel({ classId, sessions }) {
             className={fieldClass}
           />
         </label>
-        <label className="mt-3 block text-sm font-bold text-gray-700">
+        <label className="mt-3 block text-sm font-bold text-slate-700">
           Nội dung
           <textarea
             rows={4}
@@ -149,7 +149,7 @@ export default function AssignmentPanel({ classId, sessions }) {
             className={fieldClass}
           />
         </label>
-        <label className="mt-3 block text-sm font-bold text-gray-700">
+        <label className="mt-3 block text-sm font-bold text-slate-700">
           Hạn nộp
           <input
             type="datetime-local"
@@ -158,8 +158,8 @@ export default function AssignmentPanel({ classId, sessions }) {
             className={fieldClass}
           />
         </label>
-        {error && <p className="mt-3 text-sm font-semibold text-[#b1131a]">{error}</p>}
-        {notice && <p className="mt-3 text-sm font-semibold text-emerald-800">{notice}</p>}
+        {error && <p className="mt-3 text-sm font-semibold text-red-700">{error}</p>}
+        {notice && <p className="mt-3 text-sm font-semibold text-emerald-700">{notice}</p>}
         <div className="mt-4 flex gap-2">
           <button type="button" onClick={submit} disabled={saving || !openSessions.length} className={primaryButtonClass}>
             {saving ? 'Đang lưu...' : editingId ? 'Lưu sửa' : 'Thêm bài'}
