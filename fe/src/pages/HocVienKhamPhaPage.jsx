@@ -1,9 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import WorkspaceShell from '../components/workspace/WorkspaceShell';
-import NotificationBell from '../components/NotificationBell';
-import Footer from '../components/Footer';
+import { useStudentShell } from '../components/workspace/studentShell';
+import { studentWorkspaceItems } from '../components/workspace/studentNav';
+
+// Học viên chưa có lớp dùng trang này làm "Tổng quan": cùng một menu với các trang còn lại.
+const MENU_ITEMS = studentWorkspaceItems(false).map((item) =>
+  item.id === 'overview' ? { ...item, to: '/hoc-vien-kham-pha' } : item,
+);
+const BREADCRUMB = [{ label: 'Học viên' }, { label: 'Tổng quan' }];
 
 export default function HocVienKhamPhaPage() {
   const { user } = useAuth();
@@ -11,23 +16,11 @@ export default function HocVienKhamPhaPage() {
   const displayEmail = user?.email || 'Chưa cập nhật';
   const displayPhone = user?.phone || 'Chưa cập nhật';
 
-  const sidebarItems = [
-    { key: 'kham-pha', label: 'Khám phá khóa học', icon: '✨' },
-    { key: 'register', label: 'Đăng ký khóa học', icon: '📝', href: '/dang-ky-khoa-hoc' },
-    { key: 'private', label: 'Học 1-1 với HLV', icon: '🎯', href: '/hoc-vien/hoc-1-1' },
-  ];
+  useStudentShell({ items: MENU_ITEMS, breadcrumb: BREADCRUMB }, []);
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-100">
-      <WorkspaceShell
-        role="Học viên"
-        homeTo="/hoc-vien-kham-pha"
-        items={sidebarItems.map((item) => ({ id: item.key, label: item.label, to: item.href }))}
-        activeId="kham-pha"
-        breadcrumb={[{ label: 'Học viên' }, { label: 'Khám phá trung tâm' }]}
-        headerExtra={<NotificationBell />}
-        footer={<Footer />}
-      >
+    <>
+      <div>
         <div className="mt-6 space-y-8 mb-12">
           {/* BANNER CHÀO MỪNG SANG TRỌNG */}
           <section className="relative overflow-hidden rounded-3xl bg-slate-900 text-white shadow-xl border border-slate-800">
@@ -205,7 +198,7 @@ export default function HocVienKhamPhaPage() {
             </div>
           </section>
         </div>
-      </WorkspaceShell>
-    </div>
+      </div>
+    </>
   );
 }

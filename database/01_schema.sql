@@ -509,49 +509,6 @@ CREATE TABLE attendance (
 );
 GO
 
-/* Yêu cầu học 1-1: member chọn môn, lịch hằng tuần, HLV; quản lý duyệt thì sinh lớp private (sĩ số 1) và các buổi học.
-   approved = đã duyệt, chờ thanh toán trong approval_expires_at (24 giờ), quá hạn thì expired và lớp bị hủy. Đã thanh toán thì lớp có ghi danh. */
-CREATE TABLE private_class_request (
-    request_id          INT IDENTITY(1,1) NOT NULL,
-    member_user_id      INT           NOT NULL,
-    course_id           INT           NOT NULL,
-    coach_user_id       INT           NOT NULL,
-    start_date          DATE          NOT NULL,
-    note                NVARCHAR(500) NULL,
-    status              NVARCHAR(20)  NOT NULL CONSTRAINT DF_private_class_request_status DEFAULT (N'pending'),
-    created_at          DATETIME2(0)  NOT NULL,
-    decided_by_user_id  INT           NULL,
-    decided_at          DATETIME2(0)  NULL,
-    reject_reason       NVARCHAR(500) NULL,
-    class_id            INT           NULL,
-    approval_expires_at DATETIME2(0)  NULL,
-    CONSTRAINT PK_private_class_request PRIMARY KEY (request_id),
-    CONSTRAINT FK_private_class_request_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
-    CONSTRAINT FK_private_class_request_course FOREIGN KEY (course_id) REFERENCES course (course_id),
-    CONSTRAINT FK_private_class_request_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
-    CONSTRAINT FK_private_class_request_decider FOREIGN KEY (decided_by_user_id) REFERENCES [user] (user_id),
-    CONSTRAINT FK_private_class_request_class FOREIGN KEY (class_id) REFERENCES class (class_id),
-    CONSTRAINT CK_private_class_request_status CHECK (status IN (N'pending', N'approved', N'rejected', N'cancelled', N'expired'))
-);
-GO
-
-CREATE TABLE private_class_request_slot (
-    request_slot_id INT IDENTITY(1,1) NOT NULL,
-    request_id      INT     NOT NULL,
-    weekday         TINYINT NOT NULL,
-    time_slot_id    INT     NOT NULL,
-    CONSTRAINT PK_private_class_request_slot PRIMARY KEY (request_slot_id),
-    CONSTRAINT UQ_private_class_request_slot UNIQUE (request_id, weekday, time_slot_id),
-    CONSTRAINT FK_private_class_request_slot_request FOREIGN KEY (request_id) REFERENCES private_class_request (request_id) ON DELETE CASCADE,
-    CONSTRAINT FK_private_class_request_slot_time FOREIGN KEY (time_slot_id) REFERENCES time_slot (time_slot_id),
-    CONSTRAINT CK_private_class_request_slot_weekday CHECK (weekday BETWEEN 2 AND 7)
-);
-GO
-
-CREATE INDEX IX_private_class_request_member ON private_class_request (member_user_id, status);
-CREATE INDEX IX_private_class_request_status ON private_class_request (status, created_at);
-GO
-
 CREATE TABLE evaluation (
     evaluation_id      INT IDENTITY(1,1) NOT NULL,
     class_id           INT            NOT NULL,
@@ -802,6 +759,56 @@ GO
 
 CREATE INDEX IX_center_checkin_user_time ON center_checkin (user_id, checked_in_at);
 CREATE INDEX IX_center_checkin_time ON center_checkin (checked_in_at);
+GO
+
+/* Yêu cầu học 1-1: member chọn môn, lịch hằng tuần, HLV; quản lý duyệt thì sinh lớp private (sĩ số 1) và các buổi học.
+   approved = đã duyệt, chờ thanh toán trong approval_expires_at (24 giờ), quá hạn thì expired và lớp bị hủy. Đã thanh toán thì lớp có ghi danh. */
+CREATE TABLE private_class_request (
+    request_id          INT IDENTITY(1,1) NOT NULL,
+    member_user_id      INT           NOT NULL,
+    course_id           INT           NOT NULL,
+    coach_user_id       INT           NOT NULL,
+    start_date          DATE          NOT NULL,
+    note                NVARCHAR(500) NULL,
+    status              NVARCHAR(20)  NOT NULL CONSTRAINT DF_private_class_request_status DEFAULT (N'pending'),
+    created_at          DATETIME2(0)  NOT NULL,
+    decided_by_user_id  INT           NULL,
+    decided_at          DATETIME2(0)  NULL,
+    reject_reason       NVARCHAR(500) NULL,
+    class_id            INT           NULL,
+    approval_expires_at DATETIME2(0)  NULL,
+    membership_package_id INT          NULL,
+    renew_membership    BIT           NOT NULL CONSTRAINT DF_private_class_request_renew DEFAULT (0),
+    full_name           NVARCHAR(200) NULL,
+    phone               NVARCHAR(30)  NULL,
+    date_of_birth       DATE          NULL,
+    gender              NVARCHAR(10)  NULL,
+    CONSTRAINT PK_private_class_request PRIMARY KEY (request_id),
+    CONSTRAINT FK_private_class_request_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_private_class_request_course FOREIGN KEY (course_id) REFERENCES course (course_id),
+    CONSTRAINT FK_private_class_request_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_private_class_request_decider FOREIGN KEY (decided_by_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_private_class_request_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+    CONSTRAINT FK_private_class_request_package FOREIGN KEY (membership_package_id) REFERENCES membership_package (membership_package_id),
+    CONSTRAINT CK_private_class_request_status CHECK (status IN (N'pending', N'approved', N'rejected', N'cancelled', N'expired'))
+);
+GO
+
+CREATE TABLE private_class_request_slot (
+    request_slot_id INT IDENTITY(1,1) NOT NULL,
+    request_id      INT     NOT NULL,
+    weekday         TINYINT NOT NULL,
+    time_slot_id    INT     NOT NULL,
+    CONSTRAINT PK_private_class_request_slot PRIMARY KEY (request_slot_id),
+    CONSTRAINT UQ_private_class_request_slot UNIQUE (request_id, weekday, time_slot_id),
+    CONSTRAINT FK_private_class_request_slot_request FOREIGN KEY (request_id) REFERENCES private_class_request (request_id) ON DELETE CASCADE,
+    CONSTRAINT FK_private_class_request_slot_time FOREIGN KEY (time_slot_id) REFERENCES time_slot (time_slot_id),
+    CONSTRAINT CK_private_class_request_slot_weekday CHECK (weekday BETWEEN 2 AND 7)
+);
+GO
+
+CREATE INDEX IX_private_class_request_member ON private_class_request (member_user_id, status);
+CREATE INDEX IX_private_class_request_status ON private_class_request (status, created_at);
 GO
 
 -- Lịch sử đăng ký lớp (ai xếp học viên vào lớp, rút lớp, học lại...).

@@ -6,29 +6,36 @@ const enrolledItems = [
   { id: 'classes', label: 'Lớp của tôi', to: '/hoc-vien-dashboard#classes' },
   { id: 'course-plan', label: 'Bài tập lớp', to: '/hoc-vien/bai-tap-lop', end: true },
   { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
-  { id: 'private', label: 'Học 1-1', to: '/hoc-vien/hoc-1-1', end: true },
+  { id: 'register', label: 'Đăng ký khóa học', to: '/dang-ky-khoa-hoc' },
   { id: 'schedule', label: 'Lịch học', to: '/hoc-vien-dashboard#schedule' },
   { id: 'support', label: 'Đơn hỗ trợ', to: '/hoc-vien-dashboard#support' },
-  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien-dashboard#history' },
+  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien/lich-su-thanh-toan', end: true },
 ];
 
 const openItems = [
   { id: 'overview', label: 'Tổng quan', to: '/hoc-vien-dashboard', end: true },
   { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
   { id: 'register', label: 'Đăng ký khóa học', to: '/dang-ky-khoa-hoc' },
-  { id: 'private', label: 'Học 1-1', to: '/hoc-vien/hoc-1-1', end: true },
-  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien-dashboard#history' },
+  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien/lich-su-thanh-toan', end: true },
 ];
 
-const pendingItems = [
-  { id: 'overview', label: 'Tổng quan', to: '/hoc-vien-dashboard', end: true },
-  { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
-  { id: 'private', label: 'Học 1-1', to: '/hoc-vien/hoc-1-1', end: true },
-  { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien-dashboard#history' },
-];
+// Chưa biết học viên có lớp hay không: dùng menu cơ bản để không nháy thêm/bớt mục khi dữ liệu về.
+const pendingItems = openItems;
+
+// Bài tập lớp và Gợi ý tập gộp thành nhóm "Học tập". Chỉ còn một mục thì giữ mục đơn.
+const STUDY_IDS = ['course-plan', 'personal-ai'];
+
+export function groupStudyItems(items) {
+  const members = items.filter((item) => STUDY_IDS.includes(item.id));
+  if (members.length < 2) return items;
+  const first = items.findIndex((item) => STUDY_IDS.includes(item.id));
+  const rest = items.filter((item) => !STUDY_IDS.includes(item.id));
+  rest.splice(first, 0, { id: 'study', label: 'Học tập', children: members });
+  return rest;
+}
 
 export function studentWorkspaceItems(hasClass) {
-  if (hasClass === true) return enrolledItems;
+  if (hasClass === true) return groupStudyItems(enrolledItems);
   if (hasClass === false) return openItems;
   return pendingItems;
 }
