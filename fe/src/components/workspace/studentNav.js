@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { getMyClassRegistrations } from '../../api/managementApi';
+import { getMemberMembership, getMyClassRegistrations } from '../../api/managementApi';
 
 const enrolledItems = [
   { id: 'overview', label: 'Tổng quan', to: '/hoc-vien-dashboard', end: true },
   { id: 'classes', label: 'Lớp của tôi', to: '/hoc-vien-dashboard#classes' },
   { id: 'course-plan', label: 'Bài tập lớp', to: '/hoc-vien/bai-tap-lop', end: true },
   { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
-  { id: 'register', label: 'Đăng ký khóa học', to: '/dang-ky-khoa-hoc' },
+  { id: 'register', label: 'Đăng ký hội viên', to: '/dang-ky-khoa-hoc' },
   { id: 'schedule', label: 'Lịch học', to: '/hoc-vien-dashboard#schedule' },
   { id: 'support', label: 'Đơn hỗ trợ', to: '/hoc-vien-dashboard#support' },
   { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien/lich-su-thanh-toan', end: true },
@@ -15,7 +15,7 @@ const enrolledItems = [
 const openItems = [
   { id: 'overview', label: 'Tổng quan', to: '/hoc-vien-dashboard', end: true },
   { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
-  { id: 'register', label: 'Đăng ký khóa học', to: '/dang-ky-khoa-hoc' },
+  { id: 'register', label: 'Đăng ký hội viên', to: '/dang-ky-khoa-hoc' },
   { id: 'history', label: 'Lịch sử thanh toán', to: '/hoc-vien/lich-su-thanh-toan', end: true },
 ];
 
@@ -34,10 +34,34 @@ export function groupStudyItems(items) {
   return rest;
 }
 
-export function studentWorkspaceItems(hasClass) {
-  if (hasClass === true) return groupStudyItems(enrolledItems);
-  if (hasClass === false) return openItems;
-  return pendingItems;
+export function studentWorkspaceItems(hasClass, membershipWithClass = false) {
+  const source = hasClass === true ? enrolledItems : hasClass === false ? openItems : pendingItems;
+  const items = membershipWithClass ? source : source.filter((item) => item.id !== 'personal-ai');
+  return hasClass === true ? groupStudyItems(items) : items;
+}
+
+export function useMembershipWithClass(memberUserId) {
+  const [withClass, setWithClass] = useState(null);
+
+  useEffect(() => {
+    if (!memberUserId) {
+      setWithClass(false);
+      return undefined;
+    }
+    let ignore = false;
+    getMemberMembership(memberUserId)
+      .then((res) => {
+        if (!ignore) setWithClass(Boolean(res?.membershipWithClass));
+      })
+      .catch(() => {
+        if (!ignore) setWithClass(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [memberUserId]);
+
+  return withClass;
 }
 
 export function useHasClassRegistration(enabled = true) {
