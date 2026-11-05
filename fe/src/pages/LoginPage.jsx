@@ -23,7 +23,9 @@ export default function LoginPage() {
     if (role === 'ADMIN') return '/quan-ly';
     if (role === 'STAFF') return '/le-tan';
     if (role === 'COACH') return '/hlv/lop-hoc';
-    return location.state?.from || '/hoc-vien-dashboard';
+    
+    // Với tài khoản MEMBER (hoặc mặc định), luôn tự động vào /hoc-vien-dashboard
+    return '/hoc-vien-dashboard';
   };
 
   // Nếu người dùng đã có Session từ trước -> Tự động chuyển đến đúng trang theo Role

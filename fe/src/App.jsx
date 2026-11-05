@@ -10,8 +10,9 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import HocVienDashboardPage from './pages/HocVienDashboardPage';
+import HocVienKhamPhaPage from './pages/HocVienKhamPhaPage'; // Route Quảng bá mới
 import ClassRegistrationPage from './pages/ClassRegistrationPage';
-import ReceptionistDashboardPage from './pages/receptionist/ReceptionistDashboardPage'; // Import trang Lễ tân
+import ReceptionistDashboardPage from './pages/receptionist/ReceptionistDashboardPage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
 import CreateStaffAccountPage from './pages/management/CreateStaffAccountPage';
@@ -53,7 +54,7 @@ export default function App() {
             {/* Route Tuyển sinh */}
             <Route path="/tuyen-sinh" element={<AdmissionsPage />} />
 
-            {/* Khai báo route Đăng nhập & Đăng ký */}
+            {/* Route Đăng nhập & Đăng ký */}
             <Route path="/dang-nhap" element={<LoginPage />} />
             <Route path="/dang-ky" element={<RegisterPage />} />
 
@@ -66,6 +67,16 @@ export default function App() {
               element={
                 <Protected allowedRoles={['MEMBER', 'ADMIN']}>
                   <HocVienDashboardPage />
+                </Protected>
+              } 
+            />
+
+            {/* Route Quảng bá cho Học viên chưa kích hoạt gói */}
+            <Route 
+              path="/hoc-vien-kham-pha" 
+              element={
+                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
+                  <HocVienKhamPhaPage />
                 </Protected>
               } 
             />
@@ -118,7 +129,7 @@ export default function App() {
 
             <Route path="/hlv/lich-su-tap" element={<Navigate to="/hlv/lop-hoc?tab=history" replace />} />
 
-            {/* Route LỄ TÂN DASHBOARD (Không chứa Header/Footer chung) */}
+            {/* Route LỄ TÂN DASHBOARD */}
             <Route 
               path="/le-tan" 
               element={
@@ -128,7 +139,7 @@ export default function App() {
               } 
             />
 
-            {/* Khai báo các route Quản lý (ADMIN) */}
+            {/* Route Quản lý (ADMIN) */}
             <Route path="/quan-ly" element={<Protected allowedRoles={['ADMIN']}><ManagementDashboard /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected allowedRoles={['ADMIN']}><UserAccountListPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/moi" element={<Protected allowedRoles={['ADMIN']}><CreateStaffAccountPage /></Protected>} />
