@@ -719,7 +719,7 @@ export default function Footer() {
                 ? 'Đóng'
                 : hasMembership
                 ? 'Trợ Giúp'
-                : 'Đăng ký tư vấn ngay'}
+                : 'Đăng ký ghi danh ngay'}
             </span>
           </button>
         </div>
