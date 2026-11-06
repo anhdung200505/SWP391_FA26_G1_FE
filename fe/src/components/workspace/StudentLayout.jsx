@@ -1,49 +1,36 @@
 import { useState } from 'react';
 import { PublishContext } from './studentShell';
 import { Outlet, useLocation } from 'react-router-dom';
-import WorkspaceShell from './WorkspaceShell';
-import NotificationBell from '../NotificationBell';
+import StudentDashboardHeader from '../StudentDashboardHeader';
 import Footer from '../Footer';
 import { studentWorkspaceItems, useHasClassRegistration } from './studentNav';
 
-const HOME = '/hoc-vien-dashboard';
-const STUDENT = { label: 'Học viên', to: HOME };
-
-// Tên trang mặc định theo đường dẫn, để breadcrumb đúng ngay từ lần vẽ đầu.
-const PAGE_LABELS = {
-  '/hoc-vien/bai-tap-lop': 'Bài tập lớp',
-  '/hoc-vien/giao-trinh': 'Giáo trình',
-  '/hoc-vien/giao-an-ai': 'Gợi ý tập',
-  '/dang-ky-khoa-hoc': 'Đăng ký khóa học',
-  '/dang-ky-thanh-vien': 'Đăng ký thành viên',
-  '/hoc-vien/lich-su-thanh-toan': 'Lịch sử thanh toán',
-};
-
-// Một khung duy nhất cho mọi trang học viên: thanh bên và đầu trang giữ nguyên, chỉ phần nội dung đổi.
 export default function StudentLayout() {
   const { pathname } = useLocation();
   const hasClass = useHasClassRegistration();
   const [extra, setExtra] = useState(null);
 
-  const pageLabel = PAGE_LABELS[pathname];
-  const breadcrumb = extra?.breadcrumb || [STUDENT, ...(pageLabel ? [{ label: pageLabel }] : [])];
+  const items = extra?.items || studentWorkspaceItems(hasClass);
 
   return (
     <PublishContext.Provider value={setExtra}>
-      <WorkspaceShell
-        role="Học viên"
-        homeTo={HOME}
-        items={extra?.items || studentWorkspaceItems(hasClass)}
-        activeId={extra?.activeId}
-        onSelect={extra?.onSelect}
-        breadcrumb={breadcrumb}
-        headerExtra={<NotificationBell />}
-        footer={<Footer />}
-      >
-        <div key={pathname} className="page-enter">
-          <Outlet />
-        </div>
-      </WorkspaceShell>
+      <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900">
+        {/* Header dạng Top Bar vuông vức chuyên nghiệp với hiệu ứng trượt đỏ */}
+        <StudentDashboardHeader
+          activeId={extra?.activeId}
+          onSelect={extra?.onSelect}
+          items={items}
+        />
+
+        {/* Nội dung chính tràn chiều rộng chuẩn Dashboard */}
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div key={pathname} className="page-enter">
+            <Outlet />
+          </div>
+        </main>
+
+        <Footer />
+      </div>
     </PublishContext.Provider>
   );
 }

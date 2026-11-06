@@ -1,16 +1,28 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import logoImg from '../../assets/logo.png';
 import { useAuth } from '../../context/AuthContext';
 
 const focusRing = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23]';
 
-function itemClass(isActive) {
-  return `flex w-full items-center rounded-lg border-l-2 px-3 py-2.5 text-left text-sm font-semibold ${focusRing} ${
-    isActive
-      ? 'border-[#e31b23] bg-white/10 text-white'
-      : 'border-transparent text-white/70 hover:bg-white/5 hover:text-white'
-  }`;
+// Hàm render từng mục Sidebar với hiệu ứng trượt đỏ tinh tế từ trái sang phải
+function renderNavItemContent(label, isActive) {
+  return (
+    <span
+      className={`relative overflow-hidden w-full px-4 py-2.5 text-xs font-bold tracking-wider transition-all duration-300 block cursor-pointer select-none uppercase ${
+        isActive
+          ? 'bg-[#e31b23] text-white shadow-sm border-l-4 border-white'
+          : 'text-slate-300 hover:text-white border-l-4 border-transparent'
+      }`}
+    >
+      {/* Hiệu ứng trượt phủ nền đỏ từ trái sang phải khi hover */}
+      {!isActive && (
+        <span className="absolute inset-0 bg-[#e31b23] transition-transform duration-300 ease-out origin-left -z-10 scale-x-0 group-hover:scale-x-100" />
+      )}
+
+      <span className="relative z-10 block truncate">{label}</span>
+    </span>
+  );
 }
 
 export default function WorkspaceShell({
@@ -61,9 +73,9 @@ export default function WorkspaceShell({
   );
 
   return (
-    <div className="flex min-h-dvh bg-[#f4f5f7] text-gray-900">
-      {/* SIDEBAR DESKTOP - Sticky theo màn hình hoặc flex bám sát chiều cao container */}
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-[#12141d] text-white lg:flex">
+    <div className="flex min-h-dvh bg-slate-100 text-slate-900">
+      {/* SIDEBAR DESKTOP */}
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-slate-950 text-white lg:flex border-r border-slate-800 shadow-xl">
         {rail}
       </aside>
 
@@ -72,53 +84,58 @@ export default function WorkspaceShell({
         <button
           type="button"
           aria-label="Đóng menu"
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs lg:hidden"
           onClick={() => setMenuOpen(false)}
         />
       )}
 
       {/* SIDEBAR MOBILE */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#12141d] text-white transition-transform duration-300 lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 text-white shadow-2xl transition-transform duration-300 ease-out lg:hidden ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {rail}
       </aside>
 
-      {/* KHU VỰC NỘI DUNG CHÍNH + FOOTER (Nằm ở bên phải Sidebar) */}
+      {/* KHU VỰC NỘI DUNG CHÍNH + FOOTER */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6 shadow-xs">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              className={`inline-flex size-10 items-center justify-center rounded-lg border border-gray-200 lg:hidden ${focusRing}`}
+              className={`inline-flex size-10 items-center justify-center rounded-none border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 lg:hidden ${focusRing}`}
               onClick={() => setMenuOpen(true)}
               aria-label="Mở menu"
             >
-              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeWidth="2" d="M4 7h16M4 12h16M4 17h16" />
               </svg>
             </button>
-            <nav aria-label="Đường dẫn" className="truncate text-sm text-gray-500">
+            <nav aria-label="Đường dẫn" className="truncate text-sm text-slate-500">
               {breadcrumb.map((item, index) => (
                 <span key={`${item.label}-${index}`}>
-                  {index > 0 && <span className="mx-2 text-gray-300">/</span>}
+                  {index > 0 && <span className="mx-2 text-slate-300">/</span>}
                   {item.to ? (
-                    <Link to={item.to} className={`font-semibold text-gray-600 hover:text-[#e31b23] ${focusRing}`}>
+                    <Link to={item.to} className={`font-bold text-slate-700 hover:text-[#e31b23] uppercase text-xs tracking-wider transition-colors ${focusRing}`}>
                       {item.label}
                     </Link>
                   ) : (
-                    <span className="font-bold text-gray-900">{item.label}</span>
+                    <span className="font-extrabold text-slate-900 uppercase text-xs tracking-wider">{item.label}</span>
                   )}
                 </span>
               ))}
             </nav>
           </div>
+
           <div className="flex shrink-0 items-center gap-4">
             {headerExtra}
-            <Link to="/home" className={`text-sm font-semibold text-gray-600 hover:text-[#e31b23] ${focusRing}`}>
-              Về trang chủ
+            <Link
+              to="/home"
+              className={`relative overflow-hidden px-4 py-2 text-xs font-bold tracking-wider transition-all duration-300 uppercase block cursor-pointer select-none border border-slate-300 text-slate-700 hover:text-white group ${focusRing}`}
+            >
+              <span className="absolute inset-0 bg-[#e31b23] transition-transform duration-300 ease-out origin-left -z-10 scale-x-0 group-hover:scale-x-100" />
+              <span className="relative z-10">Về trang chủ</span>
             </Link>
           </div>
         </header>
@@ -126,52 +143,51 @@ export default function WorkspaceShell({
         <main className="w-full flex-1 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8">
           {children}
         </main>
-        {/* Footer nằm trong cột phải để thanh bên (sticky) luôn kéo dài tới đáy trang, nút Đăng xuất không bị đẩy lên */}
         {footer}
       </div>
     </div>
   );
 }
 
-// Mục cha có các mục con (item.children, mỗi mục con có `to`). Tự mở khi đang ở một trong các trang con.
+// Group menu cấp 2 (nếu có)
 function NavGroup({ item }) {
   const { pathname } = useLocation();
   const childActive = item.children.some((child) => pathname === child.to.split('#')[0]);
   const [manual, setManual] = useState(null);
-  // Người dùng tự mở/đóng chỉ có hiệu lực cho tới khi vào hoặc rời các trang con.
   const expanded = manual && manual.for === childActive ? manual.value : childActive;
   const panelId = `nav-group-${item.id}`;
 
   return (
-    <div>
+    <div className="w-full">
       <button
         type="button"
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setManual({ for: childActive, value: !expanded })}
-        className={`flex w-full items-center rounded-lg border-l-2 border-transparent px-3 py-2.5 text-left text-sm font-semibold hover:bg-white/5 hover:text-white ${focusRing} ${
-          childActive ? 'text-white' : 'text-white/70'
+        className={`group relative flex w-full items-center justify-between overflow-hidden px-4 py-2.5 text-xs font-bold tracking-wider uppercase transition-colors ${focusRing} ${
+          childActive ? 'bg-[#e31b23] text-white border-l-4 border-white' : 'text-slate-300 hover:text-white border-l-4 border-transparent'
         }`}
       >
-        <span className="flex-1">{item.label}</span>
+        {!childActive && (
+          <span className="absolute inset-0 bg-[#e31b23] transition-transform duration-300 ease-out origin-left -z-10 scale-x-0 group-hover:scale-x-100" />
+        )}
+        <span className="relative z-10">{item.label}</span>
         <svg
-          className={`size-4 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          className={`relative z-10 size-4 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          strokeWidth="2.5"
           viewBox="0 0 24 24"
-          aria-hidden="true"
         >
-          <path d="M9 6l6 6-6 6" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
         </svg>
       </button>
+
       {expanded && (
-        <div id={panelId} className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-2">
+        <div id={panelId} className="bg-slate-900/60 pl-2">
           {item.children.map((child) => (
-            <NavLink key={child.id} to={child.to} end={child.end} className={({ isActive }) => itemClass(isActive)}>
-              {child.label}
+            <NavLink key={child.id} to={child.to} end={child.end} className="group block">
+              {({ isActive }) => renderNavItemContent(child.label, isActive)}
             </NavLink>
           ))}
         </div>
@@ -180,87 +196,101 @@ function NavGroup({ item }) {
   );
 }
 
-// Mục dẫn tới một trang. Trang cuộn theo mục (có activeId) tự báo mục đang xem; các mục trỏ vào
-// phần của trang đó (`/trang#phan`) bấm khi đang ở trang thì cuộn tại chỗ, không tải lại trang.
+// Item điều hướng
 function NavItem({ item, activeId, onSelect }) {
   const { pathname } = useLocation();
-  const [path, hash] = item.to.split('#');
+  const [path, hash] = item.to ? item.to.split('#') : ['', ''];
   const spyHere = activeId !== undefined && pathname === path;
 
-  if (!hash && !spyHere) {
+  if (item.to && !hash && !spyHere) {
     return (
-      <NavLink to={item.to} end={item.end} className={({ isActive }) => itemClass(isActive)}>
-        {item.label}
+      <NavLink to={item.to} end={item.end} className="group block">
+        {({ isActive }) => renderNavItemContent(item.label, isActive)}
       </NavLink>
     );
   }
 
-  const active = spyHere && activeId === item.id;
+  const active = (spyHere && activeId === item.id) || item.id === activeId;
   return (
-    <Link
-      to={item.to}
-      aria-current={active ? 'page' : undefined}
-      onClick={(event) => {
-        if (spyHere && onSelect) {
-          event.preventDefault();
-          onSelect(item.id);
-        }
-      }}
-      className={itemClass(active)}
-    >
-      {item.label}
-    </Link>
+    <div className="group block w-full">
+      <button
+        type="button"
+        aria-current={active ? 'page' : undefined}
+        onClick={(event) => {
+          if (item.to && spyHere && onSelect) {
+            event.preventDefault();
+          }
+          onSelect?.(item.id);
+        }}
+        className="w-full text-left p-0 border-0 bg-transparent cursor-pointer"
+      >
+        {renderNavItemContent(item.label, active)}
+      </button>
+    </div>
   );
 }
 
 function Sidebar({ role, homeTo, items, activeId, onSelect, user, onLogout }) {
+  const displayName = user?.fullName || user?.userName || 'Học viên';
+  const displayEmail = user?.email || '';
+
   return (
-    <div className="flex h-full flex-col pb-[env(safe-area-inset-bottom)] overflow-y-auto">
-      <Link to={homeTo} className="flex items-center gap-3 px-5 py-5 shrink-0">
-        <img src={logoImg} alt="AnhDuy Sport" className="h-11 w-auto object-contain" />
-        <span className="leading-tight">
-          <span className="block text-lg font-black italic">
-            AnhDuy <span className="text-[#e31b23]">Sport</span>
+    <div className="flex h-full flex-col pb-[env(safe-area-inset-bottom)] overflow-y-auto select-none">
+      {/* HEADER LOGO */}
+      <Link
+        to={homeTo}
+        className="flex items-center space-x-3 px-6 py-5 shrink-0 bg-slate-900 border-b border-slate-800/80 group"
+      >
+        <img
+          src={logoImg}
+          alt="AnhDuy Sport Logo"
+          className="h-9 w-auto object-contain filter drop-shadow-md"
+        />
+        <div className="flex flex-col">
+          <div className="flex items-center font-black italic tracking-wider text-lg uppercase">
+            <span className="text-white group-hover:text-red-400 transition-colors">AnhDuy</span>
+            <span className="text-[#e31b23] ml-1">Sport</span>
+          </div>
+          <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest -mt-1">
+            {role} Portal
           </span>
-          <span className="text-sm text-pretty text-white/60">{role}</span>
-        </span>
+        </div>
       </Link>
 
-      <nav aria-label={role} className="space-y-1 px-3 flex-1">
+      {/* DANH SÁCH MENU */}
+      <nav aria-label={role} className="flex-1 space-y-1 py-4 px-2">
         {items.map((item) =>
           item.children ? (
             <NavGroup key={item.id} item={item} />
-          ) : item.to ? (
-            <NavItem key={item.id} item={item} activeId={activeId} onSelect={onSelect} />
           ) : (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelect(item.id)}
-              className={itemClass(item.id === activeId)}
-            >
-              {item.label}
-            </button>
-          ),
+            <NavItem key={item.id} item={item} activeId={activeId} onSelect={onSelect} />
+          )
         )}
       </nav>
 
-      <div className="mt-auto border-t border-white/10 p-4 shrink-0">
-        <div className="rounded-xl bg-white/5 px-3 py-3">
-          <p className="truncate text-sm font-semibold">{user?.fullName || user?.userName || 'Tài khoản'}</p>
-          <p className="mt-1 truncate text-xs text-white/50">{user?.email}</p>
+      {/* FOOTER USER CARD */}
+      <div className="mt-auto border-t border-slate-800/80 bg-slate-900/90 p-4 shrink-0">
+        <div className="mb-3 px-1">
+          <p className="truncate text-xs font-bold uppercase text-white tracking-wider">{displayName}</p>
+          {displayEmail && <p className="truncate text-[11px] font-medium text-slate-400">{displayEmail}</p>}
+        </div>
+
+        <div className="space-y-2">
           <Link
             to="/ho-so"
-            className={`mt-3 block w-full rounded-lg bg-white/10 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-white/20 ${focusRing}`}
+            className={`relative overflow-hidden w-full block text-center py-2 text-xs font-bold uppercase tracking-wider text-slate-200 bg-slate-800/80 hover:text-white group transition-colors border border-slate-700/60 ${focusRing}`}
           >
-            Hồ sơ & đổi mật khẩu
+            <span className="absolute inset-0 bg-slate-700 transition-transform duration-300 ease-out origin-left -z-10 scale-x-0 group-hover:scale-x-100" />
+            <span className="relative z-10">Hồ sơ cá nhân</span>
           </Link>
+
           <button
             type="button"
             onClick={onLogout}
-            className={`mt-3 w-full rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-white hover:bg-white/10 ${focusRing}`}
+            className={`relative overflow-hidden w-full block text-center py-2 text-xs font-bold uppercase tracking-wider text-red-400 border border-red-900/40 hover:text-white group transition-colors ${focusRing}`}
           >
-            Đăng xuất
+            <span className="absolute inset-0 bg-[#e31b23] transition-transform duration-300 ease-out origin-left -z-10 scale-x-0 group-hover:scale-x-100" />
+            <span className="relative z-10">Đăng xuất</span>
           </button>
         </div>
       </div>

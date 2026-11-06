@@ -10,7 +10,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import HocVienDashboardPage from './pages/HocVienDashboardPage';
-import HocVienKhamPhaPage from './pages/HocVienKhamPhaPage'; // Route Quảng bá mới
+import HocVienKhamPhaPage from './pages/HocVienKhamPhaPage';
+import GuestClassRegistrationPage from './pages/GuestClassRegistrationPage'; // Import trang Đăng ký dạng Header độc lập
 import ClassRegistrationPage from './pages/ClassRegistrationPage';
 import ReceptionistDashboardPage from './pages/receptionist/ReceptionistDashboardPage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
@@ -64,13 +65,36 @@ export default function App() {
             {/* Route Hồ sơ cá nhân */}
             <Route path="/ho-so" element={<Protected><ProfilePage /></Protected>} />
 
-            {/* Khung chung cho mọi trang học viên: thanh bên giữ nguyên khi chuyển trang */}
+            {/* CÁC ROUTE KHÁM PHẢ ĐỘC LẬP (KHÔNG DÍNH STUDENTLAYOUT / SIDEBAR ĐEN) */}
+            <Route
+              path="/hoc-vien-kham-pha"
+              element={
+                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
+                  <HocVienKhamPhaPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/dang-ky-khoa-hoc-kham-pha"
+              element={
+                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
+                  <GuestClassRegistrationPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/dang-ky-thanh-vien-kham-pha"
+              element={
+                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
+                  <GuestClassRegistrationPage membershipOnly />
+                </Protected>
+              }
+            />
+
+            {/* KHUNG CHUNG CHO MỌI TRANG HỌC VIÊN ĐÃ ACTIVE GÓI (CÓ SIDEBAR ĐEN) */}
             <Route element={<Protected allowedRoles={['MEMBER', 'ADMIN']}><StudentLayout /></Protected>}>
               <Route path="/hoc-vien-dashboard" element={<HocVienDashboardPage />} />
-              {/* Trang quảng bá cho học viên chưa kích hoạt gói */}
-              <Route path="/hoc-vien-kham-pha" element={<HocVienKhamPhaPage />} />
               <Route path="/dang-ky-khoa-hoc" element={<ClassRegistrationPage />} />
-              <Route path="/dang-ky-thanh-vien" element={<ClassRegistrationPage membershipOnly />} />
               <Route path="/hoc-vien/lich-su-thanh-toan" element={<PaymentHistoryPage />} />
               <Route
                 path="/hoc-vien/bai-tap-lop"
