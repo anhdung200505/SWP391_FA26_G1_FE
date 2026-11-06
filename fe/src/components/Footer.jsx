@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import logoImg from '../assets/logo.png';
-import { createEnrollmentConsultation, createSupportRequest } from '../api/managementApi';
+import { createEnrollmentConsultation, createSupportRequest, getMemberMembership } from '../api/managementApi';
 import { useAuth } from '../context/AuthContext';
 
 const sportsList = [
@@ -23,7 +23,30 @@ export default function Footer() {
   const { user } = useAuth();
   const location = useLocation();
 
-  const isDashboardPage = location.pathname === '/hoc-vien-dashboard';
+  // Ẩn nút "Vào Dashboard" khi đang ở trang Dashboard HOẶC trang Khám Phá Học Viên
+  const isKhamPhaOrDashboardPage =
+    location.pathname === '/hoc-vien-dashboard' || location.pathname === '/hoc-vien-kham-pha';
+
+  // Kiểm tra gói hội viên của tài khoản đang đăng nhập
+  const [hasMembership, setHasMembership] = useState(false);
+
+  useEffect(() => {
+    if (user?.id || user?.userId) {
+      getMemberMembership(user.id || user.userId)
+        .then((res) => {
+          if (res?.highestPackageId || res?.currentMembership) {
+            setHasMembership(true);
+          } else {
+            setHasMembership(false);
+          }
+        })
+        .catch(() => {
+          setHasMembership(false);
+        });
+    } else {
+      setHasMembership(false);
+    }
+  }, [user]);
 
   // ------------ STATE CỦA FORM TƯ VẤN GHI DANH (GUEST FORM) ------------
   const [actionNotice, setActionNotice] = useState('');
@@ -38,6 +61,18 @@ export default function Footer() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
+
+  // Auto-fill thông tin học viên chưa có gói vào form tư vấn
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        fullName: prev.fullName || user.fullName || user.userName || '',
+        phone: prev.phone || user.phone || '',
+        email: prev.email || user.email || '',
+      }));
+    }
+  }, [user]);
 
   // ------------ STATE CỦA WIDGET HỖ TRỢ (MEMBER LOGGED IN) ------------
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -124,7 +159,7 @@ export default function Footer() {
       sports: formData.selectedSports.length > 0 ? formData.selectedSports.join(', ') : 'Chưa chọn',
       age: Number(formData.age),
       title: 'Tư vấn ghi danh',
-      note: 'Khách gửi tư vấn ghi danh từ website',
+      note: user ? `Tài khoản ${user.fullName || user.userName} chưa kích hoạt gói gửi đăng ký tư vấn` : 'Khách gửi tư vấn ghi danh từ website',
     };
 
     try {
@@ -271,7 +306,7 @@ export default function Footer() {
                     Bạn đang đăng nhập với tư cách học viên <strong className="text-white">{user.fullName || user.userName}</strong>.
                   </p>
                   
-                  {!isDashboardPage && (
+                  {!isKhamPhaOrDashboardPage && (
                     <a
                       href="/hoc-vien-dashboard"
                       className="inline-block bg-[#e31b23] hover:bg-[#c4131a] text-white text-xs font-black uppercase px-4 py-2 rounded-lg shadow transition-all"
@@ -284,7 +319,7 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* ================= 2. KHỐI BÊN PHẢI: FORM TƯ VẤN GHI DANH (GUEST FORM) ================= */}
+          {/* ================= 2. KHỐI BÊN PHẢI: FORM TƯ VẤN GHI DANH (DÀNH CHO KHÁCH GUEST) ================= */}
           {!user && (
             <div
               className="relative w-full lg:w-[50%] xl:w-[52%] bg-[#e31b23] px-6 sm:px-10 lg:pl-16 lg:pr-12 py-10 md:py-12 flex flex-col justify-center min-h-[500px]"
@@ -476,17 +511,17 @@ export default function Footer() {
         </div>
       </footer>
 
-      {/* ================= 3. FLOATING HELP BUTTON & POPUP DÀNH CHO HỌC VIÊN ĐÃ ĐĂNG NHẬP ================= */}
+      {/* ================= 3. FLOATING BUTTON & POPUP DÀNH CHO TÀI KHOẢN ĐÃ ĐĂNG NHẬP ================= */}
       {user && (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans">
-          {/* POPUP YÊU CẦU HỖ TRỢ */}
+          {/* POPUP CONTAINER */}
           {isHelpOpen && (
             <div className="mb-4 w-80 sm:w-96 bg-[#181d2a] border border-gray-700 rounded-3xl p-6 shadow-2xl text-white animate-in fade-in slide-in-from-bottom-5 duration-200">
               <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-800">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">🎧</span>
+                  <span className="text-xl">{hasMembership ? '🎧' : '📝'}</span>
                   <h3 className="text-sm font-black uppercase text-white tracking-wider">
-                    Gửi hỗ trợ Lễ tân
+                    {hasMembership ? 'Gửi hỗ trợ Lễ tân' : 'Đăng ký tư vấn ngay'}
                   </h3>
                 </div>
                 <button
@@ -497,72 +532,195 @@ export default function Footer() {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmitSupport} className="space-y-3 text-xs">
-                <div>
-                  <label className="block text-gray-400 font-bold mb-1">Loại yêu cầu *</label>
-                  <input
-                    type="text"
-                    maxLength={80}
-                    value={supportType}
-                    onChange={(e) => setSupportType(e.target.value)}
-                    placeholder="vd: Đổi lịch học"
-                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 outline-none focus:border-[#e31b23]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-400 font-bold mb-1">Tiêu đề *</label>
-                  <input
-                    type="text"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="vd: Cần đổi thời gian lớp Bóng bàn"
-                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 outline-none focus:border-[#e31b23]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-400 font-bold mb-1">Nội dung chi tiết *</label>
-                  <textarea
-                    rows={3}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="Mô tả cụ thể vấn đề bạn cần hỗ trợ..."
-                    className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 outline-none focus:border-[#e31b23] resize-none"
-                  />
-                </div>
-
-                {helpNotice.msg && (
-                  <div
-                    className={`p-2.5 rounded-xl border text-[11px] font-semibold ${
-                      helpNotice.type === 'success'
-                        ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
-                        : 'bg-red-950/80 border-red-800 text-red-300'
-                    }`}
-                  >
-                    {helpNotice.msg}
+              {/* TRƯỜNG HỢP 1: TÀI KHOẢN CHƯA KÍCH HOẠT GÓI -> HIỂN THỊ FORM TƯ VẤN VỚI AUTO-FILL THÔNG TIN */}
+              {!hasMembership ? (
+                isSuccess ? (
+                  <div className="bg-[#eaf7f0] border-l-4 border-[#00b050] text-[#1e2022] p-4 text-center rounded-md">
+                    <h4 className="font-bold text-[#008000] text-sm mb-1">ĐĂNG KÝ THÀNH CÔNG!</h4>
+                    <p className="text-xs text-gray-600">Thông tin của bạn đã được ghi nhận. Chúng tôi sẽ liên hệ trong thời gian sớm nhất.</p>
+                    <button
+                      onClick={() => {
+                        setIsSuccess(false);
+                        setFormData((prev) => ({ ...prev, selectedSports: [], age: '' }));
+                      }}
+                      className="mt-3 text-xs font-bold text-[#e31b23] underline cursor-pointer"
+                    >
+                      Gửi đăng ký mới
+                    </button>
                   </div>
-                )}
+                ) : (
+                  <form onSubmit={handleSubmitEnrollment} className="space-y-3 text-xs">
+                    {actionNotice && <p className="text-xs text-red-400 font-bold">{actionNotice}</p>}
+                    <div>
+                      <label className="block text-gray-400 font-bold mb-1">Họ và tên *</label>
+                      <input
+                        type="text"
+                        placeholder="Nguyễn Văn A"
+                        value={formData.fullName}
+                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                        className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white outline-none focus:border-[#e31b23]"
+                      />
+                      {errors.fullName && <p className="text-yellow-300 text-[10px] mt-0.5">{errors.fullName}</p>}
+                    </div>
 
-                <button
-                  type="submit"
-                  disabled={helpLoading}
-                  className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs tracking-wider py-3 rounded-xl shadow-lg transition-all cursor-pointer disabled:opacity-60"
-                >
-                  {helpLoading ? 'Đang gửi...' : 'Gửi yêu cầu tới Lễ tân →'}
-                </button>
-              </form>
+                    <div>
+                      <label className="block text-gray-400 font-bold mb-1">Số điện thoại *</label>
+                      <input
+                        type="text"
+                        placeholder="0901234567"
+                        value={formData.phone}
+                        onChange={handlePhoneChange}
+                        className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white outline-none focus:border-[#e31b23]"
+                      />
+                      {errors.phone && <p className="text-yellow-300 text-[10px] mt-0.5">{errors.phone}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-400 font-bold mb-1">Email *</label>
+                      <input
+                        type="email"
+                        placeholder="example@gmail.com"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white outline-none focus:border-[#e31b23]"
+                      />
+                      {errors.email && <p className="text-yellow-300 text-[10px] mt-0.5">{errors.email}</p>}
+                    </div>
+
+                    {/* Chọn môn học */}
+                    <div className="relative">
+                      <label className="block text-gray-400 font-bold mb-1">Môn học quan tâm</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
+                        className="w-full bg-[#0d0f17] border border-gray-700 text-white px-3 py-2 rounded-xl text-left font-semibold flex justify-between items-center cursor-pointer"
+                      >
+                        <span className="truncate text-gray-300">
+                          {formData.selectedSports.length > 0 ? formData.selectedSports.join(', ') : 'Chọn môn học'}
+                        </span>
+                        <span className="text-xs text-gray-400">{isSportsDropdownOpen ? '▲' : '▼'}</span>
+                      </button>
+
+                      {isSportsDropdownOpen && (
+                        <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#151922] border border-gray-700 shadow-2xl z-50 max-h-48 overflow-y-auto p-2 space-y-1 rounded-xl">
+                          {sportsList.map((sport) => {
+                            const isChecked = formData.selectedSports.includes(sport);
+                            return (
+                              <label
+                                key={sport}
+                                onClick={() => handleSportToggle(sport)}
+                                className="flex items-center space-x-2.5 px-3 py-1.5 hover:bg-[#202736] rounded cursor-pointer text-xs text-gray-200 select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {}}
+                                  className="w-3.5 h-3.5 accent-[#e31b23] rounded cursor-pointer"
+                                />
+                                <span>{sport}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-400 font-bold mb-1">Độ tuổi học viên *</label>
+                      <input
+                        type="text"
+                        placeholder="vd: 20"
+                        value={formData.age}
+                        onChange={handleAgeChange}
+                        className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white outline-none focus:border-[#e31b23]"
+                      />
+                      {errors.age && <p className="text-yellow-300 text-[10px] mt-0.5">{errors.age}</p>}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs tracking-wider py-3 rounded-xl shadow-lg transition-all cursor-pointer disabled:opacity-60 mt-2"
+                    >
+                      {isLoading ? 'Đang gửi...' : 'Gửi đăng ký tư vấn →'}
+                    </button>
+                  </form>
+                )
+              ) : (
+                /* TRƯỜNG HỢP 2: TÀI KHOẢN ĐÃ CÓ GÓI HỘI VIÊN -> FORM HỖ TRỢ LỄ TÂN GỐC */
+                <form onSubmit={handleSubmitSupport} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Loại yêu cầu *</label>
+                    <input
+                      type="text"
+                      maxLength={80}
+                      value={supportType}
+                      onChange={(e) => setSupportType(e.target.value)}
+                      placeholder="vd: Đổi lịch học"
+                      className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 outline-none focus:border-[#e31b23]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Tiêu đề *</label>
+                    <input
+                      type="text"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="vd: Cần đổi thời gian lớp Bóng bàn"
+                      className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 outline-none focus:border-[#e31b23]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Nội dung chi tiết *</label>
+                    <textarea
+                      rows={3}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder="Mô tả cụ thể vấn đề bạn cần hỗ trợ..."
+                      className="w-full bg-[#0d0f17] border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 outline-none focus:border-[#e31b23] resize-none"
+                    />
+                  </div>
+
+                  {helpNotice.msg && (
+                    <div
+                      className={`p-2.5 rounded-xl border text-[11px] font-semibold ${
+                        helpNotice.type === 'success'
+                          ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                          : 'bg-red-950/80 border-red-800 text-red-300'
+                      }`}
+                    >
+                      {helpNotice.msg}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={helpLoading}
+                    className="w-full bg-[#e31b23] hover:bg-[#c4131a] text-white font-black uppercase text-xs tracking-wider py-3 rounded-xl shadow-lg transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    {helpLoading ? 'Đang gửi...' : 'Gửi yêu cầu tới Lễ tân →'}
+                  </button>
+                </form>
+              )}
             </div>
           )}
 
-          {/* NÚT TRỢ GIÚP FLOATING BUTTON */}
+          {/* FLOATING BUTTON DÀNH CHO MEMBER LOGGED IN */}
           <button
             type="button"
             onClick={() => setIsHelpOpen(!isHelpOpen)}
             className="group flex items-center gap-2.5 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider px-5 py-3.5 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 cursor-pointer border border-red-400/30"
           >
-            <span className="text-lg">💬</span>
-            <span>{isHelpOpen ? 'Đóng Trợ Giúp' : 'Trợ Giúp'}</span>
+            <span className="text-lg">{hasMembership ? '💬' : '📝'}</span>
+            <span>
+              {isHelpOpen
+                ? 'Đóng'
+                : hasMembership
+                ? 'Trợ Giúp'
+                : 'Đăng ký ghi danh ngay'}
+            </span>
           </button>
         </div>
       )}
