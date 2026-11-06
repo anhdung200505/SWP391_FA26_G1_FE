@@ -60,9 +60,52 @@ export default function StudentDashboardHeader({ activeId, onSelect, items = [] 
           </div>
         </Link>
 
-        {/* MENU ĐIỀU HƯỚNG CÓ TÍNH NĂNG CHỐNG TRÀN VÀ TỰ CO GIÃN */}
-        <nav className="hidden lg:flex items-center space-x-1 min-w-0 flex-1 justify-center overflow-x-auto no-scrollbar py-1">
+        {/* MENU ĐIỀU HƯỚNG CÓ HỖ TRỢ DROPDOWN CHO NHÓM "HỌC TẬP" */}
+        <nav className="hidden lg:flex items-center space-x-1 min-w-0 flex-1 justify-center overflow-x-visible py-1">
           {items.map((item) => {
+            // Trường hợp mục có danh sách con (ví dụ: nhóm "Học tập")
+            if (item.children && Array.isArray(item.children)) {
+              const isChildActive = item.children.some((child) => {
+                const [childPath] = child.to ? child.to.split('#') : ['', ''];
+                return location.pathname === childPath;
+              });
+
+              return (
+                <div key={item.id} className="relative group shrink-0">
+                  <button
+                    type="button"
+                    className={`relative overflow-hidden px-3 xl:px-4 py-2 text-[11px] xl:text-xs font-bold tracking-wide transition-colors duration-300 whitespace-nowrap flex items-center gap-1 select-none uppercase ${
+                      isChildActive ? 'bg-[#e31b23] text-white shadow-xs' : 'text-gray-800 hover:text-white'
+                    }`}
+                  >
+                    {!isChildActive && (
+                      <span className="absolute inset-0 bg-[#e31b23] transition-transform duration-300 ease-out origin-left -z-10 scale-x-0 group-hover:scale-x-100" />
+                    )}
+                    <span className="relative z-10">{item.label}</span>
+                    <svg className="w-3 h-3 transition-transform duration-200 group-hover:rotate-180 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* DROPDOWN MENU CON */}
+                  <div className="absolute top-full left-0 hidden group-hover:block pt-1.5 w-48 z-50 animate-fadeIn">
+                    <div className="bg-white rounded-xl shadow-xl py-2 border border-gray-100 text-gray-900">
+                      {item.children.map((child) => (
+                        <Link
+                          key={child.id}
+                          to={child.to}
+                          className="block px-4 py-2 text-xs font-bold text-gray-700 hover:bg-red-50 hover:text-[#e31b23] uppercase transition-colors"
+                        >
+                          {child.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Trường hợp mục bình thường
             const [itemPath] = item.to ? item.to.split('#') : ['', ''];
             const isCurrentPage = item.to && !item.to.includes('#') && location.pathname === itemPath;
             const isAnchorActive = activeId && item.id === activeId;
@@ -166,18 +209,31 @@ export default function StudentDashboardHeader({ activeId, onSelect, items = [] 
 
       {/* MOBILE NAV BAR */}
       <div className="lg:hidden flex items-center justify-start gap-2 overflow-x-auto px-4 pt-2.5 pb-1 border-t border-gray-100 text-xs font-bold bg-white">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onSelect?.(item.id)}
-            className={`px-3 py-1.5 whitespace-nowrap uppercase text-[11px] font-extrabold transition-colors ${
-              activeId === item.id ? 'bg-[#e31b23] text-white' : 'bg-gray-100 text-gray-700'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+        {items.map((item) => {
+          if (item.children) {
+            return item.children.map((child) => (
+              <Link
+                key={child.id}
+                to={child.to}
+                className="px-3 py-1.5 whitespace-nowrap uppercase text-[11px] font-extrabold bg-gray-100 text-gray-700"
+              >
+                {child.label}
+              </Link>
+            ));
+          }
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelect?.(item.id)}
+              className={`px-3 py-1.5 whitespace-nowrap uppercase text-[11px] font-extrabold transition-colors ${
+                activeId === item.id ? 'bg-[#e31b23] text-white' : 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
       </div>
     </header>
   );
