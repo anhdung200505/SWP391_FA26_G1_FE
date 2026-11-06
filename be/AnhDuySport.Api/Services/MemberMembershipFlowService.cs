@@ -374,7 +374,7 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
             history,
             packages.Select(AccountFlowMapper.ToDto).ToList(),
             highest?.MembershipPackageId.ToString(),
-            currentRow is not null && AiMembershipQuota.BundledWithClass(currentRow));
+            currentRow is not null && await AiMembershipQuota.OpensAiAsync(db, currentRow));
     }
 
     // ===== Need Consultation? = Yes → hiển thị số chăm sóc khách hàng =====
