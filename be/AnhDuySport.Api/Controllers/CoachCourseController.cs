@@ -9,7 +9,7 @@ namespace AnhDuySport.Api.Controllers;
 [ApiController]
 [FlowErrors]
 [Route("api/coach/classes")]
-public class CoachCourseController(CoachCourseFlowService courses, CoachCourseAiFlowService ai) : ControllerBase
+public class CoachCourseController(CoachCourseFlowService courses, CoachCourseAiFlowService ai, ClassIntakeFlowService intake) : ControllerBase
 {
     [HttpGet]
     [EndpointSummary("Coach xem lớp được giao")]
@@ -33,6 +33,17 @@ public class CoachCourseController(CoachCourseFlowService courses, CoachCourseAi
     [EndpointDescription("Gửi đủ học viên đang học. status: present, late hoặc absent. Buổi đã hủy hoặc chưa tới ngày học trả 400.")]
     public async Task<ActionResult<AttendanceSheetDto>> SaveAttendance(string classId, string sessionId, SubmitAttendanceRequest request) =>
         Ok(await courses.SaveAttendanceAsync(classId, sessionId, request));
+
+    [HttpGet("{classId}/intake")]
+    [EndpointSummary("Nhận xét đầu khóa của từng học viên")]
+    [EndpointDescription("Chỉ buổi đầu tiên của lớp. Không có điểm và không dùng đánh giá tổng môn.")]
+    public async Task<ActionResult<IntakeSheetDto>> Intake(string classId) =>
+        Ok(await intake.SheetAsync(classId));
+
+    [HttpPut("{classId}/intake")]
+    [EndpointSummary("Lưu nhận xét đầu khóa một học viên")]
+    public async Task<ActionResult<IntakeSheetDto>> SaveIntake(string classId, SaveIntakeNoteRequest request) =>
+        Ok(await intake.SaveAsync(classId, request));
 
     [HttpGet("{classId}/evaluations")]
     [EndpointSummary("Xem điểm, nhận xét và tiêu chí chấm")]
@@ -71,8 +82,8 @@ public class CoachCourseController(CoachCourseFlowService courses, CoachCourseAi
         Ok(await ai.WorkspaceAsync(classId));
 
     [HttpPost("{classId}/ai/generate")]
-    [EndpointSummary("Sinh bài tập theo buổi, bài thi và tiêu chí")]
-    [EndpointDescription("Dùng mô tả coach gửi lên và lịch sử tập coach đã ghi cho đúng lớp. Kết quả là bản preview, chưa thay nháp đã lưu. Tối đa 16 buổi.")]
+    [EndpointSummary("Sinh bài tập cho một buổi")]
+    [EndpointDescription("Dùng giáo trình của buổi được chọn và nhận xét huấn luyện viên đã ghi cho đúng buổi đó. Không sinh cả khóa. Kết quả là bản preview, các buổi đã sinh trước được giữ.")]
     public async Task<ActionResult<CourseAiWorkspaceDto>> Generate(string classId, GenerateCoursePlanRequest request) =>
         Ok(await ai.GenerateAsync(classId, request));
 

@@ -5,6 +5,7 @@ const enrolledItems = [
   { id: 'overview', label: 'Tổng quan', to: '/hoc-vien-dashboard', end: true },
   { id: 'classes', label: 'Lớp của tôi', to: '/hoc-vien-dashboard#classes' },
   { id: 'course-plan', label: 'Bài tập lớp', to: '/hoc-vien/bai-tap-lop', end: true },
+  { id: 'course-material', label: 'Giáo trình', to: '/hoc-vien/giao-trinh', end: true },
   { id: 'personal-ai', label: 'Gợi ý tập', to: '/hoc-vien/giao-an-ai', end: true },
   { id: 'register', label: 'Đăng ký khóa học', to: '/dang-ky-khoa-hoc' },
   { id: 'schedule', label: 'Lịch học', to: '/hoc-vien-dashboard#schedule' },

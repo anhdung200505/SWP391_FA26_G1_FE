@@ -93,7 +93,8 @@ public sealed record ExamQuestionDto(string Prompt, string SuggestedAnswer, deci
 public sealed record CourseSessionPlanDto(
     string SessionId,
     string SessionLabel,
-    IReadOnlyList<ExerciseItemDto> Exercises);
+    IReadOnlyList<ExerciseItemDto> Exercises,
+    bool Regenerated = false);
 
 public sealed record CoursePlanDto(
     string Slot,
@@ -112,9 +113,9 @@ public sealed record CourseAiWorkspaceDto(
     CoursePlanDto? Draft,
     CoursePlanDto? Published);
 
-public sealed record GenerateCoursePlanRequest(string Brief);
+public sealed record GenerateCoursePlanRequest(string Brief, string? SessionId);
 
-public sealed record RegenerateCoursePlanRequest(string Brief, string Changes);
+public sealed record RegenerateCoursePlanRequest(string Brief, string Changes, string? SessionId);
 
 public sealed record SaveCourseSessionRequest(string SessionId, IReadOnlyList<ExerciseItemDto> Exercises);
 

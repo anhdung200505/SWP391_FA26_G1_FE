@@ -91,6 +91,9 @@ public class CoachTrainingHistory
     [Column("class_id")]
     public int ClassId { get; set; }
 
+    [Column("session_id")]
+    public int? SessionId { get; set; }
+
     [Column("content")]
     public string Content { get; set; } = "";
 

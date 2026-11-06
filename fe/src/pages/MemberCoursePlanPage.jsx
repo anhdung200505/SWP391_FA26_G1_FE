@@ -7,42 +7,6 @@ const EXAM_ID = 'exam';
 const RUBRIC_ID = 'rubric';
 const sessionKey = (session) => `s-${session.sessionId}`;
 
-// Một mục thu gọn được: tiêu đề + dòng xem nhanh khi đóng, nội dung khi mở.
-function Fold({ title, preview, meta, open, onToggle, children }) {
-  return (
-    <details
-      open={open}
-      onToggle={(event) => onToggle(event.currentTarget.open)}
-      className="group/fold rounded-2xl border border-slate-200 bg-white"
-    >
-      <summary
-        className={`flex cursor-pointer list-none items-center gap-3 rounded-2xl px-4 py-3 hover:bg-slate-50 [&::-webkit-details-marker]:hidden ${focusRing}`}
-      >
-        <svg
-          className="size-4 shrink-0 text-slate-400 transition-transform group-open/fold:rotate-90"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path d="M9 6l6 6-6 6" />
-        </svg>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-black text-slate-900">{title}</span>
-          {preview && <span className="mt-0.5 block truncate text-xs text-slate-500 group-open/fold:hidden">{preview}</span>}
-        </span>
-        {meta && <span className="shrink-0 text-xs font-bold text-slate-500 tabular-nums">{meta}</span>}
-      </summary>
-      <div className="border-t border-slate-100 px-4 py-4">{children}</div>
-    </details>
-  );
-}
-
-const textButton = `rounded-lg px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-[#e31b23] cursor-pointer ${focusRing}`;
-
 const chevron = (
   <svg
     className="size-5 shrink-0 text-slate-400 transition-transform group-open/plan:rotate-90"
@@ -60,25 +24,20 @@ const chevron = (
 
 // Mỗi lớp là một mục thu gọn: bấm vào mới thấy nội dung các buổi.
 function PlanView({ plan }) {
-  const allIds = [...plan.sessions.map(sessionKey), EXAM_ID, RUBRIC_ID];
+  const choices = [
+    ...plan.sessions.map((session) => ({ id: sessionKey(session), label: session.sessionLabel })),
+    ...(plan.exam.length > 0 ? [{ id: EXAM_ID, label: 'Bài thi cuối kỳ' }] : []),
+    ...(plan.rubric.length > 0 ? [{ id: RUBRIC_ID, label: 'Tiêu chí chấm' }] : []),
+  ];
   const [classOpen, setClassOpen] = useState(false);
-  const [openIds, setOpenIds] = useState(() => new Set());
-
-  const setOpen = (id, open) =>
-    setOpenIds((current) => {
-      const next = new Set(current);
-      if (open) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  const fold = (id) => ({ open: openIds.has(id), onToggle: (open) => setOpen(id, open) });
+  const [selectedId, setSelectedId] = useState(choices[0]?.id || '');
 
   const exerciseCount = plan.sessions.reduce((sum, session) => sum + session.exercises.length, 0);
   const totalPoints = plan.exam.reduce((sum, question) => sum + Number(question.points || 0), 0);
   const stats = [
     `${plan.sessions.length} buổi`,
     `${exerciseCount} bài tập`,
-    `Thi ${plan.exam.length} câu · ${totalPoints} điểm`,
+    ...(plan.exam.length > 0 ? [`Thi ${plan.exam.length} câu · ${totalPoints} điểm`] : []),
   ];
 
   return (
@@ -113,47 +72,34 @@ function PlanView({ plan }) {
         </div>
 
       <section>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-black text-slate-900">Nội dung từng buổi</h3>
-          <div className="flex gap-1">
-            <button type="button" onClick={() => setOpenIds(new Set(allIds))} className={textButton}>
-              Mở tất cả
-            </button>
-            <button type="button" onClick={() => setOpenIds(new Set())} className={textButton}>
-              Thu gọn tất cả
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          {plan.sessions.map((session) => (
-            <Fold
-              key={session.sessionId}
-              title={session.sessionLabel}
-              preview={session.exercises.map((exercise) => exercise.title).join(' · ')}
-              meta={`${session.exercises.length} bài tập`}
-              {...fold(sessionKey(session))}
-            >
-              <ul className="space-y-3">
-                {session.exercises.map((exercise) => (
-                  <li key={`${session.sessionId}-${exercise.title}`} className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <p className="font-bold text-slate-900">
-                      {exercise.title}
-                      <span className="ml-2 text-sm font-semibold text-slate-500">{exercise.dosage}</span>
-                    </p>
-                    <p className="mt-1 text-sm whitespace-pre-line text-slate-700">{exercise.instructions}</p>
-                  </li>
-                ))}
-              </ul>
-            </Fold>
-          ))}
-
-          <Fold
-            title="Bài thi cuối kỳ"
-            preview={`${plan.exam.length} câu hỏi, đề không kèm đáp án`}
-            meta={`${totalPoints} điểm`}
-            {...fold(EXAM_ID)}
+        <label className="block text-sm font-black text-slate-900">
+          Buổi học
+          <select
+            value={selectedId}
+            onChange={(event) => setSelectedId(event.target.value)}
+            className={`mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold ${focusRing}`}
           >
+            {choices.length === 0 && <option value="">Chưa có buổi</option>}
+            {choices.map((choice) => (
+              <option key={choice.id} value={choice.id}>{choice.label}</option>
+            ))}
+          </select>
+        </label>
+        <div className="mt-4">
+          {plan.sessions.filter((session) => sessionKey(session) === selectedId).map((session) => (
+            <ul key={session.sessionId} className="space-y-3">
+              {session.exercises.map((exercise) => (
+                <li key={`${session.sessionId}-${exercise.title}`} className="rounded-2xl bg-slate-50 px-4 py-3">
+                  <p className="font-bold text-slate-900">
+                    {exercise.title}
+                    <span className="ml-2 text-sm font-semibold text-slate-500">{exercise.dosage}</span>
+                  </p>
+                  <p className="mt-1 text-sm whitespace-pre-line text-slate-700">{exercise.instructions}</p>
+                </li>
+              ))}
+            </ul>
+          ))}
+          {selectedId === EXAM_ID && (
             <ol className="list-decimal space-y-3 pl-5">
               {plan.exam.map((question) => (
                 <li key={question.prompt} className="text-sm">
@@ -162,14 +108,8 @@ function PlanView({ plan }) {
                 </li>
               ))}
             </ol>
-          </Fold>
-
-          <Fold
-            title="Tiêu chí chấm"
-            preview={plan.rubric.map((item) => item.criterion).join(' · ')}
-            meta={`${plan.rubric.length} tiêu chí`}
-            {...fold(RUBRIC_ID)}
-          >
+          )}
+          {selectedId === RUBRIC_ID && (
             <ul className="space-y-3">
               {plan.rubric.map((item) => (
                 <li key={item.criterion}>
@@ -181,7 +121,7 @@ function PlanView({ plan }) {
                 </li>
               ))}
             </ul>
-          </Fold>
+          )}
         </div>
       </section>
       </div>
