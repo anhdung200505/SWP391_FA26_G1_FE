@@ -64,22 +64,27 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  // Kiểm tra trạng thái đăng ký của học viên
-  const hasClassRegistration = useHasClassRegistration();
+  // Đã có lớp hay chưa: chỉ dùng để hiện gợi ý "đăng ký khóa học được tặng Hạng Đồng".
   const noClassYet = useHasClassRegistration(membershipOnly) === false && membershipOnly;
 
-  // AUTO REDIRECT: Nếu học viên chưa đăng ký lớp/gói (hasClassRegistration === false) -> Đẩy sang route Khám phá tương ứng
+  // Học viên CHƯA CÓ GÓI hội viên thì dùng trang Khám phá tương ứng. Điều kiện này phải đối xứng với trang Khám phá
+  // (trang đó đẩy người ĐÃ CÓ GÓI về đây), nếu không hai trang chuyển hướng qua lại mãi. Có gói nhưng chưa có lớp thì ở lại đây.
   useEffect(() => {
-    if (hasClassRegistration === false) {
-      const targetPath = membershipOnly
-        ? '/dang-ky-thanh-vien-kham-pha'
-        : '/dang-ky-khoa-hoc-kham-pha';
-      
-      // Giữ nguyên các search query params (như ?classId=... hay ?packageId=...)
-      const currentQuery = location.search || '';
-      navigate(`${targetPath}${currentQuery}`, { replace: true, state: location.state });
-    }
-  }, [hasClassRegistration, membershipOnly, navigate, location.search, location.state]);
+    const userId = user?.id || user?.userId;
+    if (!userId) return undefined;
+    let active = true;
+    getMemberMembership(userId)
+      .then((res) => {
+        if (!active || res?.highestPackageId || res?.currentMembership) return;
+        const targetPath = membershipOnly ? '/dang-ky-thanh-vien-kham-pha' : '/dang-ky-khoa-hoc-kham-pha';
+        navigate(`${targetPath}${location.search || ''}`, { replace: true, state: location.state });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, membershipOnly]);
 
   const initialClassId = searchParams.get('classId') || location.state?.classId;
   const initialPackageId = searchParams.get('packageId') || location.state?.packageId;
