@@ -9,6 +9,7 @@ import AssignmentPanel from '../components/coach/AssignmentPanel';
 import ClassInfoPanel from '../components/coach/ClassInfoPanel';
 import CoachHistoryPanel from '../components/coach/CoachHistoryPanel';
 import CourseAiPanel from '../components/coach/CourseAiPanel';
+import CoachMaterialPanel from '../components/coach/CoachMaterialPanel';
 import EvaluationPanel from '../components/coach/EvaluationPanel';
 import { cardClass, emptyBox, formatDate, primaryButtonClass, statusLabel } from '../components/coach/coachUi';
 import { useAuth } from '../context/AuthContext';
@@ -19,11 +20,12 @@ const TABS = [
   { id: 'evaluation', label: 'Đánh giá' },
   { id: 'assignment', label: 'Bài tập' },
   { id: 'ai', label: 'Giáo án lớp' },
+  { id: 'material', label: 'Giáo trình' },
   { id: 'history', label: 'Lịch sử tập' },
   { id: 'settings', label: 'Cài đặt' },
 ];
 
-const CLASS_TABS = new Set(['info', 'attendance', 'evaluation', 'assignment', 'ai']);
+const CLASS_TABS = new Set(['info', 'attendance', 'evaluation', 'assignment', 'ai', 'material']);
 
 export default function CoachCoursePage() {
   const { user } = useAuth();
@@ -179,7 +181,10 @@ export default function CoachCoursePage() {
                 <AssignmentPanel classId={classId} sessions={detail.sessions} />
               )}
               {detail && !detailLoading && tab === 'ai' && (
-                <CourseAiPanel classId={classId} onOpenHistory={() => selectTab('history')} />
+                <CourseAiPanel classId={classId} sessions={detail.sessions} onOpenHistory={() => selectTab('history')} />
+              )}
+              {detail && !detailLoading && tab === 'material' && (
+                <CoachMaterialPanel sportName={detail.sportName} />
               )}
             </div>
           </div>

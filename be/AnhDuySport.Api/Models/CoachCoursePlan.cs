@@ -75,6 +75,9 @@ public class CoachCourseExercise
 
     [Column("instructions")]
     public string Instructions { get; set; } = "";
+
+    [Column("from_regeneration")]
+    public bool FromRegeneration { get; set; }
 }
 
 [Table("coach_course_exam_question")]
