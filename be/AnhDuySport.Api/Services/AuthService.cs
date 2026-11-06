@@ -60,13 +60,13 @@ public class AuthService(
     public async Task<GoogleLoginResult> LoginWithGoogleAsync(GoogleLoginRequest request)
     {
         var portal = request.Portal?.Trim().ToLowerInvariant() ?? "member";
-        var staff = portal is "staff" or "management";
-        var allowedRoles = staff
-            ? new[] { RoleCatalog.AdminCode, "RECEPTIONIST", "COACH" }
-            : new[] { "MEMBER" };
-        var wrongRoleMessage = staff
-            ? "Cửa này dành cho quản trị trung tâm, lễ tân và huấn luyện viên."
-            : "Chỉ học viên đăng nhập được ở đây.";
+        if (portal is "staff" or "management")
+        {
+            throw new UnauthorizedAccessException("Đăng nhập Google chỉ dành cho học viên.");
+        }
+
+        var allowedRoles = new[] { "MEMBER" };
+        const string wrongRoleMessage = "Chỉ học viên đăng nhập được ở đây.";
 
         var profile = string.IsNullOrWhiteSpace(request.AccessToken)
             ? await ReadGoogleProfileAsync(request.IdToken)
@@ -78,11 +78,6 @@ public class AuthService(
 
         if (user is null)
         {
-            if (staff)
-            {
-                throw new UnauthorizedAccessException("Email Google này chưa có tài khoản quản trị.");
-            }
-
             user = await CreateGoogleMemberAsync(profile, email);
         }
         else
@@ -115,7 +110,12 @@ public class AuthService(
     {
         var email = RequireGmail(request.Email);
         var portal = request.Portal?.Trim().ToLowerInvariant() ?? "member";
-        await EnsureGmailPortalAsync(email, portal);
+        if (portal is "staff" or "management")
+        {
+            throw new InvalidOperationException("Đăng nhập Google chỉ dành cho học viên.");
+        }
+
+        await EnsureGmailPortalAsync(email);
 
         var now = DateTime.UtcNow;
         await db.PasswordResets.Where(row => row.ExpiresAt <= now).ExecuteDeleteAsync();
@@ -204,19 +204,13 @@ public class AuthService(
         return await FinishGmailLoginAsync(email, request.Portal);
     }
 
-    private async Task EnsureGmailPortalAsync(string email, string portal)
+    private async Task EnsureGmailPortalAsync(string email)
     {
-        var staff = portal is "staff" or "management";
         var user = await db.UserAccounts
             .Include(account => account.Role)
             .FirstOrDefaultAsync(account => account.Email != null && account.Email.ToLower() == email);
         if (user is null)
         {
-            if (staff)
-            {
-                throw new InvalidOperationException("Email Google này chưa có tài khoản quản trị.");
-            }
-
             return;
         }
 
@@ -230,33 +224,31 @@ public class AuthService(
             throw new InvalidOperationException("Tài khoản đã ngưng hoạt động.");
         }
 
-        var allowed = staff
-            ? new[] { RoleCatalog.AdminCode, "RECEPTIONIST", "COACH" }
-            : new[] { "MEMBER" };
-        if (user.Role is null || !allowed.Contains(user.Role.RoleCode))
+        if (user.Role is null || user.Role.RoleCode != "MEMBER")
         {
-            throw new InvalidOperationException(staff
-                ? "Cửa này dành cho quản trị trung tâm, lễ tân và huấn luyện viên."
-                : "Chỉ học viên đăng nhập được ở đây.");
+            throw new InvalidOperationException("Chỉ học viên đăng nhập được ở đây.");
         }
     }
 
     private async Task<LoginResponse> FinishGmailLoginAsync(string email, string? portalValue)
     {
         var portal = portalValue?.Trim().ToLowerInvariant() ?? "member";
-        var staff = portal is "staff" or "management";
+        if (portal is "staff" or "management")
+        {
+            throw new UnauthorizedAccessException("Đăng nhập Google chỉ dành cho học viên.");
+        }
+
         var user = await db.UserAccounts
             .Include(account => account.Role)
             .FirstOrDefaultAsync(account => account.Email != null && account.Email.ToLower() == email);
         if (user is null)
         {
-            if (staff)
-            {
-                throw new UnauthorizedAccessException("Email Google này chưa có tài khoản quản trị.");
-            }
-
             var local = email.Split('@')[0];
             user = await CreateGoogleMemberAsync(new GoogleProfile(email, local, null), email);
+        }
+        else if (user.Role is null || user.Role.RoleCode != "MEMBER")
+        {
+            throw new UnauthorizedAccessException("Chỉ học viên đăng nhập được ở đây.");
         }
 
         return await IssueAsync(user);

@@ -88,7 +88,7 @@ export default function LoginPage() {
   };
 
   const openGoogleAccount = async () => {
-    if (saving) return;
+    if (saving || portal !== 'member') return;
     setError('');
     setSaving(true);
     try {
@@ -519,7 +519,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setPortal('staff'); setError(''); }}
+              onClick={() => { setPortal('staff'); setGoogleChoice(null); setError(''); }}
               className={`py-2 text-xs font-bold rounded-lg transition-all ${
                 portal === 'staff'
                   ? 'bg-[#e31b23] text-white shadow-md'
@@ -585,6 +585,7 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {portal === 'member' && (
           <div className="mt-5">
             <div className="mb-4 flex items-center gap-3 text-[11px] font-bold uppercase tracking-wider text-gray-500">
               <span className="h-px flex-1 bg-gray-800" />
@@ -606,6 +607,7 @@ export default function LoginPage() {
               Đăng nhập bằng Google
             </button>
           </div>
+          )}
 
           <div className="mt-8 pt-6 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-bold text-gray-400">
             <span>Chưa có tài khoản?</span>
