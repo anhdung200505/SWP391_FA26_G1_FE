@@ -132,3 +132,22 @@ public sealed record AiTokenUsageReportDto(
 public sealed record UpdateAiPackageQuotaResponse(
     AiPackageQuotaDto Package,
     string Message);
+
+public sealed record RevenueLineDto(
+    int PaymentId,
+    DateTime PaidAt,
+    string MemberName,
+    string Title,
+    string Subtitle,
+    decimal Amount,
+    string Method);
+
+public sealed record RevenueGroupDto(string Name, int PaymentCount, decimal Total);
+
+public sealed record RevenueSectionDto(
+    decimal Total,
+    int PaymentCount,
+    IReadOnlyList<RevenueGroupDto> Groups,
+    IReadOnlyList<RevenueLineDto> Lines);
+
+public sealed record RevenueReportDto(RevenueSectionDto Course, RevenueSectionDto Membership);
