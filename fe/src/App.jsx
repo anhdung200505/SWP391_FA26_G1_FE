@@ -96,6 +96,7 @@ export default function App() {
             <Route element={<Protected allowedRoles={['MEMBER', 'ADMIN']}><StudentLayout /></Protected>}>
               <Route path="/hoc-vien-dashboard" element={<HocVienDashboardPage />} />
               <Route path="/dang-ky-khoa-hoc" element={<ClassRegistrationPage />} />
+              <Route path="/dang-ky-thanh-vien" element={<ClassRegistrationPage membershipOnly />} />
               <Route path="/hoc-vien/lich-su-thanh-toan" element={<PaymentHistoryPage />} />
               <Route
                 path="/hoc-vien/bai-tap-lop"
