@@ -394,6 +394,10 @@ export function getAiTokenUsage() {
   return request('/management/ai-token-usage');
 }
 
+export function getRevenue() {
+  return request('/management/revenue');
+}
+
 export function updatePackageAiQuota(packageId, payload) {
   return request(`/management/packages/${encodeURIComponent(packageId)}/ai-quota`, {
     method: 'PUT',
