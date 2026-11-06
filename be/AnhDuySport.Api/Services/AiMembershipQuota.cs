@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
 
-// Chat AI chỉ mở khi gói đang hiệu lực được đăng ký kèm lớp (Hạng Đồng tặng hoặc mua cùng hóa đơn lớp).
-// Hội viên mua riêng để dùng cơ sở vật chất không dùng AI.
+// Chat AI mở khi gói đang hiệu lực được đăng ký kèm lớp, hoặc hội viên đang ghi danh một lớp còn mở.
+// Hội viên chỉ mua gói để dùng cơ sở vật chất, chưa có lớp, không dùng AI.
 // Đồng: 5 lượt tạo lại, 50.000 token. Bạc: 10 lượt, 100.000 token. Vàng: 25 lượt, 250.000 token.
 public static class AiMembershipQuota
 {
@@ -25,6 +25,23 @@ public static class AiMembershipQuota
         membership.IsFree
         || membership.Payment?.ClassId is not null
         || membership.PlanName.Contains("kèm lớp", StringComparison.OrdinalIgnoreCase);
+
+    // Có lớp đang học cũng đủ, kể cả gói mua riêng trước khi ghi danh.
+    public static Task<bool> OpensAiAsync(AppDbContext db, Membership membership)
+    {
+        if (BundledWithClass(membership))
+        {
+            return Task.FromResult(true);
+        }
+
+        return (
+            from enrollment in db.ClassEnrollments.AsNoTracking()
+            join trainingClass in db.Classes.AsNoTracking() on enrollment.ClassId equals trainingClass.ClassId
+            where enrollment.UserId == membership.UserId
+                && enrollment.Status == "enrolled"
+                && trainingClass.Status != "cancelled"
+            select enrollment.ClassEnrollmentId).AnyAsync();
+    }
 
     public static (int Regenerations, int Tokens) LimitsOf(string packageCode) => packageCode switch
     {
@@ -49,7 +66,7 @@ public static class AiMembershipQuota
             .OrderByDescending(item => item.Package != null ? item.Package.Fee : 0)
             .FirstOrDefaultAsync();
         var package = membership?.Package;
-        if (membership is null || package is null || !IsEligible(package.PackageCode) || !BundledWithClass(membership))
+        if (membership is null || package is null || !IsEligible(package.PackageCode) || !await OpensAiAsync(db, membership))
         {
             throw new InvalidOperationException(
                 "Gợi ý tập AI chỉ mở khi gói hội viên đang hiệu lực được đăng ký kèm lớp.");
