@@ -191,6 +191,25 @@ export default function ManagementDashboard() {
             </p>
           </Link>
 
+          <Link
+            to="/quan-ly/doanh-thu"
+            className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#e31b23]/40 hover:shadow-md flex flex-col justify-between"
+          >
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#e31b23]">
+                Revenue
+              </p>
+              <h3 className="mt-2 text-xl font-black text-slate-900">Doanh thu</h3>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                Xem riêng tiền đã thu từ khóa học và từ gói hội viên. Hai nguồn không gộp chung.
+              </p>
+            </div>
+            <p className="mt-4 text-sm font-bold text-[#e31b23]">
+              Xem doanh thu
+              <span className="ml-1 inline-block transition group-hover:translate-x-1">→</span>
+            </p>
+          </Link>
+
           {/* 3. LỚP HỌC THỂ THAO */}
           <Link
             to="/quan-ly/lop-hoc"
