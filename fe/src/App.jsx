@@ -28,6 +28,7 @@ import ClassSchedulePage from './pages/management/ClassSchedulePage';
 import CreateClassPage from './pages/management/CreateClassPage';
 import AiWorkoutPage from './pages/AiWorkoutPage';
 import AiQuotaPage from './pages/management/AiQuotaPage';
+import RevenuePage from './pages/management/RevenuePage';
 import EnrollmentConsultationsPage from './pages/management/EnrollmentConsultationsPage';
 import CenterCheckInPage from './pages/management/CenterCheckInPage';
 import PrivateRequestsPage from './pages/management/PrivateRequestsPage';
@@ -135,6 +136,7 @@ export default function App() {
 
             {/* Route Quản lý (ADMIN) */}
             <Route path="/quan-ly" element={<Protected allowedRoles={['ADMIN']}><ManagementDashboard /></Protected>} />
+            <Route path="/quan-ly/doanh-thu" element={<Protected allowedRoles={['ADMIN']}><RevenuePage /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected allowedRoles={['ADMIN']}><UserAccountListPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/moi" element={<Protected allowedRoles={['ADMIN']}><CreateStaffAccountPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected allowedRoles={['ADMIN']}><UserAccountPage /></Protected>} />
