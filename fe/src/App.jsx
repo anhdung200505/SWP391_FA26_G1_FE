@@ -33,6 +33,8 @@ import CenterCheckInPage from './pages/management/CenterCheckInPage';
 import PrivateRequestsPage from './pages/management/PrivateRequestsPage';
 import CoachCoursePage from './pages/CoachCoursePage';
 import MemberCoursePlanPage from './pages/MemberCoursePlanPage';
+import MemberCourseMaterialPage from './pages/MemberCourseMaterialPage';
+import CourseMaterialPage from './pages/management/CourseMaterialPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
 import StudentLayout from './components/workspace/StudentLayout';
 
@@ -99,6 +101,10 @@ export default function App() {
                 element={<Protected allowedRoles={['MEMBER']}><MemberCoursePlanPage /></Protected>}
               />
               <Route
+                path="/hoc-vien/giao-trinh"
+                element={<Protected allowedRoles={['MEMBER']}><MemberCourseMaterialPage /></Protected>}
+              />
+              <Route
                 path="/hoc-vien/giao-an-ai"
                 element={<Protected allowedRoles={['MEMBER']}><AiWorkoutPage /></Protected>}
               />
@@ -140,6 +146,7 @@ export default function App() {
             <Route path="/quan-ly/tu-van-ghi-danh" element={<Protected allowedRoles={['ADMIN']}><EnrollmentConsultationsPage /></Protected>} />
             <Route path="/quan-ly/check-in" element={<Protected allowedRoles={['ADMIN']}><CenterCheckInPage /></Protected>} />
             <Route path="/quan-ly/yeu-cau-1-1" element={<Protected allowedRoles={['ADMIN']}><PrivateRequestsPage /></Protected>} />
+            <Route path="/quan-ly/giao-trinh" element={<Protected allowedRoles={['ADMIN']}><CourseMaterialPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/moi" element={<Protected allowedRoles={['ADMIN']}><CreateClassPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/:classId/lich" element={<Protected allowedRoles={['ADMIN']}><ClassSchedulePage /></Protected>} />

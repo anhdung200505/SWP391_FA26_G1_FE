@@ -27,6 +27,10 @@ builder.Configuration.AddJsonFile(emailConfigPath, optional: true, reloadOnChang
 var googleConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "google.json"));
 builder.Configuration.AddJsonFile(googleConfigPath, optional: true, reloadOnChange: true);
 
+// Khóa Gemini nằm ở file local để không bị đẩy lên git.
+var aiConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "ai.json"));
+builder.Configuration.AddJsonFile(aiConfigPath, optional: true, reloadOnChange: true);
+
 var connectionString = builder.Configuration["connectionString"]
     ?? builder.Configuration.GetConnectionString("AnhDuySport")
     ?? throw new InvalidOperationException("Thiếu chuỗi kết nối AnhDuySport.");
@@ -71,6 +75,8 @@ builder.Services.AddScoped<WorkoutRecommendationFlowService>();
 builder.Services.AddScoped<CoachClassAccess>();
 builder.Services.AddScoped<CoachCourseFlowService>();
 builder.Services.AddScoped<CoachCourseAiFlowService>();
+builder.Services.AddScoped<CourseMaterialFlowService>();
+builder.Services.AddScoped<ClassIntakeFlowService>();
 
 var payOsClientId = builder.Configuration["PayOS:ClientId"];
 var payOsApiKey = builder.Configuration["PayOS:ApiKey"];
@@ -170,6 +176,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     await SessionChangeSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await MembershipNoticeSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await PaymentBonusSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await CourseMaterialSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await startup.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 
