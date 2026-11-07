@@ -1,4 +1,5 @@
 using System.Text;
+using AnhDuySport.Api;
 using AnhDuySport.Api.Data;
 using AnhDuySport.Api.Services;
 using AnhDuySport.Api.Swagger;
@@ -10,26 +11,22 @@ using PayOS;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var databaseConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "database.json"));
+var databaseConfigPath = ResolveConfig(builder, "database.json");
 if (File.Exists(databaseConfigPath))
 {
     builder.Configuration.AddJsonFile(databaseConfigPath, optional: false, reloadOnChange: true);
 }
 
 // Khóa payOS dùng chung cả nhóm: đọc ở mọi môi trường (user-secrets chỉ có trên máy đã đặt và chỉ khi Development).
-var payOsConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "payos.json"));
-builder.Configuration.AddJsonFile(payOsConfigPath, optional: true, reloadOnChange: true);
+builder.Configuration.AddJsonFile(ResolveConfig(builder, "payos.json"), optional: true, reloadOnChange: true);
 
 // Mật khẩu ứng dụng SMTP nằm ở file local để merge main không xóa tài khoản gửi OTP.
-var emailConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "email.json"));
-builder.Configuration.AddJsonFile(emailConfigPath, optional: true, reloadOnChange: true);
+builder.Configuration.AddJsonFile(ResolveConfig(builder, "email.json"), optional: true, reloadOnChange: true);
 
-var googleConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "google.json"));
-builder.Configuration.AddJsonFile(googleConfigPath, optional: true, reloadOnChange: true);
+builder.Configuration.AddJsonFile(ResolveConfig(builder, "google.json"), optional: true, reloadOnChange: true);
 
 // Khóa Gemini nằm ở file local để không bị đẩy lên git.
-var aiConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "ai.json"));
-builder.Configuration.AddJsonFile(aiConfigPath, optional: true, reloadOnChange: true);
+builder.Configuration.AddJsonFile(ResolveConfig(builder, "ai.json"), optional: true, reloadOnChange: true);
 
 var connectionString = builder.Configuration["connectionString"]
     ?? builder.Configuration.GetConnectionString("AnhDuySport")
@@ -91,7 +88,7 @@ if (!string.IsNullOrWhiteSpace(payOsClientId)
 }
 else
 {
-    Console.WriteLine($"payOS chưa có khóa (kiểm tra {payOsConfigPath}). API vẫn chạy nhưng không tạo được mã QR.");
+    Console.WriteLine($"payOS chưa có khóa (kiểm tra {ResolveConfig(builder, "payos.json")}). API vẫn chạy nhưng không tạo được mã QR.");
 }
 
 var jwtKey = builder.Configuration["Auth:JwtKey"] ?? throw new InvalidOperationException("Thiếu khóa ký JWT.");
@@ -148,11 +145,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+app.UseMiddleware<PublicGateMiddleware>();
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "AnhDuy Sport API");
+    options.RoutePrefix = "swagger";
+});
 
 app.UseCors("Frontend");
 
@@ -183,3 +182,10 @@ await using (var scope = app.Services.CreateAsyncScope())
 }
 
 app.Run();
+
+static string ResolveConfig(WebApplicationBuilder builder, string fileName)
+{
+    var published = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "config", fileName));
+    if (File.Exists(published)) return published;
+    return Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", fileName));
+}
