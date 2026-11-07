@@ -8,22 +8,74 @@ if (!File.Exists(dotnet))
     dotnet = "dotnet";
 }
 
-using var process = Process.Start(new ProcessStartInfo
+var api = new Process
 {
-    FileName = dotnet,
-    Arguments = $"run --project \"{apiProject}\" --launch-profile http",
-    WorkingDirectory = apiDirectory,
-    UseShellExecute = false,
-}) ?? throw new InvalidOperationException("Không chạy được API.");
+    StartInfo = new ProcessStartInfo
+    {
+        FileName = dotnet,
+        Arguments = $"run --project \"{apiProject}\" --launch-profile http",
+        WorkingDirectory = apiDirectory,
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+    },
+};
+api.StartInfo.Environment["PUBLIC_GATE_PASSWORD"] = "AnhDuy@123";
+
+var tunnel = new Process
+{
+    StartInfo = new ProcessStartInfo
+    {
+        FileName = "cmd.exe",
+        Arguments = "/c npx --yes localtunnel --port 5080 --subdomain anhduysport",
+        WorkingDirectory = apiDirectory,
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+    },
+};
+
+void Write(string? line)
+{
+    if (!string.IsNullOrEmpty(line)) Console.WriteLine(line);
+}
+
+api.OutputDataReceived += (_, eventArgs) => Write(eventArgs.Data);
+api.ErrorDataReceived += (_, eventArgs) => Write(eventArgs.Data);
+tunnel.OutputDataReceived += (_, eventArgs) => Write(eventArgs.Data);
+tunnel.ErrorDataReceived += (_, eventArgs) => Write(eventArgs.Data);
+
+api.Start();
+api.BeginOutputReadLine();
+api.BeginErrorReadLine();
+tunnel.Start();
+tunnel.BeginOutputReadLine();
+tunnel.BeginErrorReadLine();
+
+Console.WriteLine("Swagger trên máy: http://localhost:5080/swagger");
+Console.WriteLine("Swagger trên web: https://anhduysport.loca.lt/swagger");
 
 Console.CancelKeyPress += (_, eventArgs) =>
 {
     eventArgs.Cancel = true;
-    if (!process.HasExited)
-    {
-        process.Kill(entireProcessTree: true);
-    }
+    Stop(tunnel);
+    Stop(api);
 };
 
-process.WaitForExit();
-Environment.Exit(process.ExitCode);
+api.WaitForExit();
+Stop(tunnel);
+Environment.Exit(api.ExitCode);
+
+static void Stop(Process process)
+{
+    try
+    {
+        if (!process.HasExited)
+        {
+            process.Kill(entireProcessTree: true);
+        }
+    }
+    catch (InvalidOperationException)
+    {
+    }
+}
