@@ -505,10 +505,11 @@ export default function LoginPage() {
           ) : (
           <>
           {/* CỔNG ĐĂNG NHẬP (TAB PORTAL) */}
-          <div className="grid grid-cols-2 gap-2 bg-[#0d0f17] p-1.5 rounded-xl border border-gray-800 mb-6">
+          <div className="grid grid-cols-2 gap-2 bg-[#0d0f17] p-1.5 rounded-xl border border-gray-800 mb-3">
             <button
               type="button"
               onClick={() => { setPortal('member'); setError(''); }}
+              aria-pressed={portal === 'member'}
               className={`py-2 text-xs font-bold rounded-lg transition-all ${
                 portal === 'member'
                   ? 'bg-[#e31b23] text-white shadow-md'
@@ -520,15 +521,22 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => { setPortal('staff'); setGoogleChoice(null); setError(''); }}
+              aria-pressed={portal === 'staff'}
               className={`py-2 text-xs font-bold rounded-lg transition-all ${
                 portal === 'staff'
                   ? 'bg-[#e31b23] text-white shadow-md'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Quản trị & Lễ tân
+              Nhân viên
             </button>
           </div>
+
+          <p className="mb-6 text-center text-[11px] font-medium text-gray-400" aria-live="polite">
+            {portal === 'member'
+              ? 'Dành cho học viên đã đăng ký.'
+              : 'Dành cho Quản lý, Lễ tân và Huấn luyện viên.'}
+          </p>
 
           <form className="space-y-4" onSubmit={submit}>
             <div>
@@ -572,7 +580,7 @@ export default function LoginPage() {
 
             {error && (
               <div className="rounded-xl bg-red-950/60 border border-red-800/80 px-4 py-3 text-xs font-semibold text-red-300">
-                ⚠️ {error}
+                {error}
               </div>
             )}
 
@@ -581,7 +589,7 @@ export default function LoginPage() {
               disabled={saving}
               className="w-full rounded-xl bg-[#e31b23] hover:bg-[#c4131a] px-4 py-3.5 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-red-900/40 cursor-pointer disabled:opacity-60 transition-all transform active:scale-[0.99]"
             >
-              {saving ? 'Đang xác thực...' : portal === 'member' ? 'Đăng nhập Học viên' : 'Đăng nhập Quản trị / Lễ tân'}
+              {saving ? 'Đang xác thực...' : portal === 'member' ? 'Đăng nhập Học viên' : 'Đăng nhập Nhân viên'}
             </button>
           </form>
 
