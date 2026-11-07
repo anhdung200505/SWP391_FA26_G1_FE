@@ -22,7 +22,7 @@ public sealed class PublicGateMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (_password.Length == 0 || IsLocal(context.Request.Host.Host))
+        if (_password.Length == 0 || IsLocal(context.Request.Host.Host) || context.Request.Path.StartsWithSegments("/api"))
         {
             await _next(context);
             return;
