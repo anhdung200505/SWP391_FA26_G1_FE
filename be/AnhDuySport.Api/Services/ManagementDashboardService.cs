@@ -177,11 +177,112 @@ public class ManagementDashboardService(AppDbContext db, CurrentActor actor)
             package.AiTokenLimit,
             activeMembers);
 
+    public async Task<RevenueReportDto> ListRevenueAsync()
+    {
+        var payments = await db.Payments
+            .AsNoTracking()
+            .Include(payment => payment.Class!)
+            .ThenInclude(trainingClass => trainingClass.Course)
+            .Include(payment => payment.Invoice)
+            .Where(payment => payment.Status == "paid")
+            .ToListAsync();
+        var userIds = payments.Select(payment => payment.UserId).Distinct().ToList();
+        var names = await db.UserAccounts
+            .AsNoTracking()
+            .Where(user => userIds.Contains(user.UserId))
+            .ToDictionaryAsync(user => user.UserId, user => user.FullName);
+        var paymentIds = payments.Select(payment => payment.PaymentId).ToList();
+        var membershipRows = await db.Memberships
+            .AsNoTracking()
+            .Where(item => item.PaymentId != null && paymentIds.Contains(item.PaymentId.Value))
+            .ToListAsync();
+        var membershipByPayment = membershipRows
+            .GroupBy(item => item.PaymentId!.Value)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(item => item.MembershipId).First());
+        var packageNames = await db.MembershipPackages
+            .AsNoTracking()
+            .ToDictionaryAsync(package => package.MembershipPackageId, package => package.PackageName);
+
+        var courseLines = new List<RevenueLineDto>();
+        var membershipLines = new List<RevenueLineDto>();
+        foreach (var payment in payments)
+        {
+            var paidAt = payment.PaidAt ?? payment.Invoice?.IssuedAt ?? DateTime.MinValue;
+            var memberName = names.GetValueOrDefault(payment.UserId, "Học viên");
+            var method = PaymentMethodLabel(payment.PaymentMethod);
+            if (payment.ClassId is not null)
+            {
+                var tuition = payment.Amount - payment.UpgradeAmount;
+                if (tuition > 0)
+                {
+                    courseLines.Add(new RevenueLineDto(
+                        payment.PaymentId,
+                        paidAt,
+                        memberName,
+                        payment.Class?.Course?.CourseName ?? "Khóa học",
+                        payment.Class?.ClassName ?? "Lớp học",
+                        tuition,
+                        method));
+                }
+            }
+
+            var membershipAmount = payment.ClassId is null ? payment.Amount : payment.UpgradeAmount;
+            if (membershipAmount <= 0)
+            {
+                continue;
+            }
+
+            membershipByPayment.TryGetValue(payment.PaymentId, out var membership);
+            var packageName = membership?.PlanName;
+            if (string.IsNullOrWhiteSpace(packageName) && payment.UpgradePackageId is int packageId)
+            {
+                packageName = packageNames.GetValueOrDefault(packageId);
+            }
+
+            var className = payment.Class?.ClassName;
+            membershipLines.Add(new RevenueLineDto(
+                payment.PaymentId,
+                paidAt,
+                memberName,
+                string.IsNullOrWhiteSpace(packageName) ? "Gói hội viên" : packageName,
+                payment.ClassId is null
+                    ? "Mua hoặc gia hạn gói"
+                    : string.IsNullOrWhiteSpace(className) ? "Lên cấp kèm lớp" : $"Lên cấp kèm lớp {className}",
+                membershipAmount,
+                method));
+        }
+
+        return new RevenueReportDto(ToRevenueSection(courseLines), ToRevenueSection(membershipLines));
+    }
+
     public async Task<IReadOnlyList<RoleDto>> ListRolesAsync()
     {
         var roles = await db.Roles.AsNoTracking().Include(role => role.Permissions).OrderBy(role => role.RoleId).ToListAsync();
         return roles.Select(ToRoleDto).ToList();
     }
+
+    private static RevenueSectionDto ToRevenueSection(List<RevenueLineDto> lines)
+    {
+        var ordered = lines
+            .OrderByDescending(line => line.PaidAt)
+            .ThenByDescending(line => line.PaymentId)
+            .ToList();
+        var groups = ordered
+            .GroupBy(line => line.Title)
+            .Select(group => new RevenueGroupDto(group.Key, group.Count(), group.Sum(line => line.Amount)))
+            .OrderByDescending(group => group.Total)
+            .ThenBy(group => group.Name)
+            .ToList();
+        return new RevenueSectionDto(ordered.Sum(line => line.Amount), ordered.Count, groups, ordered);
+    }
+
+    private static string PaymentMethodLabel(string? method) => method switch
+    {
+        "chuyen_khoan" => "Chuyển khoản",
+        "payos" => "payOS",
+        "cash" or "tien_mat" => "Tiền mặt",
+        _ => string.IsNullOrWhiteSpace(method) ? "Khác" : method,
+    };
 
     private static RoleDto ToRoleDto(Role role) =>
         new(

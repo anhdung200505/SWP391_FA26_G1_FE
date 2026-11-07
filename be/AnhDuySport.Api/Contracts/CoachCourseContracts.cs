@@ -22,7 +22,11 @@ public sealed record CoachSessionLineDto(
     TimeOnly StartTime,
     TimeOnly EndTime,
     string Status,
-    string? Note);
+    string? Note,
+    string CoachName = "",
+    string RoomName = "",
+    string? CoachChange = null,
+    bool RoomChanged = false);
 
 public sealed record CoachClassDetailDto(
     string ClassId,
@@ -47,7 +51,10 @@ public sealed record AttendanceSheetDto(
     TimeOnly StartTime,
     TimeOnly EndTime,
     string Status,
-    IReadOnlyList<AttendanceRowDto> Rows);
+    IReadOnlyList<AttendanceRowDto> Rows,
+    // CanEdit = false khi coach đang ngoài khung giờ điểm danh (hoặc buổi đã hủy); LockReason nêu lý do.
+    bool CanEdit,
+    string? LockReason);
 
 public sealed record AttendanceMarkRequest(string MemberUserId, string Status);
 
@@ -86,7 +93,8 @@ public sealed record ExamQuestionDto(string Prompt, string SuggestedAnswer, deci
 public sealed record CourseSessionPlanDto(
     string SessionId,
     string SessionLabel,
-    IReadOnlyList<ExerciseItemDto> Exercises);
+    IReadOnlyList<ExerciseItemDto> Exercises,
+    bool Regenerated = false);
 
 public sealed record CoursePlanDto(
     string Slot,
@@ -105,9 +113,9 @@ public sealed record CourseAiWorkspaceDto(
     CoursePlanDto? Draft,
     CoursePlanDto? Published);
 
-public sealed record GenerateCoursePlanRequest(string Brief);
+public sealed record GenerateCoursePlanRequest(string Brief, string? SessionId);
 
-public sealed record RegenerateCoursePlanRequest(string Brief, string Changes);
+public sealed record RegenerateCoursePlanRequest(string Brief, string Changes, string? SessionId);
 
 public sealed record SaveCourseSessionRequest(string SessionId, IReadOnlyList<ExerciseItemDto> Exercises);
 

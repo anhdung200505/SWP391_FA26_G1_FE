@@ -75,8 +75,11 @@ public class ComboPayOsPaymentService(
         // Đổi lựa chọn lên cấp: SubmitRegistrationAsync định hủy đơn cũ nhưng đơn đó lấy từ LiveHolds() (AsNoTracking)
         // nên 'failed' không được lưu, rồi trùng UX_payment_pending_per_class và trả lại đơn cũ.
         // Ở đây tự hủy đơn cũ (đóng cả QR payOS) rồi tạo lại.
-        var wantedPackageId = (await ClassMembershipBonus.QuoteUpgradeAsync(db, request.MembershipPackageId)).Package?.MembershipPackageId;
-        if (payment.Status == "pending" && payment.UpgradePackageId != wantedPackageId)
+        var choice = await ClassMembershipBonus.ResolveForClassAsync(
+            db, memberUserId, request.MembershipPackageId, request.RenewMembership, DateOnly.FromDateTime(DateTime.Now));
+        var wantedPackageId = choice.SkipBonus ? null : choice.Package?.MembershipPackageId;
+        if (payment.Status == "pending"
+            && (payment.UpgradePackageId != wantedPackageId || payment.SkipMembershipBonus != choice.SkipBonus))
         {
             await CancelLinkAsync(payment, "Đổi lựa chọn gói lên cấp");
             await registrations.MarkPaymentFailedAsync(payment.PaymentId, memberUserId);

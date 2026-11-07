@@ -79,24 +79,24 @@ export default function ReceptionRegistrationsList() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       {/* CỤM TÌM KIẾM VÀ LỌC */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* SCOPE LỌC */}
         <div className="flex gap-2">
           <button
             onClick={() => setScope('mine')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
               scope === 'mine' ? 'bg-[#e31b23] text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            👤 Tôi đã đăng ký (scope=mine)
+            Tôi đã đăng ký
           </button>
           <button
             onClick={() => setScope('all')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
               scope === 'all' ? 'bg-[#e31b23] text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            🌐 Tất cả học viên (scope=all)
+            Tất cả học viên
           </button>
         </div>
 
@@ -135,26 +135,26 @@ export default function ReceptionRegistrationsList() {
       {/* HIỂN THỊ LỖI */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">
-          ⚠️ {error}
+          {error}
         </div>
       )}
 
       {/* BẢNG DANH SÁCH HỌC VIÊN ĐĂNG KÝ */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
         {loading ? (
           <div className="py-16 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#e31b23] border-t-transparent mb-2"></div>
-            <p className="text-xs font-bold text-slate-400">Đang tải danh sách học viên đăng ký lớp...</p>
+            <p className="text-xs font-bold text-slate-500">Đang tải danh sách học viên đăng ký lớp...</p>
           </div>
         ) : registrations.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-xs font-bold text-slate-400">Không tìm thấy bản ghi đăng ký lớp nào.</p>
+            <p className="text-xs font-bold text-slate-500">Không tìm thấy bản ghi đăng ký lớp nào.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider">
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs">
                   <th className="p-4">Học viên</th>
                   <th className="p-4">Lớp học / Môn</th>
                   <th className="p-4">Đơn thanh toán</th>
@@ -171,17 +171,17 @@ export default function ReceptionRegistrationsList() {
                     {/* HỌC VIÊN */}
                     <td className="p-4">
                       <div className="font-bold text-slate-900">{item.member?.fullName}</div>
-                      <div className="text-[11px] text-slate-400">{item.member?.email}</div>
-                      <div className="text-[11px] font-semibold text-slate-600">📞 {item.member?.phone}</div>
+                      <div className="text-xs text-slate-500">{item.member?.email}</div>
+                      <div className="text-xs font-semibold text-slate-600">{item.member?.phone}</div>
                     </td>
 
                     {/* LỚP HỌC */}
                     <td className="p-4">
                       <div className="font-bold text-slate-800">{item.class?.name || 'Chưa tên'}</div>
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-xs text-slate-500">
                         {item.class?.sportName} • {item.class?.courseName}
                       </div>
-                      <div className="text-[10px] text-slate-400">HLV: {item.class?.coachName || 'N/A'}</div>
+                      <div className="text-xs text-slate-500">HLV: {item.class?.coachName || 'N/A'}</div>
                     </td>
 
                     {/* ĐƠN THANH TOÁN */}
@@ -194,7 +194,7 @@ export default function ReceptionRegistrationsList() {
                         {PAYMENT_STATUS[item.payment?.status]?.label || item.payment?.status || 'Chưa có đơn'}
                       </span>
                       {item.payment?.method && (
-                        <div className="mt-1 text-[10px] text-slate-400">
+                        <div className="mt-1 text-xs text-slate-500">
                           {METHOD[item.payment.method] || item.payment.method}
                         </div>
                       )}
@@ -203,18 +203,18 @@ export default function ReceptionRegistrationsList() {
                     {/* ĐĂNG KÝ BỞI */}
                     <td className="p-4">
                       <div className="font-bold text-slate-800">{item.registeredBy?.fullName || 'Tự đăng ký'}</div>
-                      <div className="text-[10px] text-slate-400">{item.registeredBy?.role || 'SYSTEM'}</div>
+                      <div className="text-xs text-slate-500">{item.registeredBy?.role || 'SYSTEM'}</div>
                     </td>
 
                     {/* XẾP LỚP BỞI */}
                     <td className="p-4">
                       <div className="font-bold text-slate-800">{item.classAssignedBy?.label || item.classAssignedBy?.source}</div>
-                      <div className="text-[10px] text-slate-400">{item.classAssignedBy?.fullName || 'Hệ thống tự động'}</div>
+                      <div className="text-xs text-slate-500">{item.classAssignedBy?.fullName || 'Hệ thống tự động'}</div>
                     </td>
 
                     {/* TRẠNG THÁI GHI DANH */}
                     <td className="p-4 text-right">
-                      <span className={`inline-block border text-[10px] font-black px-2.5 py-1 rounded-full ${badge.className}`}>
+                      <span className={`inline-block border text-xs font-black px-2.5 py-1 rounded-full ${badge.className}`}>
                         {badge.label}
                       </span>
                     </td>

@@ -50,6 +50,51 @@ public static class ClassSessionPlanner
         return sessions;
     }
 
+    // Gói theo số buổi (1-1): lấy đúng count buổi đầu tiên từ ngày start trở đi theo lịch tuần. Lịch rỗng thì không có buổi nào.
+    public static List<ClassSession> PlanCount(
+        int classId,
+        DateOnly start,
+        int count,
+        IReadOnlyCollection<(byte Weekday, TimeSlot Slot)> schedule,
+        int coachUserId,
+        int roomId,
+        DateTime now)
+    {
+        if (schedule.Count == 0 || count <= 0)
+        {
+            return [];
+        }
+
+        var sessions = new List<ClassSession>();
+        for (var date = start; sessions.Count < count; date = date.AddDays(1))
+        {
+            var weekday = WeekdayOf(date);
+            foreach (var (_, slot) in schedule.Where(item => item.Weekday == weekday).OrderBy(item => item.Slot.StartTime))
+            {
+                if (sessions.Count == count)
+                {
+                    break;
+                }
+
+                sessions.Add(new ClassSession
+                {
+                    ClassId = classId,
+                    SessionNo = sessions.Count + 1,
+                    SessionDate = date,
+                    TimeSlotId = slot.TimeSlotId,
+                    StartTime = slot.StartTime,
+                    EndTime = slot.EndTime,
+                    CoachUserId = coachUserId,
+                    RoomId = roomId,
+                    Status = "scheduled",
+                    CreatedAt = now,
+                });
+            }
+        }
+
+        return sessions;
+    }
+
     // TR_session_rules báo lỗi bằng THROW 50010..50016 kèm thông báo tiếng Việt.
     public static bool IsRuleViolation(DbUpdateException exception, out string message)
     {

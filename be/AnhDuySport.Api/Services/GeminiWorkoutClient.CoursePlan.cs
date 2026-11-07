@@ -24,55 +24,71 @@ public partial class GeminiWorkoutClient
 
         var prompt = BuildCoursePrompt(request);
         string? lastMessage = null;
-        for (var attempt = 1; attempt <= 2; attempt++)
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var model in CandidateModels())
         {
-            HttpResponseMessage response;
-            try
+            if (!seen.Add(model))
             {
-                using var message = new HttpRequestMessage(
-                    HttpMethod.Post,
-                    $"v1beta/models/{Uri.EscapeDataString(Model)}:generateContent");
-                message.Version = HttpVersion.Version11;
-                message.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
-                message.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
-                message.Content = JsonContent.Create(new
-                {
-                    contents = new[]
-                    {
-                        new { parts = new[] { new { text = prompt } } },
-                    },
-                    generationConfig = new
-                    {
-                        temperature = 0.4,
-                        responseMimeType = "application/json",
-                    },
-                });
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-                response = await http.SendAsync(message, timeout.Token);
-            }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-            {
-                throw new InvalidOperationException($"Google Gemini ({Model}) không phản hồi kịp. Hãy thử lại sau ít giây.");
-            }
-
-            var raw = await response.Content.ReadAsStringAsync();
-            if (response.IsSuccessStatusCode)
-            {
-                return ParseCoursePlan(raw, request.Sessions);
-            }
-
-            var geminiMessage = ReadError(raw);
-            var status = (int)response.StatusCode;
-            lastMessage = string.IsNullOrWhiteSpace(geminiMessage)
-                ? $"Google Gemini từ chối yêu cầu ({status}). Model {Model}."
-                : $"Google Gemini ({Model}): {geminiMessage}";
-            if (status is 429 or 503 && attempt < 2)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(2));
                 continue;
             }
 
-            break;
+            for (var attempt = 1; attempt <= 3; attempt++)
+            {
+                HttpResponseMessage response;
+                try
+                {
+                    using var message = new HttpRequestMessage(
+                        HttpMethod.Post,
+                        $"v1beta/models/{Uri.EscapeDataString(model)}:generateContent");
+                    message.Version = HttpVersion.Version11;
+                    message.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+                    message.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
+                    message.Content = JsonContent.Create(new
+                    {
+                        contents = new[]
+                        {
+                            new { parts = new[] { new { text = prompt } } },
+                        },
+                        generationConfig = new
+                        {
+                            temperature = 0.4,
+                            responseMimeType = "application/json",
+                        },
+                    });
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+                    response = await http.SendAsync(message, timeout.Token);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+                {
+                    lastMessage = $"Google Gemini ({model}) không phản hồi kịp. Hãy thử lại sau ít giây.";
+                    break;
+                }
+
+                var raw = await response.Content.ReadAsStringAsync();
+                if (response.IsSuccessStatusCode)
+                {
+                    return ParseCoursePlan(raw, request.Sessions, request.SingleSession);
+                }
+
+                var geminiMessage = ReadError(raw);
+                var status = (int)response.StatusCode;
+                lastMessage = string.IsNullOrWhiteSpace(geminiMessage)
+                    ? $"Google Gemini từ chối yêu cầu ({status}). Model {model}."
+                    : $"Google Gemini ({model}): {geminiMessage}";
+                if (status is 404 or 429 or 503)
+                {
+                    if (status is 429 or 503 && attempt < 3)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(attempt * 2));
+                        continue;
+                    }
+
+                    lastMessage = FriendlyGeminiError(lastMessage);
+                    break;
+                }
+
+                throw new InvalidOperationException(lastMessage);
+            }
         }
 
         throw new InvalidOperationException(lastMessage ?? "Google Gemini không trả bài tập.");
@@ -89,10 +105,32 @@ public partial class GeminiWorkoutClient
         var current = string.IsNullOrWhiteSpace(request.CurrentPlan)
             ? "Chưa có bộ bài đã lưu."
             : request.CurrentPlan;
+        if (request.SingleSession)
+        {
+            return $"""
+                Bạn là huấn luyện viên bộ môn {request.SportName}. Chỉ trả về JSON, không markdown.
+                Soạn bài tập cho đúng một buổi của lớp "{request.ClassName}", khóa "{request.CourseName}". Không soạn buổi khác và không soạn bài thi.
+                {request.CourseMaterial}
+                Chỉ dùng khối RAFT ở trên. Không thêm kỹ thuật ngoài khối đó và nhận xét huấn luyện viên.
+                Đánh giá buổi vừa học xong, dùng để soạn buổi kế tiếp: {request.TrainingHistory}
+                Mô tả coach nhập thêm: {request.Brief}
+                Bài đang có của buổi này, nếu coach yêu cầu sửa: {current}
+                {change}
+                Buổi cần soạn, giữ đúng sessionId:
+                {sessions}
+                JSON gồm summary (1 đến 3 câu) và sessions.
+                sessions có đúng một phần tử, đúng sessionId ở trên.
+                Phần tử đó gồm sessionId và exercises (2 đến 4 bài).
+                Mỗi bài tập gồm title, dosage (số lần, hiệp hoặc thời lượng) và instructions.
+                Viết tiếng Việt, bài phù hợp môn {request.SportName}, không kê đơn thuốc.
+                """;
+        }
+
         return $"""
             Bạn là huấn luyện viên bộ môn {request.SportName}. Chỉ trả về JSON, không markdown.
             Soạn bài tập cho từng buổi và một bài thi cuối kỳ của lớp "{request.ClassName}", khóa "{request.CourseName}".
-            Chỉ dùng mô tả coach nhập và lịch sử tập của đúng lớp này. Không bịa dữ liệu học viên khác.
+            {request.CourseMaterial}
+            Bài tập, bài thi và tiêu chí phải bám các khối RAFT liên quan. Không bịa kỹ thuật ngoài giáo trình và mô tả coach.
             Mô tả coach nhập: {request.Brief}
             Lịch sử tập coach đã ghi cho lớp này: {request.TrainingHistory}
             Bộ bài đang có, nếu coach yêu cầu sửa: {current}
@@ -109,7 +147,7 @@ public partial class GeminiWorkoutClient
             """;
     }
 
-    private static GeneratedCoursePlan ParseCoursePlan(string raw, IReadOnlyList<CoursePlanSessionPrompt> expected)
+    private static GeneratedCoursePlan ParseCoursePlan(string raw, IReadOnlyList<CoursePlanSessionPrompt> expected, bool singleSession)
     {
         using var document = JsonDocument.Parse(raw);
         if (!document.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
@@ -200,6 +238,11 @@ public partial class GeminiWorkoutClient
             }
 
             ordered.Add(new GeneratedCourseSession(item.SessionId, exercises));
+        }
+
+        if (singleSession)
+        {
+            return new GeneratedCoursePlan(summary, ordered, [], []);
         }
 
         var exam = ReadExam(root);
@@ -322,7 +365,9 @@ public sealed record CoursePlanGenerationRequest(
     string TrainingHistory,
     IReadOnlyList<CoursePlanSessionPrompt> Sessions,
     string? CurrentPlan,
-    string? Changes);
+    string? Changes,
+    string CourseMaterial,
+    bool SingleSession = false);
 
 public sealed record CoursePlanSessionPrompt(string SessionId, string Label);
 
@@ -334,7 +379,7 @@ public sealed record GeneratedCoursePlan(
 
 public sealed record GeneratedCourseSession(string SessionId, IReadOnlyList<GeneratedCourseExercise> Exercises);
 
-public sealed record GeneratedCourseExercise(string Title, string Dosage, string Instructions);
+public sealed record GeneratedCourseExercise(string Title, string Dosage, string Instructions, bool FromRegeneration = false);
 
 public sealed record GeneratedExamQuestion(string Prompt, string SuggestedAnswer, decimal Points);
 

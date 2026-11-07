@@ -18,6 +18,29 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
 
     public string ProviderLabel => $"Google Gemini ({Model})";
 
+    private IEnumerable<string> CandidateModels()
+    {
+        foreach (var name in new[] { Model, "gemini-3.1-flash-lite", "gemini-3.5-flash" })
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                yield return name.Trim();
+            }
+        }
+    }
+
+    private static string FriendlyGeminiError(string detail)
+    {
+        if (detail.Contains("high demand", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("overloaded", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("RESOURCE_EXHAUSTED", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Google Gemini đang quá tải. Hệ thống đã thử model dự phòng. Hãy bấm sinh lại sau ít phút.";
+        }
+
+        return detail;
+    }
+
     public async Task<GeneratedWorkout> GenerateAsync(WorkoutGenerationRequest request)
     {
         var apiKey = configuration["Ai:ApiKey"];
@@ -33,10 +56,9 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
                 "Chưa có khóa Google Gemini. Thêm Ai:ApiKey vào appsettings.Development.json hoặc đặt biến môi trường GEMINI_API_KEY.");
         }
 
-        var models = new List<string> { Model };
         string? lastMessage = null;
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var candidate in models)
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in CandidateModels())
         {
             if (!seen.Add(candidate))
             {
@@ -58,7 +80,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
             break;
         }
 
-        throw new InvalidOperationException(lastMessage ?? "Google Gemini không trả giáo án.");
+        throw new InvalidOperationException(lastMessage ?? "Google Gemini không trả gợi ý tập.");
     }
 
     private async Task<(GeneratedWorkout? Workout, string? Error, bool TryNext)> CallModelAsync(
@@ -110,19 +132,19 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
                 : $"Google Gemini ({model}): {geminiMessage}";
             if (status is 404 or 429 or 503)
             {
-                if (status is 429 or 503 && attempt < 2)
+                if (status is 429 or 503 && attempt < 3)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(2));
+                    await Task.Delay(TimeSpan.FromSeconds(attempt * 2));
                     continue;
                 }
 
-                return (null, detail, true);
+                return (null, FriendlyGeminiError(detail), true);
             }
 
             return (null, detail, false);
         }
 
-        return (null, $"Google Gemini ({model}) không trả giáo án.", true);
+        return (null, $"Google Gemini ({model}) không trả gợi ý tập.", true);
     }
 
     private static string ReadError(string raw)
@@ -149,26 +171,29 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
     {
         var days = string.Join(", ", request.Weekdays);
         var change = string.IsNullOrWhiteSpace(request.Changes)
-            ? "Đây là lần tạo giáo án đầu."
-            : $"Học viên yêu cầu sửa giáo án: {request.Changes}";
+            ? "Đây là lần tạo gợi ý tập cá nhân đầu."
+            : $"Học viên yêu cầu sửa gợi ý tập: {request.Changes}";
         var safety = string.IsNullOrWhiteSpace(request.SafetyNote)
             ? "Không có cảnh báo thêm."
             : request.SafetyNote;
         return $"""
             Bạn là huấn luyện viên. Chỉ trả về JSON, không markdown.
-            Tạo giáo án tập tại nhà bằng tiếng Việt cho {request.MemberName}.
+            Tạo gợi ý tập cá nhân tại nhà bằng tiếng Việt cho {request.MemberName}. Đây là lịch tập riêng, không phải giáo án hay bài tập của lớp.
             Sức khỏe: {request.HealthSummary}
-            Lịch sử tập do coach tự nhập, không phải điểm danh hay điểm số: {request.TrainingHistory}
+            {request.CourseMaterial}
+            Lịch sử tập coach ghi theo từng buổi đã học: {request.TrainingHistory}
+            Đánh giá đầu khóa, chỉ là nhận xét buổi đầu, không có điểm: {request.IntakeEvaluation}
+            Đánh giá tổng môn, khác với đánh giá đầu khóa: {request.OverallEvaluation}
             Lịch môn học, gồm môn và số buổi học, không xếp bài cá nhân trùng ngày có buổi học: {request.ClassSchedule}
             Mục tiêu: {request.Goal}
             Ràng buộc: {request.SessionsPerWeek} buổi/tuần, mỗi buổi {request.SessionMinutes} phút, kéo dài {request.DurationWeeks} tuần, cường độ gợi ý {request.Intensity}, giờ tập {request.StartTime}.
             Các buổi theo đúng thứ tự ngày: {days}.
             {change}
             {safety}
-            JSON gồm analysis (2 đến 4 câu nhận xét BMI và mục tiêu), planName (tên giáo án ngắn) và sessions.
+            JSON gồm analysis (2 đến 4 câu nhận xét BMI và mục tiêu), planName (tên gợi ý tập ngắn, không dùng chữ giáo án) và sessions.
             Mỗi phần tử sessions gồm title, intensity (Thấp hoặc Trung bình hoặc Cao) và exercises (khởi động, bài chính gồm số hiệp và số lần, giãn cơ).
             sessions phải có đúng {request.Weekdays.Count} phần tử, cùng thứ tự các ngày ở trên.
-            Bài tập phải bổ trợ đúng môn học viên đang học và nội dung lịch sử tập coach đã nhập.
+            Bài tập phải bổ trợ đúng môn học viên đang học, bám giáo trình RAFT, lịch sử từng buổi, nhận xét đầu khóa và đánh giá tổng môn.
             Không kê đơn thuốc, không bài tập nguy hiểm với mức BMI đã nêu.
             """;
     }
@@ -185,7 +210,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
         if (!document.RootElement.TryGetProperty("candidates", out var candidates)
             || candidates.GetArrayLength() == 0)
         {
-            throw new InvalidOperationException("Google Gemini không trả nội dung giáo án.");
+            throw new InvalidOperationException("Google Gemini không trả nội dung gợi ý tập.");
         }
 
         var text = "";
@@ -244,7 +269,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
         var planName = payload.PlanName?.Trim() ?? "";
         if (planName.Length == 0)
         {
-            planName = "Giáo án cá nhân";
+            planName = "Gợi ý tập cá nhân";
         }
 
         return new GeneratedWorkout(
@@ -392,7 +417,10 @@ public sealed record WorkoutGenerationRequest(
     string StartTime,
     IReadOnlyList<string> Weekdays,
     string? SafetyNote,
-    string? Changes);
+    string? Changes,
+    string OverallEvaluation,
+    string IntakeEvaluation,
+    string CourseMaterial);
 
 public sealed record GeneratedWorkout(
     string PlanName,

@@ -74,6 +74,34 @@ export function loginMember(email, password, portal = 'member') {
   });
 }
 
+export function getGoogleClientId() {
+  return request('/auth/google-client', { anonymous: true });
+}
+
+export function loginWithGoogle(accessToken, portal = 'member', linkExisting = false) {
+  return request('/auth/google', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ accessToken, portal, linkExisting }),
+  });
+}
+
+export function sendGmailOtp(email, portal = 'member') {
+  return request('/auth/gmail/otp', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, portal }),
+  });
+}
+
+export function confirmGmailLogin(email, code, portal = 'member') {
+  return request('/auth/gmail/confirm', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, code, portal }),
+  });
+}
+
 export function registerGuest(payload) {
   return request('/auth/register', {
     method: 'POST',
@@ -87,6 +115,22 @@ export function sendRegisterOtp(payload) {
     method: 'POST',
     anonymous: true,
     body: JSON.stringify(payload),
+  });
+}
+
+export function forgotPassword(email) {
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(email, code, newPassword) {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    anonymous: true,
+    body: JSON.stringify({ email, code, newPassword }),
   });
 }
 
@@ -238,6 +282,19 @@ export function changeSessionCoach(sessionId, payload) {
   });
 }
 
+// Quản trị xem và sửa điểm danh một buổi của lớp bất kỳ, mọi thời điểm. Trả { rows, canEdit, lockReason, ... }.
+export function getAdminAttendance(classId, sessionId) {
+  return request(`/management/classes/${classId}/sessions/${sessionId}/attendance`);
+}
+
+// marks: [{ memberUserId, status: present | late | absent }], phải đủ học viên đang học của lớp.
+export function saveAdminAttendance(classId, sessionId, marks) {
+  return request(`/management/classes/${classId}/sessions/${sessionId}/attendance`, {
+    method: 'PUT',
+    body: JSON.stringify({ marks }),
+  });
+}
+
 export function cancelSession(sessionId, reason) {
   return request(`/sessions/${sessionId}/cancel`, {
     method: 'POST',
@@ -287,6 +344,10 @@ export function getMyClassRegistrations() {
   return request('/class-registrations/mine');
 }
 
+export function getBlockedClasses() {
+  return request('/class-registrations/blocked');
+}
+
 export function getClassRegistrationStatus(paymentId) {
   return request(`/class-registrations/${paymentId}`);
 }
@@ -331,6 +392,10 @@ export function getDashboard() {
 
 export function getAiTokenUsage() {
   return request('/management/ai-token-usage');
+}
+
+export function getRevenue() {
+  return request('/management/revenue');
 }
 
 export function updatePackageAiQuota(packageId, payload) {
@@ -396,23 +461,21 @@ export function getMemberProfile(memberUserId) {
   return request(`/members/${memberUserId}/profile`);
 }
 
-export function updateMemberProfile(memberUserId, payload) {
-  return request(`/members/${memberUserId}/profile`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
-// Gửi ảnh đại diện dạng form-data (không dùng request() vì request() luôn đặt Content-Type JSON)
-export async function uploadMemberAvatar(memberUserId, file) {
+// Hồ sơ và ảnh đại diện cùng một request. file bỏ trống thì giữ ảnh cũ.
+export async function updateMemberProfile(memberUserId, payload, file) {
   const token = readSession()?.token || localStorage.getItem('token');
   const form = new FormData();
-  form.append('file', file);
+  form.append('fullName', payload.fullName ?? '');
+  form.append('phone', payload.phone ?? '');
+  form.append('dateOfBirth', payload.dateOfBirth ?? '');
+  form.append('gender', payload.gender ?? '');
+  if (payload.email) form.append('email', payload.email);
+  if (file) form.append('file', file);
 
   let response;
   try {
-    response = await fetch(`/api/members/${memberUserId}/profile/avatar`, {
-      method: 'POST',
+    response = await fetch(`/api/members/${memberUserId}/profile`, {
+      method: 'PUT',
       headers: {
         accept: 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -431,9 +494,24 @@ export async function uploadMemberAvatar(memberUserId, file) {
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(body?.message || 'Tải ảnh đại diện thất bại.');
+    throw new Error(body?.message || 'Cập nhật hồ sơ thất bại.');
   }
+  notifyDataChanged('PUT');
   return body;
+}
+
+export function sendEmailOtp(memberUserId, { newEmail, currentPassword }) {
+  return request(`/members/${memberUserId}/profile/email/otp`, {
+    method: 'POST',
+    body: JSON.stringify({ newEmail, currentPassword }),
+  });
+}
+
+export function confirmEmailOtp(memberUserId, code) {
+  return request(`/members/${memberUserId}/profile/email/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
 }
 
 // ==========================================
@@ -503,5 +581,63 @@ export function createMembershipRenewal(memberUserId, packageId) {
 export function confirmMembershipRenewal(memberUserId, paymentId) {
   return request(`/members/${memberUserId}/membership/renewals/${paymentId}/confirm`, {
     method: 'POST',
+  });
+}
+
+// ==========================================
+// API HỌC 1-1 (PRIVATE CLASSES)
+// ==========================================
+
+// Học viên: gói 1-1 (lọc theo môn), tìm HLV rảnh, gửi/hủy/thanh toán yêu cầu
+export function getPrivateCourses(sportId) {
+  return request(`/private-classes/courses${toQuery({ sportId })}`);
+}
+
+// { courseId, startDate, slots: [{ weekday, timeSlotId }] } → số buổi, còn phòng, HLV kèm isBusy/busyReason
+export function checkPrivateAvailability(payload) {
+  return request('/private-classes/availability', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// { courseId, coachUserId, startDate, slots, note }
+export function createPrivateRequest(payload) {
+  return request('/private-classes/requests', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getMyPrivateRequests() {
+  return request('/private-classes/requests/mine');
+}
+
+export function cancelPrivateRequest(requestId) {
+  return request(`/private-classes/requests/${requestId}/cancel`, { method: 'POST' });
+}
+
+// Tạo đơn thanh toán (mã QR giữ 3 phút) cho yêu cầu đã được duyệt
+export function payPrivateRequest(requestId) {
+  return request(`/private-classes/requests/${requestId}/pay`, { method: 'POST' });
+}
+
+// Quản lý: danh sách (status: pending, approved, paid, rejected, cancelled, expired), chi tiết kèm buổi dự kiến, duyệt, từ chối
+export function getPrivateRequests(status) {
+  return request(`/management/private-requests${toQuery({ status })}`);
+}
+
+export function getPrivateRequestDetail(requestId) {
+  return request(`/management/private-requests/${requestId}`);
+}
+
+export function approvePrivateRequest(requestId) {
+  return request(`/management/private-requests/${requestId}/approve`, { method: 'POST' });
+}
+
+export function rejectPrivateRequest(requestId, reason) {
+  return request(`/management/private-requests/${requestId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
   });
 }

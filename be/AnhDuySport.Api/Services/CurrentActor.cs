@@ -15,6 +15,8 @@ public class CurrentActor(IHttpContextAccessor accessor, AppDbContext db)
         }
     }
 
+    public string Role => accessor.HttpContext?.User.FindFirstValue(ClaimTypes.Role) ?? "";
+
     public async Task<string> NameAsync()
     {
         var id = UserId;

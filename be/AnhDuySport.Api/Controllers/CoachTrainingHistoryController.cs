@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnhDuySport.Api.Controllers;
 
-// Coach tự nhập lịch sử tập. Phần này không lấy điểm danh, nhận xét hay điểm.
+// Coach ghi lịch sử theo từng buổi đã học. Đánh giá tổng nằm ở evaluation.assignment_id IS NULL.
 [AllowAnonymous]
 [ApiController]
 [Route("api/coaches/{coachUserId}/training-history")]
@@ -29,7 +29,7 @@ public class CoachTrainingHistoryController(WorkoutRecommendationFlowService flo
 
     [HttpPost]
     [EndpointSummary("Coach nhập lịch sử tập")]
-    [EndpointDescription("Coach ghi nội dung đã tập với học viên. Nội dung này được đưa vào Google Gemini khi tạo hoặc tạo lại giáo án. Không dùng điểm danh, nhận xét hay điểm. Ví dụ: { \"memberUserId\": \"11\", \"classId\": 1, \"content\": \"Bơi ếch 4x25m, nhịp thở còn gấp. Cần bài thở trên cạn 10 phút trước giờ xuống nước.\" }")]
+    [EndpointDescription("Coach ghi nội dung đã tập của một buổi đã học. Buổi chưa tới hoặc đã hủy bị từ chối. Ví dụ: { \"memberUserId\": \"11\", \"classId\": 1, \"sessionId\": 3, \"content\": \"Bơi ếch 4x25m, nhịp thở còn gấp.\" }")]
     public async Task<ActionResult<SaveCoachTrainingHistoryResponse>> Save(string coachUserId, CoachTrainingHistoryRequest request)
     {
         try

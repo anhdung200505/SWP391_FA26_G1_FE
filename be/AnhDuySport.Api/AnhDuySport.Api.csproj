@@ -13,11 +13,16 @@
     <PackageReference Include="MailKit" Version="4.18.1" />
     <PackageReference Include="payOS" Version="2.1.0" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="QuestPDF" Version="2025.7.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="mailbox\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Assets\email-logo.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
