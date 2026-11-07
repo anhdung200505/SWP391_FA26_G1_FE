@@ -47,6 +47,8 @@ builder.Services.AddHostedService<PendingRegistrationCleanupService>();
 // Mỗi phút đối chiếu đơn gói hội viên với payOS (webhook không tới được máy local).
 builder.Services.AddHostedService<MembershipPaymentSyncService>();
 builder.Services.AddHostedService<MembershipExpiryNoticeService>();
+// Sau 23:59 buổi học nào học viên chưa có điểm danh thì tự ghi vắng.
+builder.Services.AddHostedService<AttendanceAutoAbsentService>();
 builder.Services.AddScoped<CurrentActor>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailNotificationService>();
