@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Data;
 using AnhDuySport.Api.Models;
@@ -10,7 +11,12 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace AnhDuySport.Api.Services;
 
-public class AuthService(AppDbContext db, PasswordHasher passwords, IConfiguration configuration, SmtpEmailSender emailSender)
+public class AuthService(
+    AppDbContext db,
+    PasswordHasher passwords,
+    IConfiguration configuration,
+    SmtpEmailSender emailSender,
+    IHttpClientFactory httpClientFactory)
 {
     public async Task EnsureBootstrapAdminPasswordAsync()
     {
@@ -48,6 +54,218 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
 
     public Task<LoginResponse> LoginMemberAsync(MemberLoginRequest request) =>
         SignInAsync(request.Email, request.Password, ["MEMBER"], "Chỉ học viên đăng nhập được ở đây.");
+
+    public string GoogleClientId() => configuration["Google:ClientId"]?.Trim() ?? "";
+
+    public async Task<GoogleLoginResult> LoginWithGoogleAsync(GoogleLoginRequest request)
+    {
+        var portal = request.Portal?.Trim().ToLowerInvariant() ?? "member";
+        if (portal is "staff" or "management")
+        {
+            throw new UnauthorizedAccessException("Đăng nhập Google chỉ dành cho học viên.");
+        }
+
+        var allowedRoles = new[] { "MEMBER" };
+        const string wrongRoleMessage = "Chỉ học viên đăng nhập được ở đây.";
+
+        var profile = string.IsNullOrWhiteSpace(request.AccessToken)
+            ? await ReadGoogleProfileAsync(request.IdToken)
+            : await ReadGoogleAccessTokenAsync(request.AccessToken);
+        var email = NormalizeEmail(profile.Email);
+        var user = await db.UserAccounts
+            .Include(account => account.Role)
+            .FirstOrDefaultAsync(account => account.Email != null && account.Email.ToLower() == email);
+
+        if (user is null)
+        {
+            user = await CreateGoogleMemberAsync(profile, email);
+        }
+        else
+        {
+            if (user.Status == "locked")
+            {
+                throw new UnauthorizedAccessException("Tài khoản đã bị khóa.");
+            }
+
+            if (user.Status != "active")
+            {
+                throw new UnauthorizedAccessException("Tài khoản đã ngưng hoạt động.");
+            }
+
+            if (user.Role is null || !allowedRoles.Contains(user.Role.RoleCode))
+            {
+                throw new UnauthorizedAccessException(wrongRoleMessage);
+            }
+
+            if (!string.IsNullOrEmpty(user.PasswordHash) && !request.LinkExisting)
+            {
+                return new GoogleLoginResult(null, new GoogleAccountChoice(user.Email ?? email, user.FullName));
+            }
+        }
+
+        return new GoogleLoginResult(await IssueAsync(user), null);
+    }
+
+    public async Task SendGmailLoginOtpAsync(GmailOtpRequest request)
+    {
+        var email = RequireGmail(request.Email);
+        var portal = request.Portal?.Trim().ToLowerInvariant() ?? "member";
+        if (portal is "staff" or "management")
+        {
+            throw new InvalidOperationException("Đăng nhập Google chỉ dành cho học viên.");
+        }
+
+        await EnsureGmailPortalAsync(email);
+
+        var now = DateTime.UtcNow;
+        await db.PasswordResets.Where(row => row.ExpiresAt <= now).ExecuteDeleteAsync();
+        var reset = await db.PasswordResets.FirstOrDefaultAsync(row => row.Email == email);
+        if (reset is not null && reset.CreatedAt > now.AddMinutes(-1))
+        {
+            throw new InvalidOperationException("Hãy đợi một phút trước khi gửi lại mã.");
+        }
+
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        var body = $"Xin chào,{Environment.NewLine}{Environment.NewLine}Mã đăng nhập Gmail AnhDuy Sport là {code}. Mã có hiệu lực trong 3 phút. Nếu bạn không yêu cầu mã này, hãy bỏ qua email.";
+        try
+        {
+            await emailSender.SendAsync(email, "[AnhDuy Sport] Mã đăng nhập Gmail", body);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException("Không gửi được email. Hãy thử lại.", exception);
+        }
+
+        if (reset is null)
+        {
+            reset = new PasswordReset { Email = email };
+            db.PasswordResets.Add(reset);
+        }
+
+        reset.OtpHash = HashOtp(code);
+        reset.Attempts = 0;
+        reset.CreatedAt = now;
+        reset.ExpiresAt = now.AddMinutes(3);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<LoginResponse> ConfirmGmailLoginAsync(GmailConfirmRequest request)
+    {
+        var email = RequireGmail(request.Email);
+        var code = request.Code?.Trim() ?? "";
+        const string invalidCode = "Mã OTP không đúng hoặc đã hết hạn.";
+        if (code.Length != 6 || !code.All(char.IsDigit))
+        {
+            throw new InvalidOperationException(invalidCode);
+        }
+
+        var reset = await db.PasswordResets.FirstOrDefaultAsync(row => row.Email == email);
+        if (reset is null || reset.ExpiresAt <= DateTime.UtcNow)
+        {
+            if (reset is not null)
+            {
+                db.PasswordResets.Remove(reset);
+                await db.SaveChangesAsync();
+            }
+
+            throw new InvalidOperationException(invalidCode);
+        }
+
+        if (reset.Attempts >= 5)
+        {
+            db.PasswordResets.Remove(reset);
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException("Bạn đã nhập sai quá số lần. Hãy gửi lại mã.");
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(reset.OtpHash),
+                Encoding.UTF8.GetBytes(HashOtp(code))))
+        {
+            reset.Attempts += 1;
+            var tooMany = reset.Attempts >= 5;
+            if (tooMany)
+            {
+                db.PasswordResets.Remove(reset);
+            }
+
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException(tooMany
+                ? "Bạn đã nhập sai quá số lần. Hãy gửi lại mã."
+                : invalidCode);
+        }
+
+        db.PasswordResets.Remove(reset);
+        await db.SaveChangesAsync();
+        return await FinishGmailLoginAsync(email, request.Portal);
+    }
+
+    private async Task EnsureGmailPortalAsync(string email)
+    {
+        var user = await db.UserAccounts
+            .Include(account => account.Role)
+            .FirstOrDefaultAsync(account => account.Email != null && account.Email.ToLower() == email);
+        if (user is null)
+        {
+            return;
+        }
+
+        if (user.Status == "locked")
+        {
+            throw new InvalidOperationException("Tài khoản đã bị khóa.");
+        }
+
+        if (user.Status != "active")
+        {
+            throw new InvalidOperationException("Tài khoản đã ngưng hoạt động.");
+        }
+
+        if (user.Role is null || user.Role.RoleCode != "MEMBER")
+        {
+            throw new InvalidOperationException("Chỉ học viên đăng nhập được ở đây.");
+        }
+    }
+
+    private async Task<LoginResponse> FinishGmailLoginAsync(string email, string? portalValue)
+    {
+        var portal = portalValue?.Trim().ToLowerInvariant() ?? "member";
+        if (portal is "staff" or "management")
+        {
+            throw new UnauthorizedAccessException("Đăng nhập Google chỉ dành cho học viên.");
+        }
+
+        var user = await db.UserAccounts
+            .Include(account => account.Role)
+            .FirstOrDefaultAsync(account => account.Email != null && account.Email.ToLower() == email);
+        if (user is null)
+        {
+            var local = email.Split('@')[0];
+            user = await CreateGoogleMemberAsync(new GoogleProfile(email, local, null), email);
+        }
+        else if (user.Role is null || user.Role.RoleCode != "MEMBER")
+        {
+            throw new UnauthorizedAccessException("Chỉ học viên đăng nhập được ở đây.");
+        }
+
+        return await IssueAsync(user);
+    }
+
+    private static string RequireGmail(string? value)
+    {
+        var email = NormalizeEmail(value);
+        var at = email.LastIndexOf('@');
+        var domain = at > 0 ? email[(at + 1)..] : "";
+        if (email.Length is 0 or > 200 || (domain != "gmail.com" && domain != "googlemail.com"))
+        {
+            throw new InvalidOperationException("Hãy nhập địa chỉ Gmail.");
+        }
+
+        return email;
+    }
 
     private async Task<LoginResponse> SignInAsync(string? emailValue, string? passwordValue, string[] allowedRoles, string wrongRoleMessage)
     {
@@ -450,7 +668,7 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             .SingleAsync();
         if (planCount > 0)
         {
-            throw new InvalidOperationException("Tài khoản đang có giáo án nên không tự xóa được.");
+            throw new InvalidOperationException("Tài khoản đang có gợi ý tập nên không tự xóa được.");
         }
 
         var email = user.Email ?? "";
@@ -517,6 +735,159 @@ public class AuthService(AppDbContext db, PasswordHasher passwords, IConfigurati
             || await db.ClassEnrollments.AnyAsync(enrollment => enrollment.UserId == user.UserId && enrollment.Status == "enrolled");
         return new LoginResponse(CreateToken(user), ToDto(user, hasPaid));
     }
+
+    private async Task<GoogleProfile> ReadGoogleProfileAsync(string? idToken)
+    {
+        var token = idToken?.Trim() ?? "";
+        var clientId = GoogleClientId();
+        if (clientId.Length == 0)
+        {
+            throw new InvalidOperationException("Chưa cấu hình Google:ClientId.");
+        }
+
+        if (token.Length == 0)
+        {
+            throw new UnauthorizedAccessException("Không xác thực được tài khoản Google.");
+        }
+
+        using var http = httpClientFactory.CreateClient();
+        using var response = await http.GetAsync(
+            "https://oauth2.googleapis.com/tokeninfo?id_token=" + Uri.EscapeDataString(token));
+        var body = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body))
+        {
+            throw new UnauthorizedAccessException("Không xác thực được tài khoản Google.");
+        }
+
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        var audience = ReadJsonString(root, "aud");
+        var issuer = ReadJsonString(root, "iss");
+        var email = ReadJsonString(root, "email");
+        if (!string.Equals(audience, clientId, StringComparison.Ordinal)
+            || (issuer != "accounts.google.com" && issuer != "https://accounts.google.com")
+            || !IsGoogleEmailVerified(root)
+            || email.Length == 0
+            || !email.Contains('@'))
+        {
+            throw new UnauthorizedAccessException("Không xác thực được tài khoản Google.");
+        }
+
+        var name = ReadJsonString(root, "name");
+        if (name.Length == 0) name = email.Split('@')[0];
+        if (name.Length > 200) name = name[..200];
+        var picture = ReadJsonString(root, "picture");
+        if (picture.Length > 500 || !picture.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            picture = "";
+        }
+
+        return new GoogleProfile(email, name, picture.Length == 0 ? null : picture);
+    }
+
+    private async Task<GoogleProfile> ReadGoogleAccessTokenAsync(string? accessToken)
+    {
+        var token = accessToken?.Trim() ?? "";
+        var clientId = GoogleClientId();
+        if (clientId.Length == 0)
+        {
+            throw new InvalidOperationException("Chưa cấu hình Google:ClientId.");
+        }
+
+        if (token.Length == 0)
+        {
+            throw new UnauthorizedAccessException("Không xác thực được tài khoản Google.");
+        }
+
+        using var http = httpClientFactory.CreateClient();
+        using var infoResponse = await http.GetAsync(
+            "https://oauth2.googleapis.com/tokeninfo?access_token=" + Uri.EscapeDataString(token));
+        var infoBody = await infoResponse.Content.ReadAsStringAsync();
+        if (!infoResponse.IsSuccessStatusCode || string.IsNullOrWhiteSpace(infoBody))
+        {
+            throw new UnauthorizedAccessException("Không xác thực được tài khoản Google.");
+        }
+
+        using var infoDocument = JsonDocument.Parse(infoBody);
+        var info = infoDocument.RootElement;
+        var audience = ReadJsonString(info, "aud");
+        var authorizedParty = ReadJsonString(info, "azp");
+        if (!string.Equals(audience, clientId, StringComparison.Ordinal)
+            && !string.Equals(authorizedParty, clientId, StringComparison.Ordinal))
+        {
+            throw new UnauthorizedAccessException("Không xác thực được tài khoản Google.");
+        }
+
+        using var userRequest = new HttpRequestMessage(HttpMethod.Get, "https://www.googleapis.com/oauth2/v3/userinfo");
+        userRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        using var userResponse = await http.SendAsync(userRequest);
+        var userBody = await userResponse.Content.ReadAsStringAsync();
+        if (!userResponse.IsSuccessStatusCode || string.IsNullOrWhiteSpace(userBody))
+        {
+            throw new UnauthorizedAccessException("Không xác thực được tài khoản Google.");
+        }
+
+        using var userDocument = JsonDocument.Parse(userBody);
+        var root = userDocument.RootElement;
+        var email = ReadJsonString(root, "email");
+        if (!IsGoogleEmailVerified(root) || email.Length == 0 || !email.Contains('@'))
+        {
+            throw new UnauthorizedAccessException("Không xác thực được tài khoản Google.");
+        }
+
+        var name = ReadJsonString(root, "name");
+        if (name.Length == 0) name = email.Split('@')[0];
+        if (name.Length > 200) name = name[..200];
+        var picture = ReadJsonString(root, "picture");
+        if (picture.Length > 500 || !picture.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            picture = "";
+        }
+
+        return new GoogleProfile(email, name, picture.Length == 0 ? null : picture);
+    }
+
+    private async Task<UserAccount> CreateGoogleMemberAsync(GoogleProfile profile, string email)
+    {
+        var memberRole = await db.Roles.FirstOrDefaultAsync(role => role.RoleCode == "MEMBER")
+            ?? throw new InvalidOperationException("Chưa có vai trò học viên.");
+        var user = new UserAccount
+        {
+            RoleId = memberRole.RoleId,
+            Role = memberRole,
+            FullName = profile.Name,
+            Email = email,
+            AvatarUrl = profile.Picture,
+            Status = "active",
+            CreatedAt = DateTime.Now,
+        };
+        db.UserAccounts.Add(user);
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            throw new InvalidOperationException("Email này đã được dùng.");
+        }
+
+        return user;
+    }
+
+    private static string ReadJsonString(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()?.Trim() ?? ""
+            : "";
+
+    private static bool IsGoogleEmailVerified(JsonElement root)
+    {
+        if (!root.TryGetProperty("email_verified", out var value)) return false;
+        if (value.ValueKind == JsonValueKind.True) return true;
+        return value.ValueKind == JsonValueKind.String
+            && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed record GoogleProfile(string Email, string Name, string? Picture);
 
     private static string NormalizeEmail(string? email) => (email ?? "").Trim().ToLowerInvariant();
 

@@ -331,6 +331,8 @@ CREATE TABLE [session] (
     room_id       INT           NOT NULL,
     status        NVARCHAR(20)  NOT NULL CONSTRAINT DF_session_status DEFAULT (N'scheduled'),
     note          NVARCHAR(500) NULL,
+    room_changed  BIT           NOT NULL CONSTRAINT DF_session_room_changed DEFAULT (0),
+    coach_change  NVARCHAR(12)  NULL,
     created_at    DATETIME2(0)  NOT NULL CONSTRAINT DF_session_created_at DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_session PRIMARY KEY (session_id),
     CONSTRAINT UQ_session UNIQUE (class_id, session_date, time_slot_id),
@@ -339,7 +341,8 @@ CREATE TABLE [session] (
     CONSTRAINT FK_session_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_session_room FOREIGN KEY (room_id) REFERENCES room (room_id),
     CONSTRAINT CK_session_time CHECK (end_time > start_time),
-    CONSTRAINT CK_session_status CHECK (status IN (N'scheduled', N'held', N'cancelled', N'completed'))
+    CONSTRAINT CK_session_status CHECK (status IN (N'scheduled', N'held', N'cancelled', N'completed')),
+    CONSTRAINT CK_session_coach_change CHECK (coach_change IS NULL OR coach_change IN (N'substitute', N'permanent'))
 );
 GO
 
@@ -532,12 +535,14 @@ CREATE TABLE coach_training_history (
     member_user_id      INT            NOT NULL,
     coach_user_id       INT            NOT NULL,
     class_id            INT            NOT NULL,
+    session_id          INT            NULL,
     content             NVARCHAR(2000) NOT NULL,
     recorded_at         DATETIME2(0)   NOT NULL,
     CONSTRAINT PK_coach_training_history PRIMARY KEY (training_history_id),
     CONSTRAINT FK_coach_training_history_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_coach_training_history_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
-    CONSTRAINT FK_coach_training_history_class FOREIGN KEY (class_id) REFERENCES class (class_id)
+    CONSTRAINT FK_coach_training_history_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+    CONSTRAINT FK_coach_training_history_session FOREIGN KEY (session_id) REFERENCES [session] (session_id)
 );
 GO
 
@@ -577,6 +582,7 @@ CREATE TABLE coach_course_exercise (
     title        NVARCHAR(200)  NOT NULL,
     dosage       NVARCHAR(120)  NOT NULL,
     instructions NVARCHAR(2000) NOT NULL,
+    from_regeneration BIT          NOT NULL CONSTRAINT DF_coach_course_exercise_regen DEFAULT (0),
     CONSTRAINT PK_coach_course_exercise PRIMARY KEY (exercise_id),
     CONSTRAINT FK_coach_course_exercise_plan FOREIGN KEY (plan_id) REFERENCES coach_course_plan (plan_id) ON DELETE CASCADE,
     CONSTRAINT FK_coach_course_exercise_session FOREIGN KEY (session_id) REFERENCES [session] (session_id)
@@ -670,6 +676,7 @@ CREATE TABLE payment (
     registered_by_user_id INT            NULL,
     upgrade_package_id    INT            NULL,
     upgrade_amount        DECIMAL(18,2)  NOT NULL CONSTRAINT DF_payment_upgrade_amount DEFAULT (0),
+    skip_membership_bonus BIT            NOT NULL CONSTRAINT DF_payment_skip_membership_bonus DEFAULT (0),
     CONSTRAINT PK_payment PRIMARY KEY (payment_id),
     CONSTRAINT FK_payment_invoice FOREIGN KEY (invoice_id) REFERENCES invoice (invoice_id),
     CONSTRAINT FK_payment_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
@@ -714,6 +721,7 @@ CREATE TABLE membership (
     status                NVARCHAR(30)  NOT NULL CONSTRAINT DF_membership_status DEFAULT (N'active'),
     membership_package_id INT           NULL,
     is_free               BIT           NOT NULL CONSTRAINT DF_membership_is_free DEFAULT (0),
+    expiry_notice_end_date DATE         NULL,
     CONSTRAINT PK_membership PRIMARY KEY (membership_id),
     CONSTRAINT FK_membership_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_membership_payment FOREIGN KEY (payment_id) REFERENCES payment (payment_id),
@@ -725,6 +733,85 @@ GO
 
 CREATE UNIQUE INDEX UX_membership_payment ON membership (payment_id) WHERE payment_id IS NOT NULL;
 CREATE UNIQUE INDEX UX_membership_one_active ON membership (user_id) WHERE status = N'active';
+GO
+
+/* Check-in vào trung tâm do lễ tân thao tác (không gắn lớp học, cần gói hội viên còn hạn).
+   Nhiều lượt mỗi ngày. Hoàn tác = status voided (giữ dòng). Lượt hôm trước chưa check-out coi như tự đóng khi qua 00:00. */
+CREATE TABLE center_checkin (
+    checkin_id             INT IDENTITY(1,1) NOT NULL,
+    user_id                INT           NOT NULL,
+    membership_id          INT           NULL,
+    checked_in_at          DATETIME2(0)  NOT NULL,
+    checked_in_by_user_id  INT           NOT NULL,
+    checked_out_at         DATETIME2(0)  NULL,
+    checked_out_by_user_id INT           NULL,
+    status                 NVARCHAR(20)  NOT NULL CONSTRAINT DF_center_checkin_status DEFAULT (N'valid'),
+    voided_at              DATETIME2(0)  NULL,
+    voided_by_user_id      INT           NULL,
+    void_reason            NVARCHAR(500) NULL,
+    CONSTRAINT PK_center_checkin PRIMARY KEY (checkin_id),
+    CONSTRAINT FK_center_checkin_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_center_checkin_membership FOREIGN KEY (membership_id) REFERENCES membership (membership_id),
+    CONSTRAINT FK_center_checkin_in_by FOREIGN KEY (checked_in_by_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_center_checkin_out_by FOREIGN KEY (checked_out_by_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_center_checkin_void_by FOREIGN KEY (voided_by_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT CK_center_checkin_status CHECK (status IN (N'valid', N'voided')),
+    CONSTRAINT CK_center_checkin_out CHECK (checked_out_at IS NULL OR checked_out_at >= checked_in_at)
+);
+GO
+
+CREATE INDEX IX_center_checkin_user_time ON center_checkin (user_id, checked_in_at);
+CREATE INDEX IX_center_checkin_time ON center_checkin (checked_in_at);
+GO
+
+/* Yêu cầu học 1-1: member chọn môn, lịch hằng tuần, HLV; quản lý duyệt thì sinh lớp private (sĩ số 1) và các buổi học.
+   approved = đã duyệt, chờ thanh toán trong approval_expires_at (24 giờ), quá hạn thì expired và lớp bị hủy. Đã thanh toán thì lớp có ghi danh. */
+CREATE TABLE private_class_request (
+    request_id          INT IDENTITY(1,1) NOT NULL,
+    member_user_id      INT           NOT NULL,
+    course_id           INT           NOT NULL,
+    coach_user_id       INT           NOT NULL,
+    start_date          DATE          NOT NULL,
+    note                NVARCHAR(500) NULL,
+    status              NVARCHAR(20)  NOT NULL CONSTRAINT DF_private_class_request_status DEFAULT (N'pending'),
+    created_at          DATETIME2(0)  NOT NULL,
+    decided_by_user_id  INT           NULL,
+    decided_at          DATETIME2(0)  NULL,
+    reject_reason       NVARCHAR(500) NULL,
+    class_id            INT           NULL,
+    approval_expires_at DATETIME2(0)  NULL,
+    membership_package_id INT          NULL,
+    renew_membership    BIT           NOT NULL CONSTRAINT DF_private_class_request_renew DEFAULT (0),
+    full_name           NVARCHAR(200) NULL,
+    phone               NVARCHAR(30)  NULL,
+    date_of_birth       DATE          NULL,
+    gender              NVARCHAR(10)  NULL,
+    CONSTRAINT PK_private_class_request PRIMARY KEY (request_id),
+    CONSTRAINT FK_private_class_request_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_private_class_request_course FOREIGN KEY (course_id) REFERENCES course (course_id),
+    CONSTRAINT FK_private_class_request_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_private_class_request_decider FOREIGN KEY (decided_by_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_private_class_request_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+    CONSTRAINT FK_private_class_request_package FOREIGN KEY (membership_package_id) REFERENCES membership_package (membership_package_id),
+    CONSTRAINT CK_private_class_request_status CHECK (status IN (N'pending', N'approved', N'rejected', N'cancelled', N'expired'))
+);
+GO
+
+CREATE TABLE private_class_request_slot (
+    request_slot_id INT IDENTITY(1,1) NOT NULL,
+    request_id      INT     NOT NULL,
+    weekday         TINYINT NOT NULL,
+    time_slot_id    INT     NOT NULL,
+    CONSTRAINT PK_private_class_request_slot PRIMARY KEY (request_slot_id),
+    CONSTRAINT UQ_private_class_request_slot UNIQUE (request_id, weekday, time_slot_id),
+    CONSTRAINT FK_private_class_request_slot_request FOREIGN KEY (request_id) REFERENCES private_class_request (request_id) ON DELETE CASCADE,
+    CONSTRAINT FK_private_class_request_slot_time FOREIGN KEY (time_slot_id) REFERENCES time_slot (time_slot_id),
+    CONSTRAINT CK_private_class_request_slot_weekday CHECK (weekday BETWEEN 2 AND 7)
+);
+GO
+
+CREATE INDEX IX_private_class_request_member ON private_class_request (member_user_id, status);
+CREATE INDEX IX_private_class_request_status ON private_class_request (status, created_at);
 GO
 
 -- Lịch sử đăng ký lớp (ai xếp học viên vào lớp, rút lớp, học lại...).
@@ -960,4 +1047,47 @@ CREATE INDEX IX_class_registration_log_class ON class_registration_log (class_id
 CREATE INDEX IX_class_registration_log_payment ON class_registration_log (payment_id);
 CREATE INDEX IX_notification_user_id ON notification (user_id);
 CREATE INDEX IX_audit_log_user_id ON audit_log (user_id);
+GO
+
+CREATE TABLE sport_course_material (
+    sport_id            INT            NOT NULL,
+    source_name         NVARCHAR(300)  NOT NULL CONSTRAINT DF_sport_material_source DEFAULT (N''),
+    source_url          NVARCHAR(500)  NOT NULL CONSTRAINT DF_sport_material_url DEFAULT (N''),
+    note                NVARCHAR(2000) NOT NULL CONSTRAINT DF_sport_material_note DEFAULT (N''),
+    updated_by_user_id  INT            NULL,
+    updated_at          DATETIME2(0)   NOT NULL CONSTRAINT DF_sport_material_updated DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_sport_course_material PRIMARY KEY (sport_id),
+    CONSTRAINT FK_sport_course_material_sport FOREIGN KEY (sport_id) REFERENCES sport (sport_id),
+    CONSTRAINT FK_sport_course_material_user FOREIGN KEY (updated_by_user_id) REFERENCES [user] (user_id)
+);
+GO
+
+CREATE TABLE sport_course_unit (
+    unit_id     INT IDENTITY(1,1) NOT NULL,
+    sport_id    INT            NOT NULL,
+    sort_order  INT            NOT NULL,
+    label       NVARCHAR(200)  NOT NULL,
+    work        NVARCHAR(MAX)  NOT NULL,
+    review      NVARCHAR(2000) NOT NULL CONSTRAINT DF_sport_course_unit_review DEFAULT (N''),
+    CONSTRAINT PK_sport_course_unit PRIMARY KEY (unit_id),
+    CONSTRAINT UQ_sport_course_unit UNIQUE (sport_id, sort_order),
+    CONSTRAINT FK_sport_course_unit_sport FOREIGN KEY (sport_id) REFERENCES sport (sport_id)
+);
+GO
+
+CREATE TABLE class_intake_note (
+    intake_note_id  INT IDENTITY(1,1) NOT NULL,
+    class_id        INT            NOT NULL,
+    member_user_id  INT            NOT NULL,
+    session_id      INT            NOT NULL,
+    coach_user_id   INT            NOT NULL,
+    comment         NVARCHAR(2000) NOT NULL,
+    updated_at      DATETIME2(0)   NOT NULL,
+    CONSTRAINT PK_class_intake_note PRIMARY KEY (intake_note_id),
+    CONSTRAINT UQ_class_intake_note UNIQUE (class_id, member_user_id),
+    CONSTRAINT FK_class_intake_note_class FOREIGN KEY (class_id) REFERENCES class (class_id),
+    CONSTRAINT FK_class_intake_note_member FOREIGN KEY (member_user_id) REFERENCES [user] (user_id),
+    CONSTRAINT FK_class_intake_note_session FOREIGN KEY (session_id) REFERENCES [session] (session_id),
+    CONSTRAINT FK_class_intake_note_coach FOREIGN KEY (coach_user_id) REFERENCES [user] (user_id)
+);
 GO

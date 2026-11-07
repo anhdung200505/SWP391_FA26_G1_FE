@@ -31,3 +31,6 @@ be/AnhDuySport.Api/mailbox/
 
 # Ảnh học viên tải lên (ảnh đại diện), chỉ là dữ liệu trên từng máy
 be/AnhDuySport.Api/uploads/
+
+# Khóa Gemini chỉ ở máy local, không đưa lên git
+be/config/ai.json

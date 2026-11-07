@@ -16,7 +16,7 @@ namespace AnhDuySport.Api.Services;
 //      ├─ Yes → Enter Required Changes → Send New Analysis Request → Generate lại
 //      └─ No  → Save Plan to Member Account → Sync Schedule to Personal Calendar
 //             → View Daily Exercise Routine
-public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClient gemini)
+public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClient gemini, CourseMaterialFlowService materials)
 {
     private static readonly TimeOnly DefaultStart = new(18, 0);
 
@@ -41,7 +41,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         if (proposed is not null)
         {
             nextStep = "decide";
-            message = $"Đã có giáo án #{proposed.RecommendationId} chờ xác nhận. Gọi decision với editRequired=true để sửa, hoặc false để lưu.";
+            message = "Đã có gợi ý tập chờ bạn lưu hoặc yêu cầu chỉnh.";
         }
         else if (body is null)
         {
@@ -56,7 +56,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         else
         {
             nextStep = "view_routine";
-            message = "Giáo án đã lưu. Xem routine, hoặc POST regenerate với changes để tạo yêu cầu tạo lại giáo án.";
+            message = "Gợi ý tập đã lưu trên lịch cá nhân. Có thể tạo lại nếu muốn đổi.";
         }
 
         return new AiRecommendationAccessDto(
@@ -173,7 +173,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         var tokens = await ApplySpecAsync(recommendation, metric, goal, spec, health, history, member.FullName, null, now);
         AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Generate, tokens, now);
-        var log = AddLog(member, "Tạo giáo án AI", recommendation.PlanName, now);
+        var log = AddLog(member, "Tạo gợi ý tập cá nhân", recommendation.PlanName, now);
         await db.SaveChangesAsync();
         log.EntityId = recommendation.RecommendationId;
         await db.SaveChangesAsync();
@@ -182,7 +182,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutPlanResponse(
             recommendation.RecommendationId.ToString(),
             ToPlan(recommendation),
-            $"recommendationId = {recommendation.RecommendationId}. Dùng số này ở POST .../{recommendation.RecommendationId}/decision. Giáo án do {gemini.ProviderLabel} tạo. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: false)}",
+            $"Đã tạo gợi ý tập. Hãy lưu hoặc yêu cầu chỉnh trước khi đưa vào lịch. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: false)}",
             ToLogDto(log, member.FullName));
     }
 
@@ -194,15 +194,15 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             .Include(item => item.Sessions)
             .Include(item => item.BodyMetric)
             .FirstOrDefaultAsync(item => item.RecommendationId == recommendationId && item.UserId == member.UserId)
-            ?? throw new KeyNotFoundException("Không tìm thấy giáo án.");
+            ?? throw new KeyNotFoundException("Không tìm thấy gợi ý tập.");
         if (recommendation.Status != "proposed")
         {
-            throw new InvalidOperationException("Giáo án này đã được lưu hoặc đã thay bằng giáo án mới.");
+            throw new InvalidOperationException("Gợi ý tập này đã được lưu hoặc đã thay bằng gợi ý mới.");
         }
 
         if (recommendation.BodyMetric is null)
         {
-            throw new InvalidOperationException("Giáo án chưa gắn chỉ số BMI.");
+            throw new InvalidOperationException("Gợi ý tập chưa gắn chỉ số BMI.");
         }
 
         var allowance = await AiMembershipQuota.LoadAsync(db, member.UserId);
@@ -236,14 +236,14 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 changes,
                 now);
             AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Regenerate, tokens, now);
-            var log = AddLog(member, "Tạo lại giáo án AI", changes, now);
+            var log = AddLog(member, "Tạo lại gợi ý tập cá nhân", changes, now);
             await db.SaveChangesAsync();
             log.EntityId = recommendation.RecommendationId;
             await db.SaveChangesAsync();
             return new WorkoutDecisionResponse(
                 recommendation.RecommendationId.ToString(),
                 false,
-                $"Đã gọi {gemini.ProviderLabel} tạo lại giáo án lần {recommendation.Revision}. recommendationId vẫn là {recommendation.RecommendationId}. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
+                $"Đã tạo lại gợi ý tập lần {recommendation.Revision}. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
                 ToPlan(recommendation),
                 null,
                 ToLogDto(log, member.FullName));
@@ -256,9 +256,9 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
     public async Task<WorkoutPlanResponse> RegenerateAsync(string memberUserId, RegenerateWorkoutRequest request)
     {
         var member = await FindActiveMemberAsync(memberUserId);
-        var changes = RequireText(request.Changes, "Nhập lý do muốn tạo lại giáo án.", 1000);
+        var changes = RequireText(request.Changes, "Nhập lý do muốn tạo lại gợi ý tập.", 1000);
         var metric = await LatestBodyAsync(member.UserId)
-            ?? throw new InvalidOperationException("Hãy nhập chỉ số BMI trước khi tạo lại giáo án.");
+            ?? throw new InvalidOperationException("Hãy nhập chỉ số BMI trước khi tạo lại gợi ý tập.");
         var proposed = await db.WorkoutRecommendations
             .Include(item => item.Sessions)
             .FirstOrDefaultAsync(item => item.UserId == member.UserId && item.Status == "proposed");
@@ -266,7 +266,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             .Where(item => item.UserId == member.UserId && item.Status == "saved")
             .OrderByDescending(item => item.RecommendationId)
             .FirstOrDefaultAsync()
-            ?? throw new InvalidOperationException("Chưa có giáo án để tạo lại. Hãy nhập mục tiêu trước.");
+            ?? throw new InvalidOperationException("Chưa có gợi ý tập để tạo lại. Hãy nhập mục tiêu trước.");
 
         var history = await CollectHistoryAsync(member.UserId);
         RequireCoachHistory(history);
@@ -303,7 +303,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         recommendation.Revision += 1;
         var tokens = await ApplySpecAsync(recommendation, metric, source.Goal, spec, health, history, member.FullName, changes, now);
         AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Regenerate, tokens, now);
-        var log = AddLog(member, "Yêu cầu tạo lại giáo án AI", changes, now);
+        var log = AddLog(member, "Yêu cầu tạo lại gợi ý tập cá nhân", changes, now);
         await db.SaveChangesAsync();
         log.EntityId = recommendation.RecommendationId;
         await db.SaveChangesAsync();
@@ -312,7 +312,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutPlanResponse(
             recommendation.RecommendationId.ToString(),
             ToPlan(recommendation),
-            $"Đã nhận yêu cầu tạo lại giáo án. recommendationId = {recommendation.RecommendationId}. Gọi decision với editRequired=false để lưu lịch mới. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
+            $"Đã tạo lại gợi ý tập. Hãy lưu để cập nhật lịch cá nhân. {AiMembershipQuota.RemainingText(allowance, tokens, countedRegeneration: true)}",
             ToLogDto(log, member.FullName));
     }
 
@@ -326,7 +326,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             .Where(item => item.UserId == member.UserId && item.Status == "saved")
             .OrderByDescending(item => item.RecommendationId)
             .FirstOrDefaultAsync()
-            ?? throw new InvalidOperationException("Chưa có giáo án được lưu. Hãy chọn Edit Required = No.");
+            ?? throw new InvalidOperationException("Chưa có gợi ý tập được lưu. Hãy xác nhận gợi ý trước.");
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         var items = await db.PersonalExercises
@@ -404,7 +404,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             select session.SessionDate).Distinct().ToListAsync();
         var calendar = BuildCalendar(member.UserId, recommendation, today.AddDays(1), busy.ToHashSet(), out var moved, out var skipped);
         db.PersonalExercises.AddRange(calendar);
-        var log = AddLog(member, "Lưu giáo án AI", $"Đồng bộ {calendar.Count} buổi vào lịch cá nhân.", now);
+        var log = AddLog(member, "Lưu gợi ý tập cá nhân", $"Đồng bộ {calendar.Count} buổi vào lịch cá nhân.", now);
         await db.SaveChangesAsync();
         log.EntityId = recommendation.RecommendationId;
         await db.SaveChangesAsync();
@@ -422,7 +422,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return new WorkoutDecisionResponse(
             recommendation.RecommendationId.ToString(),
             true,
-            "Đã lưu giáo án vào tài khoản học viên và đồng bộ lịch. Bước tiếp theo: View Daily Exercise Routine.",
+            "Đã lưu gợi ý tập vào lịch cá nhân.",
             ToPlan(recommendation),
             sync,
             ToLogDto(log, member.FullName));
@@ -439,6 +439,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             orderby session.SessionDate, session.StartTime
             select new
             {
+                course.SportId,
                 course.CourseName,
                 session.SessionDate,
                 session.StartTime,
@@ -466,13 +467,30 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             join coach in db.UserAccounts.AsNoTracking() on history.CoachUserId equals coach.UserId
             where history.MemberUserId == userId
             orderby history.RecordedAt descending
-            select new { course.CourseName, coach.FullName, history.RecordedAt, history.Content })
+            select new { course.CourseName, coach.FullName, history.RecordedAt, history.Content, history.SessionId })
             .Take(8)
             .ToListAsync();
+        var sessionIds = histories.Where(item => item.SessionId != null).Select(item => item.SessionId!.Value).Distinct().ToList();
+        var sessionNotes = await SessionNotesAsync(sessionIds);
         var summary = histories.Count == 0
             ? "Coach chưa nhập lịch sử tập."
             : string.Join(" | ", histories.Select(item =>
-                $"{item.CourseName}, {item.FullName}, {item.RecordedAt:dd/MM/yyyy}: {item.Content}"));
+                $"{item.CourseName}, {item.FullName}, {(item.SessionId is int sessionId && sessionNotes.TryGetValue(sessionId, out var note) ? note : "chưa gắn buổi")}, {item.RecordedAt:dd/MM/yyyy}: {item.Content}"));
+        var evaluations = await OverallEvaluationsOfMemberAsync(userId);
+        var overall = evaluations.Count == 0
+            ? "Huấn luyện viên chưa có đánh giá tổng."
+            : string.Join(" | ", evaluations.Select(item =>
+                $"{item.CourseName}: {(item.Score is decimal score ? score.ToString("0.0") : "chưa có điểm")}/10. {item.Comment}"));
+        var intakeRows = await (
+            from note in db.ClassIntakeNotes.AsNoTracking()
+            join trainingClass in db.Classes.AsNoTracking() on note.ClassId equals trainingClass.ClassId
+            join course in db.Courses.AsNoTracking() on trainingClass.CourseId equals course.CourseId
+            where note.MemberUserId == userId
+            select new { course.CourseName, note.Comment }).ToListAsync();
+        var intake = intakeRows.Count == 0
+            ? "Chưa có nhận xét đầu khóa."
+            : string.Join(" | ", intakeRows.Select(item => $"{item.CourseName}: {item.Comment}"));
+        var raft = await materials.RaftContextAsync(sessions.Select(item => item.SportId).ToList());
         var weekdays = sessions.Select(item => item.SessionDate.DayOfWeek).Distinct().ToList();
         return new TrainingHistory(
             summary,
@@ -480,7 +498,11 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             sessions.Select(item => item.CourseName).Distinct().Count(),
             sessions.Count,
             weekdays,
-            histories.Count);
+            histories.Count,
+            overall,
+            evaluations.Count > 0,
+            intake,
+            raft);
     }
 
     public async Task<CoachTrainingHistoryListDto> ListCoachHistoryAsync(string coachUserId)
@@ -488,7 +510,8 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         var coach = await FindActiveCoachAsync(coachUserId);
         var classes = await CoachClassesAsync(coach.UserId);
         var histories = await HistoriesOfCoachAsync(coach.UserId);
-        return new CoachTrainingHistoryListDto(coach.UserId.ToString(), coach.FullName, classes, histories);
+        var evaluations = await OverallEvaluationsOfCoachAsync(coach.UserId);
+        return new CoachTrainingHistoryListDto(coach.UserId.ToString(), coach.FullName, classes, histories, evaluations);
     }
 
     public async Task<SaveCoachTrainingHistoryResponse> SaveCoachHistoryAsync(string coachUserId, CoachTrainingHistoryRequest request)
@@ -504,6 +527,17 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             .Include(item => item.Course)
             .FirstOrDefaultAsync(item => item.ClassId == request.ClassId && item.CoachUserId == coach.UserId)
             ?? throw new InvalidOperationException("Coach chỉ nhập lịch sử tập cho lớp mình phụ trách.");
+        var taught = await db.ClassSessions
+            .FirstOrDefaultAsync(item => item.SessionId == request.SessionId && item.ClassId == trainingClass.ClassId)
+            ?? throw new InvalidOperationException("Chọn buổi học của lớp này.");
+        var openSessions = await db.ClassSessions.AsNoTracking()
+            .Where(item => item.ClassId == trainingClass.ClassId && item.Status != "cancelled")
+            .ToListAsync();
+        var latest = SessionWindow.LatestFinished(openSessions, DateTime.Now);
+        if (latest is null || latest.SessionId != taught.SessionId)
+        {
+            throw new InvalidOperationException("Chỉ ghi đánh giá cho buổi vừa học xong. Buổi quá khứ xa hơn và buổi chưa diễn ra không lưu được.");
+        }
         var enrolled = await db.ClassEnrollments.AnyAsync(item =>
             item.ClassId == trainingClass.ClassId && item.UserId == memberId && item.Status == "enrolled");
         if (!enrolled)
@@ -525,11 +559,12 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             MemberUserId = member.UserId,
             CoachUserId = coach.UserId,
             ClassId = trainingClass.ClassId,
+            SessionId = taught.SessionId,
             Content = content,
             RecordedAt = now,
         };
         db.CoachTrainingHistories.Add(row);
-        var log = AddLog(coach, "Nhập lịch sử tập", $"{coach.FullName} nhập lịch sử tập của {member.FullName} cho {trainingClass.Course?.CourseName}.", now);
+        var log = AddLog(coach, "Nhập lịch sử tập", $"{coach.FullName} nhập lịch sử tập của {member.FullName} cho {trainingClass.Course?.CourseName}, {SessionNote(taught.SessionNo, taught.SessionDate)}.", now);
         await db.SaveChangesAsync();
         var history = new CoachTrainingHistoryDto(
             row.TrainingHistoryId.ToString(),
@@ -538,8 +573,10 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             trainingClass.ClassId,
             trainingClass.Course?.CourseName ?? "",
             row.Content,
-            row.RecordedAt);
-        return new SaveCoachTrainingHistoryResponse(history, "Đã lưu lịch sử tập. Học viên có thể tạo hoặc tạo lại giáo án AI.", ToLogDto(log, coach.FullName));
+            row.RecordedAt,
+            taught.SessionId,
+            SessionNote(taught.SessionNo, taught.SessionDate));
+        return new SaveCoachTrainingHistoryResponse(history, "Đã lưu lịch sử tập. Học viên có thể tạo hoặc tạo lại gợi ý tập cá nhân.", ToLogDto(log, coach.FullName));
     }
 
     // Lớp coach phụ trách, kể cả lớp chưa có học viên. Học viên chỉ gồm người đang ghi danh.
@@ -566,6 +603,13 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 where classIds.Contains(enrollment.ClassId) && enrollment.Status == "enrolled"
                 orderby member.FullName
                 select new { enrollment.ClassId, member.UserId, member.FullName }).ToListAsync();
+        var taughtSessions = classIds.Count == 0
+            ? []
+            : await db.ClassSessions.AsNoTracking()
+                .Where(item => classIds.Contains(item.ClassId) && item.Status != "cancelled")
+                .OrderBy(item => item.SessionDate)
+                .ThenBy(item => item.StartTime)
+                .ToListAsync();
         var membersByClass = members
             .GroupBy(item => item.ClassId)
             .ToDictionary(
@@ -573,42 +617,130 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 group => (IReadOnlyList<CoachMemberOptionDto>)group
                     .Select(item => new CoachMemberOptionDto(item.UserId.ToString(), item.FullName))
                     .ToList());
+        var now = DateTime.Now;
+        var sessionsByClass = taughtSessions
+            .GroupBy(item => item.ClassId)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                {
+                    var latestFinished = SessionWindow.LatestFinished(group, now);
+                    IReadOnlyList<CoachSessionOptionDto> options = latestFinished is null
+                        ? []
+                        : [new CoachSessionOptionDto(latestFinished.SessionId, SessionNote(latestFinished.SessionNo, latestFinished.SessionDate) + $" {latestFinished.StartTime:HH:mm}")];
+                    return options;
+                });
 
         return classes
             .Select(item => new CoachClassOptionDto(
                 item.ClassId,
                 item.CourseName,
                 item.ClassName,
-                membersByClass.GetValueOrDefault(item.ClassId) ?? []))
+                membersByClass.GetValueOrDefault(item.ClassId) ?? [],
+                sessionsByClass.GetValueOrDefault(item.ClassId) ?? []))
             .ToList();
     }
 
     private async Task<IReadOnlyList<CoachTrainingHistoryDto>> HistoriesOfCoachAsync(int coachUserId)
     {
-        return await (
+        var rows = await (
             from history in db.CoachTrainingHistories.AsNoTracking()
             join member in db.UserAccounts.AsNoTracking() on history.MemberUserId equals member.UserId
             join trainingClass in db.Classes.AsNoTracking() on history.ClassId equals trainingClass.ClassId
             join course in db.Courses.AsNoTracking() on trainingClass.CourseId equals course.CourseId
             where history.CoachUserId == coachUserId
             orderby history.RecordedAt descending
-            select new CoachTrainingHistoryDto(
-                history.TrainingHistoryId.ToString(),
-                member.UserId.ToString(),
+            select new
+            {
+                history.TrainingHistoryId,
+                member.UserId,
                 member.FullName,
                 trainingClass.ClassId,
                 course.CourseName,
                 history.Content,
-                history.RecordedAt))
+                history.RecordedAt,
+                history.SessionId,
+            })
             .Take(30)
             .ToListAsync();
+        var notes = await SessionNotesAsync(rows.Where(item => item.SessionId != null).Select(item => item.SessionId!.Value).Distinct().ToList());
+        return rows.Select(item => new CoachTrainingHistoryDto(
+            item.TrainingHistoryId.ToString(),
+            item.UserId.ToString(),
+            item.FullName,
+            item.ClassId,
+            item.CourseName,
+            item.Content,
+            item.RecordedAt,
+            item.SessionId,
+            item.SessionId is int sessionId && notes.TryGetValue(sessionId, out var note) ? note : null)).ToList();
     }
+
+    private async Task<IReadOnlyList<CoachOverallEvaluationDto>> OverallEvaluationsOfCoachAsync(int coachUserId)
+    {
+        var rows = await (
+            from evaluation in db.CoachEvaluations.AsNoTracking()
+            join trainingClass in db.Classes.AsNoTracking() on evaluation.ClassId equals trainingClass.ClassId
+            join member in db.UserAccounts.AsNoTracking() on evaluation.EvaluatedUserId equals member.UserId
+            where trainingClass.CoachUserId == coachUserId && evaluation.AssignmentId == null
+            orderby evaluation.EvaluatedAt descending
+            select new { evaluation.ClassId, member.UserId, member.FullName, evaluation.Score, evaluation.Comment, evaluation.EvaluatedAt })
+            .ToListAsync();
+        return rows
+            .GroupBy(item => (item.ClassId, item.UserId))
+            .Select(group => group.First())
+            .Select(item => new CoachOverallEvaluationDto(
+                item.ClassId,
+                item.UserId.ToString(),
+                item.FullName,
+                item.Score,
+                item.Comment,
+                item.EvaluatedAt))
+            .ToList();
+    }
+
+    private async Task<List<MemberOverallEvaluation>> OverallEvaluationsOfMemberAsync(int userId)
+    {
+        var rows = await (
+            from evaluation in db.CoachEvaluations.AsNoTracking()
+            join trainingClass in db.Classes.AsNoTracking() on evaluation.ClassId equals trainingClass.ClassId
+            join course in db.Courses.AsNoTracking() on trainingClass.CourseId equals course.CourseId
+            where evaluation.EvaluatedUserId == userId && evaluation.AssignmentId == null
+            orderby evaluation.EvaluatedAt descending
+            select new { evaluation.ClassId, course.CourseName, evaluation.Score, evaluation.Comment })
+            .ToListAsync();
+        return rows
+            .GroupBy(item => item.ClassId)
+            .Select(group => group.First())
+            .Select(item => new MemberOverallEvaluation(item.CourseName, item.Score, item.Comment))
+            .ToList();
+    }
+
+    private async Task<Dictionary<int, string>> SessionNotesAsync(IReadOnlyCollection<int> sessionIds)
+    {
+        if (sessionIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await db.ClassSessions.AsNoTracking()
+            .Where(item => sessionIds.Contains(item.SessionId))
+            .Select(item => new { item.SessionId, item.SessionNo, item.SessionDate })
+            .ToListAsync();
+        return rows.ToDictionary(item => item.SessionId, item => SessionNote(item.SessionNo, item.SessionDate));
+    }
+
+    private static bool IsTaught(ClassSession session, DateOnly today) =>
+        session.Status != "cancelled" && (session.Status == "completed" || session.SessionDate < today);
+
+    private static string SessionNote(int? sessionNo, DateOnly sessionDate) =>
+        $"{ClassSessionPlanner.SessionTitle(sessionNo)} {sessionDate:dd/MM/yyyy}";
 
     private static void RequireCoachHistory(TrainingHistory history)
     {
-        if (history.EntryCount == 0)
+        if (history.EntryCount == 0 && !history.HasOverallEvaluation)
         {
-            throw new InvalidOperationException("Coach chưa nhập lịch sử tập cho học viên này. Coach phụ trách lớp hãy ghi lịch sử tập trước khi tạo giáo án.");
+            throw new InvalidOperationException("Huấn luyện viên chưa ghi lịch sử buổi học hoặc đánh giá tổng. Cần một trong hai trước khi tạo gợi ý tập cá nhân.");
         }
     }
 
@@ -639,7 +771,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         else if (bmi < 18.5m && focus == "giam_can")
         {
             focus = "tang_co";
-            safety = "BMI thiếu cân, không lập giáo án giảm cân. Ưu tiên tăng cơ và ăn đủ năng lượng.";
+            safety = "BMI thiếu cân, không lập bài giảm cân. Ưu tiên tăng cơ và ăn đủ năng lượng.";
         }
 
         var intensity = bmi switch
@@ -764,7 +896,10 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             spec.StartTime.ToString("HH:mm"),
             days.Select(WeekdayName).ToArray(),
             spec.SafetyNote,
-            changes));
+            changes,
+            history.OverallEvaluation,
+            history.IntakeEvaluation,
+            history.CourseMaterial));
         recommendation.BodyMetricId = metric.BodyMetricId;
         recommendation.BodyMetric = metric;
         recommendation.Goal = goal;
@@ -777,7 +912,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         var scheduleNote = $" Lịch môn: {history.ClassSchedule}";
         recommendation.AnalysisRequest = changes is null
             ? $"{gemini.ProviderLabel}: Phân tích chỉ số sức khỏe và BMI cho {memberName}: {health} Mục tiêu \"{goal}\", {spec.SessionsPerWeek} buổi/tuần, {spec.SessionMinutes} phút/buổi.{scheduleNote}"
-            : $"{gemini.ProviderLabel}: Yêu cầu phân tích mới sau khi học viên sửa giáo án: {changes}.{scheduleNote}";
+            : $"{gemini.ProviderLabel}: Yêu cầu phân tích mới sau khi học viên sửa gợi ý tập: {changes}.{scheduleNote}";
         recommendation.PlanName = generated.PlanName;
         recommendation.DurationWeeks = spec.DurationWeeks;
         recommendation.PreferredStartTime = spec.StartTime;
@@ -1132,7 +1267,13 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         int EnrollmentCount,
         int SessionCount,
         IReadOnlyList<DayOfWeek> ClassWeekdays,
-        int EntryCount);
+        int EntryCount,
+        string OverallEvaluation,
+        bool HasOverallEvaluation,
+        string IntakeEvaluation,
+        string CourseMaterial);
+
+    private sealed record MemberOverallEvaluation(string CourseName, decimal? Score, string? Comment);
 
     private sealed record PlanSpec(
         string Focus,

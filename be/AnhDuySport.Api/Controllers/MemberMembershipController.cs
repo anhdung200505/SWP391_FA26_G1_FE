@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using AnhDuySport.Api.Contracts;
 using AnhDuySport.Api.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -28,33 +30,20 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
 
     [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
     [HttpPut("profile")]
-    [EndpointSummary("Edit personal information: học viên sửa thông tin cá nhân")]
-    [EndpointDescription("gender: Nam, Nữ hoặc Khác. dateOfBirth không bắt buộc (yyyy-MM-dd; gửi null hoặc \"\" thì giữ nguyên ngày sinh đang có). email không bắt buộc; gửi email khác email hiện tại thì báo lỗi, đổi email dùng POST profile/email/otp rồi profile/email/confirm. Hệ thống kiểm tra rồi cập nhật database và ghi nhật ký.")]
-    public async Task<ActionResult<MemberProfileMutationResponse>> InputChanges(string memberUserId, UpdateMemberProfileRequest request)
-    {
-        if (EnsureOwner(memberUserId) is { } denied) return denied;
-        try
-        {
-            return Ok(await flow.InputChangesAsync(memberUserId, request));
-        }
-        catch (Exception exception) when (MapFlowError(exception, out var result))
-        {
-            return result!;
-        }
-    }
-
-    [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
-    [HttpPost("profile/avatar")]
-    [Consumes("multipart/form-data")]
     [RequestSizeLimit(3 * 1024 * 1024)]
-    [EndpointSummary("Edit personal information: học viên đổi ảnh đại diện")]
-    [EndpointDescription("Gửi form-data có field file (JPG, PNG, WebP hoặc GIF, tối đa 2 MB). Trả hồ sơ mới với avatarUrl dạng /api/uploads/avatars/...")]
-    public async Task<ActionResult<MemberProfileMutationResponse>> UploadAvatar(string memberUserId, IFormFile? file)
+    [EndpointSummary("Edit personal information: học viên sửa hồ sơ và ảnh đại diện")]
+    [EndpointDescription("Một request cho cả hồ sơ và ảnh. JSON hoặc form-data: fullName, phone, gender (Nam, Nữ hoặc Khác), dateOfBirth (yyyy-MM-dd; null hoặc \"\" thì giữ nguyên), email (không đổi ở đây). Form-data thêm field file nếu đổi ảnh (JPG, PNG, WebP hoặc GIF, tối đa 2 MB); không gửi file thì giữ ảnh cũ. Đổi email dùng POST profile/email/otp rồi profile/email/confirm.")]
+    public async Task<ActionResult<MemberProfileMutationResponse>> InputChanges(string memberUserId)
     {
         if (EnsureOwner(memberUserId) is { } denied) return denied;
         try
         {
-            return Ok(await flow.UpdateAvatarAsync(memberUserId, file));
+            var (request, file) = await ReadProfileUpdateAsync();
+            return Ok(await flow.InputChangesAsync(memberUserId, request, file));
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { message = "Dữ liệu hồ sơ không hợp lệ. Ngày sinh phải có dạng yyyy-MM-dd." });
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
@@ -160,6 +149,49 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         {
             return result!;
         }
+    }
+
+    private async Task<(UpdateMemberProfileRequest Request, IFormFile? File)> ReadProfileUpdateAsync()
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            return (
+                new UpdateMemberProfileRequest(
+                    form["fullName"].ToString(),
+                    BlankToNull(form["email"]),
+                    form["phone"].ToString(),
+                    ParseOptionalDate(form["dateOfBirth"]),
+                    BlankToNull(form["gender"])),
+                form.Files.GetFile("file") ?? form.Files.FirstOrDefault());
+        }
+
+        var json = await Request.ReadFromJsonAsync<UpdateMemberProfileRequest>();
+        if (json is null)
+        {
+            throw new InvalidOperationException("Thiếu thông tin hồ sơ.");
+        }
+
+        return (json, null);
+    }
+
+    private static string? BlankToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static DateOnly? ParseOptionalDate(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var datePart = text.Trim().Split('T')[0];
+        if (DateOnly.TryParseExact(datePart, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            return date;
+        }
+
+        throw new InvalidOperationException("Ngày sinh phải có dạng yyyy-MM-dd.");
     }
 
     private bool MapFlowError(Exception exception, out ActionResult? result)

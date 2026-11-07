@@ -77,6 +77,10 @@ public class Payment
     [Column("upgrade_amount")]
     public decimal UpgradeAmount { get; set; }
 
+    // Học viên đã có gói và không tick gia hạn: không tặng Hạng Đồng khi thanh toán lớp.
+    [Column("skip_membership_bonus")]
+    public bool SkipMembershipBonus { get; set; }
+
     public Invoice? Invoice { get; set; }
     public TrainingClass? Class { get; set; }
 }

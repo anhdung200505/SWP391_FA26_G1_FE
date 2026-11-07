@@ -5,7 +5,7 @@ import { DiagramCaption, FlowTrail } from '../../components/management/Managemen
 import { useAccountManagement } from '../../context/AccountManagementContext';
 import { formatFee } from '../../data/accountManagement';
 
-const PACKAGE_FLOW = ['Bảng điều khiển', 'Danh sách gói', 'Tạo hoặc sửa gói', 'Hệ thống ghi nhận'];
+const PACKAGE_FLOW = ['Bảng điều khiển', 'Danh sách gói', 'Sửa gói hiện tại', 'Hệ thống ghi nhận'];
 
 export default function PackageListPage() {
   const { packages = [], loading, error } = useAccountManagement();
@@ -25,31 +25,10 @@ export default function PackageListPage() {
       <div className="mt-5">
         <h1 className="text-2xl font-black sm:text-3xl">Danh sách gói hội viên</h1>
         <DiagramCaption>Access Package List</DiagramCaption>
+        <p className="mt-2 text-sm text-gray-600">
+          Chỉ có thể chỉnh sửa thông tin của 3 gói hội viên hiện tại. Không hỗ trợ tạo gói mới.
+        </p>
       </div>
-
-      <section className="mt-5">
-        <h2 className="text-lg font-black">Chọn thao tác với gói</h2>
-        <DiagramCaption>Select Package Action</DiagramCaption>
-        <div className="mt-3 grid gap-4 lg:grid-cols-2">
-          <Link
-            to="/quan-ly/goi/moi"
-            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-[#e31b23]/40"
-          >
-            <DiagramCaption>Create new package</DiagramCaption>
-            <p className="mt-2 text-xl font-black">Tạo gói mới</p>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              Nhập tên, phí, thời hạn và quyền lợi. Hệ thống lưu gói rồi ghi nhật ký.
-            </p>
-          </Link>
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <DiagramCaption>Modify existing package</DiagramCaption>
-            <p className="mt-2 text-xl font-black">Sửa gói đang có</p>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              Chọn một gói bên dưới để sửa phí, thời hạn và quyền lợi.
-            </p>
-          </div>
-        </div>
-      </section>
 
       {loading && <p className="mt-5 text-sm font-semibold text-gray-500">Đang tải gói từ máy chủ...</p>}
       {error && <p className="mt-5 text-sm font-semibold text-[#b1131a]">{error}</p>}
@@ -76,15 +55,13 @@ export default function PackageListPage() {
                   to={`/quan-ly/goi/${item.id}`}
                   className="rounded-xl bg-[#12141d] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#e31b23]"
                 >
-                  Chọn gói
+                  Chỉnh sửa gói
                 </Link>
               </div>
               {Array.isArray(item.benefits) && item.benefits.length > 0 && (
-                <ul className="mt-3 flex flex-wrap gap-2">
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">
                   {item.benefits.map((benefit, idx) => (
-                    <li key={`${item.id}-benefit-${idx}`} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-                      {benefit}
-                    </li>
+                    <li key={`${item.id}-benefit-${idx}`}>{benefit}</li>
                   ))}
                 </ul>
               )}

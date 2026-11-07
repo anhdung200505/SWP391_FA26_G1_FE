@@ -63,7 +63,11 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
                 session.StartTime,
                 session.EndTime,
                 session.Status,
-                session.Note))
+                session.Note,
+                session.Coach!.FullName,
+                session.Room!.RoomName,
+                session.CoachChange,
+                session.RoomChanged))
             .ToListAsync();
 
         var schedules = item.Schedules
@@ -96,16 +100,38 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
         var owned = await access.RequireAsync(classId);
         var session = await RequireSessionAsync(owned.ClassId, sessionId);
         var rows = await RosterMarksAsync(owned.ClassId, session.SessionId);
-        return ToSheet(session, rows);
+        return ToSheet(session, rows, AttendanceLock(session, DateTime.Now, asAdmin: false));
     }
 
+    // Quản trị xem và sửa điểm danh mọi buổi, mọi thời điểm (chỉ buổi đã hủy là không điểm danh).
+    public async Task<AttendanceSheetDto> AttendanceAsAdminAsync(string classId, string sessionId)
+    {
+        var owned = await access.RequireAnyAsync(classId);
+        var session = await RequireSessionAsync(owned.ClassId, sessionId);
+        var rows = await RosterMarksAsync(owned.ClassId, session.SessionId);
+        return ToSheet(session, rows, AttendanceLock(session, DateTime.Now, asAdmin: true));
+    }
+
+    public async Task<AttendanceSheetDto> SaveAttendanceAsAdminAsync(string classId, string sessionId, SubmitAttendanceRequest request)
+    {
+        var owned = await access.RequireAnyAsync(classId);
+        return await SaveAttendanceCoreAsync(owned, sessionId, request, asAdmin: true);
+    }
+
+    // Coach chỉ điểm danh được từ giờ bắt đầu của đúng buổi đó đến hết ngày hôm đó; sau 00:00 khóa.
     public async Task<AttendanceSheetDto> SaveAttendanceAsync(string classId, string sessionId, SubmitAttendanceRequest request)
     {
         var owned = await access.RequireAsync(classId);
+        return await SaveAttendanceCoreAsync(owned, sessionId, request, asAdmin: false);
+    }
+
+    private async Task<AttendanceSheetDto> SaveAttendanceCoreAsync(OwnedClass owned, string sessionId, SubmitAttendanceRequest request, bool asAdmin)
+    {
         var session = await RequireSessionAsync(owned.ClassId, sessionId);
-        if (session.Status == "cancelled")
+        var locked = AttendanceLock(session, DateTime.Now, asAdmin);
+        if (locked is not null)
         {
-            throw new RegistrationException("Buổi đã hủy nên không điểm danh.");
+            throw new RegistrationException(locked);
         }
 
         var roster = await db.ClassEnrollments
@@ -146,6 +172,8 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
         }
 
         var now = DateTime.Now;
+        // Quản trị sửa sau buổi học thì lấy giờ bắt đầu buổi làm giờ vào, không dùng giờ lúc bấm lưu (có thể là ngày khác).
+        var markedAt = asAdmin ? session.SessionDate.ToDateTime(session.StartTime) : now;
         var existing = await db.ClassAttendances
             .Where(row => row.SessionId == session.SessionId && roster.Contains(row.UserId))
             .ToListAsync();
@@ -160,13 +188,13 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
                     SessionId = session.SessionId,
                     UserId = memberId,
                     Status = status,
-                    CheckInAt = status == "absent" ? null : now,
+                    CheckInAt = status == "absent" ? null : markedAt,
                 });
             }
             else
             {
                 row.Status = status;
-                row.CheckInAt = status == "absent" ? null : row.CheckInAt ?? now;
+                row.CheckInAt = status == "absent" ? null : row.CheckInAt ?? markedAt;
             }
         }
 
@@ -176,12 +204,12 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
             Action = Shorten($"Điểm danh {owned.ClassName}", 100),
             EntityName = "session",
             EntityId = session.SessionId,
-            Detail = $"Coach điểm danh buổi {session.SessionDate:dd/MM/yyyy} lớp {owned.ClassName}: {parsed.Count} học viên.",
+            Detail = $"{(asAdmin ? "Quản trị chỉnh điểm danh" : "Coach điểm danh")} buổi {session.SessionDate:dd/MM/yyyy} lớp {owned.ClassName}: {parsed.Count} học viên.",
             CreatedAt = now,
         });
         await db.SaveChangesAsync();
         var rows = await RosterMarksAsync(owned.ClassId, session.SessionId);
-        return ToSheet(session, rows);
+        return ToSheet(session, rows, AttendanceLock(session, DateTime.Now, asAdmin));
     }
 
     public async Task<EvaluationSheetDto> EvaluationsAsync(string classId)
@@ -411,8 +439,36 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
         return (items, plan.Slot);
     }
 
-    private static AttendanceSheetDto ToSheet(ClassSession session, IReadOnlyList<AttendanceRowDto> rows) =>
-        new(session.SessionId.ToString(), session.SessionDate, session.StartTime, session.EndTime, session.Status, rows);
+    private static AttendanceSheetDto ToSheet(ClassSession session, IReadOnlyList<AttendanceRowDto> rows, string? lockReason) =>
+        new(session.SessionId.ToString(), session.SessionDate, session.StartTime, session.EndTime, session.Status, rows, lockReason is null, lockReason);
+
+    // Lý do không điểm danh được, null = được. Buổi đã hủy không điểm danh với mọi vai trò; buổi tương lai thì không ai điểm danh được;
+    // coach chỉ điểm danh từ giờ bắt đầu buổi đến 23:59 cùng ngày; quản trị sửa được mọi buổi từ hôm nay về quá khứ (không giới hạn giờ).
+    private static string? AttendanceLock(ClassSession session, DateTime now, bool asAdmin)
+    {
+        if (session.Status == "cancelled")
+        {
+            return "Buổi đã hủy nên không điểm danh.";
+        }
+
+        var today = DateOnly.FromDateTime(now);
+        if (asAdmin)
+        {
+            return session.SessionDate > today ? "Buổi học ở tương lai nên chưa thể điểm danh." : null;
+        }
+
+        if (session.SessionDate > today || (session.SessionDate == today && TimeOnly.FromDateTime(now) < session.StartTime))
+        {
+            return $"Chưa tới giờ bắt đầu buổi học ({session.StartTime:HH\\:mm} {session.SessionDate:dd/MM/yyyy}), coach chỉ điểm danh được từ lúc đó.";
+        }
+
+        if (session.SessionDate < today)
+        {
+            return "Buổi học đã qua ngày nên điểm danh đã khóa. Chỉ quản trị mới sửa được.";
+        }
+
+        return null;
+    }
 
     private static AssignmentItemDto ToAssignment(ClassAssignment item, IReadOnlyDictionary<int, ClassSession> sessions)
     {

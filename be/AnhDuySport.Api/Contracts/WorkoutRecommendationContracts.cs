@@ -18,15 +18,26 @@ public sealed record WorkoutDecisionRequest(bool EditRequired, string? Changes);
 
 public sealed record RegenerateWorkoutRequest(string Changes);
 
-public sealed record CoachTrainingHistoryRequest(string MemberUserId, int ClassId, string Content);
+public sealed record CoachTrainingHistoryRequest(string MemberUserId, int ClassId, int SessionId, string Content);
 
 public sealed record CoachMemberOptionDto(string MemberUserId, string MemberName);
+
+public sealed record CoachSessionOptionDto(int SessionId, string Label);
+
+public sealed record CoachOverallEvaluationDto(
+    int ClassId,
+    string MemberUserId,
+    string MemberName,
+    decimal? Score,
+    string? Comment,
+    DateTime? EvaluatedAt);
 
 public sealed record CoachClassOptionDto(
     int ClassId,
     string CourseName,
     string ClassName,
-    IReadOnlyList<CoachMemberOptionDto> Members);
+    IReadOnlyList<CoachMemberOptionDto> Members,
+    IReadOnlyList<CoachSessionOptionDto> Sessions);
 
 public sealed record CoachTrainingHistoryDto(
     string Id,
@@ -35,13 +46,16 @@ public sealed record CoachTrainingHistoryDto(
     int ClassId,
     string CourseName,
     string Content,
-    DateTime RecordedAt);
+    DateTime RecordedAt,
+    int? SessionId,
+    string? SessionLabel);
 
 public sealed record CoachTrainingHistoryListDto(
     string CoachUserId,
     string CoachName,
     IReadOnlyList<CoachClassOptionDto> Classes,
-    IReadOnlyList<CoachTrainingHistoryDto> Histories);
+    IReadOnlyList<CoachTrainingHistoryDto> Histories,
+    IReadOnlyList<CoachOverallEvaluationDto> Evaluations);
 
 public sealed record SaveCoachTrainingHistoryResponse(
     CoachTrainingHistoryDto History,

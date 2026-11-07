@@ -16,7 +16,6 @@ const TABS = [
   { id: 'schedule', label: 'Lịch buổi học' },
   { id: 'checkin', label: 'Check-in học viên' },
   { id: 'members', label: 'Tra cứu học viên' },
-  { id: 'settings', label: 'Cài đặt' },
 ];
 
 export default function ReceptionistDashboardPage() {
@@ -54,8 +53,8 @@ export default function ReceptionistDashboardPage() {
             <button
               type="button"
               onClick={() => setSubTab('register_form')}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-                subTab === 'register_form' ? 'bg-[#12141d] text-white' : 'border border-gray-200 bg-white text-gray-700'
+              className={`rounded-xl px-4 py-2.5 text-sm font-bold cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23] ${
+                subTab === 'register_form' ? 'bg-[#12141d] text-white' : 'border border-slate-200 bg-white text-slate-700 hover:border-[#e31b23]'
               }`}
             >
               Đăng ký lớp tại quầy
@@ -63,8 +62,8 @@ export default function ReceptionistDashboardPage() {
             <button
               type="button"
               onClick={() => setSubTab('registrations_list')}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-                subTab === 'registrations_list' ? 'bg-[#12141d] text-white' : 'border border-gray-200 bg-white text-gray-700'
+              className={`rounded-xl px-4 py-2.5 text-sm font-bold cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23] ${
+                subTab === 'registrations_list' ? 'bg-[#12141d] text-white' : 'border border-slate-200 bg-white text-slate-700 hover:border-[#e31b23]'
               }`}
             >
               Học viên đã ghi danh
@@ -93,9 +92,9 @@ export default function ReceptionistDashboardPage() {
       )}
 
       {activeTab === 'members' && (
-        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
+        <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
           <h2 className="text-lg font-black text-balance">Hồ sơ học viên</h2>
-          <p className="mt-2 text-sm text-pretty text-gray-500">
+          <p className="mt-2 text-sm text-pretty text-slate-500">
             Tra cứu thông tin và lịch sử tham gia lớp của hội viên.
           </p>
         </section>

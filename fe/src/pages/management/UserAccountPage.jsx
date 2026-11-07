@@ -25,7 +25,9 @@ export default function UserAccountPage() {
   const { users, roles, loading, error, updateUserRole, updateAccountStatus, updateCoachSports } = useAccountManagement();
   const user = users.find((item) => item.id === userId);
   const catalog = roles.length > 0 ? roles : ROLES;
-  const assignableRoles = catalog.filter((item) => item.id !== 'ADMIN');
+  const isMember = user?.roleId === 'MEMBER';
+  // Chỉ cho phép chuyển đổi giữa các vai trò Staff; không cho chuyển sang MEMBER hoặc ADMIN.
+  const assignableRoles = catalog.filter((item) => item.id !== 'ADMIN' && item.id !== 'MEMBER');
   const findRole = (roleId) => catalog.find((item) => item.id === roleId) ?? getRole(roleId);
 
   const [mode, setMode] = useState('choose');
@@ -104,6 +106,8 @@ export default function UserAccountPage() {
   const sportNames = (user.sports || []).map((sport) => sport.name).filter(Boolean);
 
   const openRole = () => {
+    // Học viên không có quyền truy cập chức năng thay đổi vai trò.
+    if (isMember) return;
     setDraftRoleId(user.roleId);
     setMode('role');
   };
@@ -133,7 +137,9 @@ export default function UserAccountPage() {
 
   const confirmRole = async () => {
     const nextRole = findRole(draftRoleId);
-    if (!nextRole || !role || saving) return;
+    // Chặn cả trường hợp gọi hàm khi tài khoản hiện tại là MEMBER
+    // hoặc giá trị role được gửi lên không thuộc nhóm Staff.
+    if (isMember || draftRoleId === 'MEMBER' || draftRoleId === 'ADMIN' || !nextRole || !role || saving) return;
     setSaving(true);
     setActionError('');
     try {
@@ -300,12 +306,21 @@ export default function UserAccountPage() {
             <button
               type="button"
               onClick={openRole}
-              className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm hover:border-[#e31b23]/40"
+              disabled={isMember}
+              aria-disabled={isMember}
+              title={isMember ? 'Tài khoản Học viên không được phép thay đổi vai trò.' : undefined}
+              className={`rounded-2xl border p-5 text-left shadow-sm ${
+                isMember
+                  ? 'cursor-not-allowed border-gray-200 bg-gray-100 opacity-50'
+                  : 'border-gray-200 bg-white hover:border-[#e31b23]/40'
+              }`}
             >
               <DiagramCaption>Roles & Permissions</DiagramCaption>
               <p className="mt-2 text-xl font-black">Vai trò và quyền hạn</p>
               <p className="mt-2 text-sm leading-6 text-gray-600">
-                Đổi vai trò của {user.fullName}. Quyền hạn được gắn theo vai trò vừa chọn.
+                {isMember
+                  ? 'Tài khoản Học viên không được phép thay đổi vai trò.'
+                  : `Đổi vai trò của ${user.fullName}. Chỉ có thể chuyển đổi giữa các vai trò Staff.`}
               </p>
             </button>
             <button
@@ -338,7 +353,7 @@ export default function UserAccountPage() {
         </section>
       )}
 
-      {mode === 'role' && (
+      {mode === 'role' && !isMember && (
         <section className="mt-5 rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

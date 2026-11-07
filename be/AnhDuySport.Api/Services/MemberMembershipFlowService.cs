@@ -70,7 +70,9 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
 
     // ===== Edit personal information → Input changes → Validate & Update database =====
     // Email không đổi ở đây: gửi email khác email hiện tại thì báo dùng luồng đổi email bằng OTP.
-    public async Task<MemberProfileMutationResponse> InputChangesAsync(string memberUserId, UpdateMemberProfileRequest request)
+    // Ảnh đại diện đi cùng request (form-data field file). Không gửi file thì giữ ảnh cũ.
+    public async Task<MemberProfileMutationResponse> InputChangesAsync(
+        string memberUserId, UpdateMemberProfileRequest request, IFormFile? avatar = null)
     {
         var member = await FindActiveProfileUserAsync(memberUserId);
 
@@ -102,33 +104,65 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
         if (member.Phone != phone) changes.Add("Điện thoại");
         if (member.DateOfBirth != dateOfBirth) changes.Add("Ngày sinh");
         if (member.Gender != gender) changes.Add("Giới tính");
-        if (changes.Count == 0)
+        var hasAvatar = avatar is { Length: > 0 };
+        if (changes.Count == 0 && !hasAvatar)
         {
             throw new InvalidOperationException("Thông tin cá nhân không thay đổi.");
         }
 
-        // ---- Update database ----
-        member.FullName = fullName;
-        member.Phone = phone;
-        member.DateOfBirth = dateOfBirth;
-        member.Gender = gender;
-        var log = new ActivityLog
+        // ---- Update database (ảnh lưu trước, xóa file mới nếu ghi database thất bại) ----
+        string? savedAvatar = null;
+        string? contentRoot = null;
+        var oldAvatar = member.AvatarUrl;
+        try
         {
-            ActorUserId = member.UserId,
-            Action = "Cập nhật thông tin cá nhân",
-            EntityName = "user",
-            EntityId = member.UserId,
-            Detail = $"Đã sửa: {string.Join(", ", changes)}.",
-            CreatedAt = DateTime.Now,
-        };
-        db.ActivityLogs.Add(log);
-        await db.SaveChangesAsync();
+            if (hasAvatar)
+            {
+                contentRoot = services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
+                savedAvatar = await AvatarStorage.SaveAsync(contentRoot, member.UserId, avatar);
+                changes.Add("Ảnh đại diện");
+            }
 
-        // ---- Display Success Message ----
-        return new MemberProfileMutationResponse(
-            ToProfileDto(member),
-            "Cập nhật thông tin cá nhân thành công.",
-            ToLogDto(log, member.FullName));
+            member.FullName = fullName;
+            member.Phone = phone;
+            member.DateOfBirth = dateOfBirth;
+            member.Gender = gender;
+            if (savedAvatar is not null)
+            {
+                member.AvatarUrl = savedAvatar;
+            }
+
+            var onlyAvatar = changes.Count == 1 && changes[0] == "Ảnh đại diện";
+            var log = new ActivityLog
+            {
+                ActorUserId = member.UserId,
+                Action = onlyAvatar ? "Cập nhật ảnh đại diện" : "Cập nhật thông tin cá nhân",
+                EntityName = "user",
+                EntityId = member.UserId,
+                Detail = $"Đã sửa: {string.Join(", ", changes)}.",
+                CreatedAt = DateTime.Now,
+            };
+            db.ActivityLogs.Add(log);
+            await db.SaveChangesAsync();
+            if (savedAvatar is not null)
+            {
+                AvatarStorage.DeleteIfUploaded(contentRoot!, oldAvatar);
+            }
+
+            return new MemberProfileMutationResponse(
+                ToProfileDto(member),
+                onlyAvatar ? "Cập nhật ảnh đại diện thành công." : "Cập nhật thông tin cá nhân thành công.",
+                ToLogDto(log, member.FullName));
+        }
+        catch
+        {
+            if (savedAvatar is not null && contentRoot is not null)
+            {
+                AvatarStorage.DeleteIfUploaded(contentRoot, savedAvatar);
+            }
+
+            throw;
+        }
     }
 
     // ===== Edit personal information → đổi email (bước 1: gửi OTP tới email mới) =====
@@ -299,33 +333,6 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
             ToLogDto(log, member.FullName));
     }
 
-    // ===== Edit personal information → đổi ảnh đại diện =====
-    public async Task<MemberProfileMutationResponse> UpdateAvatarAsync(string memberUserId, IFormFile? file)
-    {
-        var member = await FindActiveProfileUserAsync(memberUserId);
-        var contentRoot = services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
-        var oldAvatar = member.AvatarUrl;
-        member.AvatarUrl = await AvatarStorage.SaveAsync(contentRoot, member.UserId, file);
-
-        var log = new ActivityLog
-        {
-            ActorUserId = member.UserId,
-            Action = "Cập nhật ảnh đại diện",
-            EntityName = "user",
-            EntityId = member.UserId,
-            Detail = "Đã đổi ảnh đại diện.",
-            CreatedAt = DateTime.Now,
-        };
-        db.ActivityLogs.Add(log);
-        await db.SaveChangesAsync();
-        AvatarStorage.DeleteIfUploaded(contentRoot, oldAvatar);
-
-        return new MemberProfileMutationResponse(
-            ToProfileDto(member),
-            "Cập nhật ảnh đại diện thành công.",
-            ToLogDto(log, member.FullName));
-    }
-
     // ===== Renew/Upgrade Package → View membership management =====
     public async Task<MembershipManagementDto> ViewMembershipManagementAsync(string memberUserId)
     {
@@ -358,13 +365,16 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
             .ToListAsync();
 
         var highest = await ClassMembershipBonus.HighestOwnedPackageAsync(db, member.UserId, today);
+        var currentRow = memberships.FirstOrDefault(item =>
+            item.Status == "active" && item.StartDate <= today && item.EndDate >= today);
         return new MembershipManagementDto(
             ToProfileDto(member),
             current,
             endDate,
             history,
             packages.Select(AccountFlowMapper.ToDto).ToList(),
-            highest?.MembershipPackageId.ToString());
+            highest?.MembershipPackageId.ToString(),
+            currentRow is not null && await AiMembershipQuota.OpensAiAsync(db, currentRow));
     }
 
     // ===== Need Consultation? = Yes → hiển thị số chăm sóc khách hàng =====
@@ -700,7 +710,11 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
             .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("Không tìm thấy thanh toán gói.");
 
-        return await InMemberLockAsync(userId, async () =>
+        UserAccount? firstMember = null;
+        string firstPlan = "";
+        var firstStart = default(DateOnly);
+        var firstEnd = default(DateOnly);
+        var log = await InMemberLockAsync(userId, async () =>
         {
             // Đọc lại sau khi đã khóa: luồng khác có thể vừa xử lý xong.
             var membership = await db.Memberships
@@ -726,7 +740,16 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
 
             var member = await db.UserAccounts.FirstAsync(user => user.UserId == membership.UserId);
             var now = DateTime.Now;
+            var otherPackages = await db.Memberships.AnyAsync(item =>
+                item.UserId == member.UserId && item.MembershipId != membership.MembershipId);
             var log = await ActivateAsync(member, membership, payment, now);
+            if (!otherPackages && log.Action.StartsWith("Đăng ký mới", StringComparison.Ordinal))
+            {
+                firstMember = member;
+                firstPlan = membership.PlanName;
+                firstStart = membership.StartDate;
+                firstEnd = membership.EndDate;
+            }
             if (revived)
             {
                 db.Notifications.Add(new AccountNotification
@@ -742,6 +765,20 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
 
             return log;
         });
+        if (firstMember is not null)
+        {
+            try
+            {
+                await services.GetRequiredService<EmailNotificationService>()
+                    .SendFirstPackageAsync(firstMember, firstPlan, firstStart, firstEnd);
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine($"Không gửi được thư cảm ơn gói cho học viên {firstMember.UserId}: {exception.Message}");
+            }
+        }
+
+        return log;
     }
 
     private async Task<T> InMemberLockAsync<T>(int userId, Func<Task<T>> work)

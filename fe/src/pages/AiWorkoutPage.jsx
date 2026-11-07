@@ -9,18 +9,15 @@ import {
 } from '../api/workoutRecommendationApi';
 import WorkoutPlanView from '../components/ai/WorkoutPlanView';
 import { FlowTrail } from '../components/management/ManagementBits';
-import WorkspaceShell from '../components/workspace/WorkspaceShell';
-import NotificationBell from '../components/NotificationBell';
-import { studentWorkspaceItems, useHasClassRegistration } from '../components/workspace/studentNav';
 import { useAuth } from '../context/AuthContext';
 
-const AI_STEPS = ['Chỉ số BMI', 'Mục tiêu', 'Giáo án AI', 'Lịch tập'];
+const AI_STEPS = ['Chỉ số BMI', 'Mục tiêu', 'Gợi ý tập', 'Lịch tập'];
 
 const fieldClass =
-  'mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2';
+  'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2';
 const primaryButtonClass =
-  'rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300';
-const secondaryButtonClass = 'rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-800';
+  'rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300';
+const secondaryButtonClass = 'rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800';
 
 function stepIndex(nextStep) {
   if (nextStep === 'input_goals') return 1;
@@ -62,15 +59,15 @@ function ExerciseList({ title, items }) {
   if (!items?.length) return null;
   return (
     <section className="mt-4">
-      <h3 className="text-sm font-black text-gray-900">{title}</h3>
+      <h3 className="text-sm font-black text-slate-900">{title}</h3>
       <ul className="mt-2 space-y-2">
         {items.map((item) => (
-          <li key={item.id} className="rounded-2xl border border-gray-200 px-4 py-3">
-            <p className="font-bold text-gray-900">{item.title}</p>
-            <p className="mt-1 text-xs font-bold text-gray-500 tabular-nums">
+          <li key={item.id} className="rounded-2xl border border-slate-200 px-4 py-3">
+            <p className="font-bold text-slate-900">{item.title}</p>
+            <p className="mt-1 text-xs font-bold text-slate-500 tabular-nums">
               {formatDate(item.date)} · {formatClock(item.startTime)}–{formatClock(item.endTime)}
             </p>
-            <p className="mt-2 text-sm text-pretty whitespace-pre-line text-gray-600">{item.detail}</p>
+            <p className="mt-2 text-sm text-pretty whitespace-pre-line text-slate-600">{item.detail}</p>
           </li>
         ))}
       </ul>
@@ -79,7 +76,6 @@ function ExerciseList({ title, items }) {
 }
 
 export default function AiWorkoutPage() {
-  const hasClass = useHasClassRegistration();
   const { user } = useAuth();
   const memberUserId = user?.id;
 
@@ -104,7 +100,7 @@ export default function AiWorkoutPage() {
   const [regenerateError, setRegenerateError] = useState('');
 
   useEffect(() => {
-    document.title = 'Giáo án AI · AnhDuy Sport';
+    document.title = 'Gợi ý tập cá nhân · AnhDuy Sport';
   }, []);
 
   const applySnapshot = (accessData, routineData) => {
@@ -224,7 +220,7 @@ export default function AiWorkoutPage() {
     const recommendationId = access?.proposedPlan?.id || access?.recommendationId;
     const trimmedChanges = changes.trim();
     if (!recommendationId) {
-      setDecisionError('Chưa có giáo án để xác nhận.');
+      setDecisionError('Chưa có gợi ý tập để xác nhận.');
       return;
     }
     if (editRequired && !trimmedChanges) {
@@ -252,7 +248,7 @@ export default function AiWorkoutPage() {
   const submitRegenerate = () => {
     const trimmed = regenerateNote.trim();
     if (!trimmed) {
-      setRegenerateError('Nhập lý do muốn tạo lại giáo án.');
+      setRegenerateError('Nhập lý do muốn tạo lại gợi ý tập.');
       return;
     }
     setRegenerateError('');
@@ -273,17 +269,17 @@ export default function AiWorkoutPage() {
   const body = access?.latestBody;
 
   return (
-    <WorkspaceShell
-      role="Học viên"
-      homeTo="/hoc-vien-dashboard"
-      items={studentWorkspaceItems(hasClass)}
-      breadcrumb={[{ label: 'Học viên', to: '/hoc-vien-dashboard' }, { label: 'Giáo án AI' }]}
-      headerExtra={<NotificationBell />}
-    >
-        <h1 className="text-2xl font-black text-balance">Giáo án tập với AI</h1>
-        <p className="mt-2 text-sm text-pretty text-gray-500">
-          Nhập chỉ số cơ thể và mục tiêu. Hệ thống dùng lịch sử tập huấn luyện viên đã ghi để lập giáo án, rồi đồng bộ vào lịch cá nhân khi bạn lưu.
+    <>
+        <h1 className="text-2xl font-black text-balance">Gợi ý tập cá nhân</h1>
+        <p className="mt-2 max-w-2xl text-sm text-pretty text-slate-500">
+          AI đề xuất lịch tập riêng theo chỉ số và mục tiêu của bạn. Đây không phải bài tập hay giáo án của lớp. Lưu xong, các buổi tập vào lịch cá nhân. Hạn mức lượt tạo lại và token lấy từ gói hội viên bạn đang dùng.
         </p>
+        {access?.quota && (
+          <p className="mt-3 max-w-2xl rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+            Gói {access.quota.packageName}: đã dùng {access.quota.regenerationsUsed}/{access.quota.regenerationLimit} lượt tạo lại gợi ý tập
+            và {Number(access.quota.tokensUsed || 0).toLocaleString('vi-VN')}/{Number(access.quota.tokenLimit || 0).toLocaleString('vi-VN')} token trong kỳ hội viên này.
+          </p>
+        )}
 
         {notice && (
           <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
@@ -292,14 +288,14 @@ export default function AiWorkoutPage() {
         )}
 
         {loading && (
-          <div className="mt-6 space-y-3" aria-busy="true" aria-label="Đang tải giáo án">
-            <div className="h-8 w-64 rounded-full bg-gray-200" />
-            <div className="h-44 rounded-3xl bg-gray-200" />
+          <div className="mt-6 space-y-3" aria-busy="true" aria-label="Đang tải gợi ý tập">
+            <div className="h-8 w-64 animate-pulse rounded-full bg-slate-200" />
+            <div className="h-44 animate-pulse rounded-3xl bg-slate-200" />
           </div>
         )}
 
         {!loading && loadError && !access && (
-          <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5">
+          <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5">
             <p className="text-sm font-semibold text-[#b1131a]">{loadError}</p>
             <button type="button" onClick={() => reload()} className={`${primaryButtonClass} mt-4`}>
               Tải lại
@@ -310,12 +306,12 @@ export default function AiWorkoutPage() {
         {!loading && access && (
           <div className="mt-6 space-y-5">
             <FlowTrail step={stepIndex(nextStep)} steps={AI_STEPS} />
-            <p className="text-sm text-pretty text-gray-600">{stepHint(nextStep)}</p>
+            <p className="text-sm text-pretty text-slate-600">{stepHint(nextStep)}</p>
 
             {body && !showBodyForm && (
-              <section className="rounded-3xl border border-gray-200 bg-white p-5">
+              <section className="rounded-3xl border border-slate-200 bg-white p-5">
                 <h2 className="text-lg font-black text-balance">Chỉ số gần nhất</h2>
-                <p className="mt-2 text-sm font-bold text-gray-800 tabular-nums">
+                <p className="mt-2 text-sm font-bold text-slate-800 tabular-nums">
                   {body.heightCm} cm · {body.weightKg} kg · BMI {body.bmi} ({body.bmiCategory})
                 </p>
                 <button type="button" onClick={() => setEditingBody(true)} className={`${secondaryButtonClass} mt-4`}>
@@ -325,14 +321,14 @@ export default function AiWorkoutPage() {
             )}
 
             {showBodyForm && (
-              <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
                 <h2 className="text-lg font-black text-balance">Nhập chiều cao và cân nặng</h2>
-                <p className="mt-2 text-sm text-pretty text-gray-600">
+                <p className="mt-2 text-sm text-pretty text-slate-600">
                   Hệ thống tính BMI từ hai số này.
-                  {access.proposedPlan ? ' Lưu chỉ số mới sẽ xóa giáo án đang chờ xác nhận.' : ''}
+                  {access.proposedPlan ? ' Lưu chỉ số mới sẽ xóa gợi ý tập đang chờ xác nhận.' : ''}
                 </p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm font-bold text-gray-700">
+                  <label className="block text-sm font-bold text-slate-700">
                     Chiều cao (cm)
                     <input
                       value={heightCm}
@@ -342,7 +338,7 @@ export default function AiWorkoutPage() {
                       placeholder="170"
                     />
                   </label>
-                  <label className="block text-sm font-bold text-gray-700">
+                  <label className="block text-sm font-bold text-slate-700">
                     Cân nặng (kg)
                     <input
                       value={weightKg}
@@ -368,12 +364,12 @@ export default function AiWorkoutPage() {
             )}
 
             {nextStep === 'input_goals' && (
-              <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
                 <h2 className="text-lg font-black text-balance">Nhập mục tiêu cá nhân</h2>
-                <p className="mt-2 text-sm text-pretty text-gray-600">
-                  Huấn luyện viên phụ trách lớp cần ghi lịch sử tập trước. Nếu chưa có, hệ thống sẽ báo ngay tại đây.
+                <p className="mt-2 text-sm text-pretty text-slate-600">
+                  AI dùng chỉ số của bạn và lịch sử tập huấn luyện viên đã ghi để đề xuất lịch tập cá nhân, không phải bài tập của lớp.
                 </p>
-                <label className="mt-4 block text-sm font-bold text-gray-700">
+                <label className="mt-4 block text-sm font-bold text-slate-700">
                   Mục tiêu
                   <textarea
                     value={goal}
@@ -384,7 +380,7 @@ export default function AiWorkoutPage() {
                   />
                 </label>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm font-bold text-gray-700">
+                  <label className="block text-sm font-bold text-slate-700">
                     Số buổi mỗi tuần
                     <select
                       value={sessionsPerWeek}
@@ -398,7 +394,7 @@ export default function AiWorkoutPage() {
                       ))}
                     </select>
                   </label>
-                  <label className="block text-sm font-bold text-gray-700">
+                  <label className="block text-sm font-bold text-slate-700">
                     Số phút mỗi buổi
                     <select
                       value={sessionMinutes}
@@ -420,20 +416,20 @@ export default function AiWorkoutPage() {
                   onClick={submitGoals}
                   className={`${primaryButtonClass} mt-4`}
                 >
-                  {busy === 'goals' ? 'Đang tạo giáo án...' : 'Tạo giáo án'}
+                  {busy === 'goals' ? 'Đang tạo gợi ý...' : 'Tạo gợi ý tập'}
                 </button>
               </section>
             )}
 
             {access.proposedPlan && (
               <section className="space-y-4">
-                <div className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-                  <h2 className="text-lg font-black text-balance">Xác nhận giáo án</h2>
-                  <p className="mt-2 text-sm text-pretty text-gray-600">
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h2 className="text-lg font-black text-balance">Xác nhận gợi ý tập</h2>
+                  <p className="mt-2 text-sm text-pretty text-slate-600">
                     Lưu để đưa các buổi tập vào lịch cá nhân. Nếu muốn đổi, mô tả phần cần sửa rồi tạo lại.
                   </p>
                   {showEdit && (
-                    <label className="mt-4 block text-sm font-bold text-gray-700">
+                    <label className="mt-4 block text-sm font-bold text-slate-700">
                       Nội dung cần chỉnh
                       <textarea
                         value={changes}
@@ -475,11 +471,11 @@ export default function AiWorkoutPage() {
             )}
 
             {nextStep === 'view_routine' && routine && (
-              <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
                 <h2 className="text-lg font-black text-balance">{routine.planName}</h2>
-                <p className="mt-2 text-sm text-pretty text-gray-600">{routine.message}</p>
+                <p className="mt-2 text-sm text-pretty text-slate-600">{routine.message}</p>
                 {!routine.today?.length && !routine.upcoming?.length ? (
-                  <p className="mt-4 text-sm text-gray-500">Chưa có buổi tập từ hôm nay trở đi. Yêu cầu tạo lại giáo án ở bên dưới.</p>
+                  <p className="mt-4 text-sm text-slate-500">Chưa có buổi tập từ hôm nay trở đi. Yêu cầu tạo lại gợi ý ở bên dưới.</p>
                 ) : (
                   <>
                     <ExerciseList title="Hôm nay" items={routine.today} />
@@ -492,12 +488,12 @@ export default function AiWorkoutPage() {
             {nextStep === 'view_routine' && access.savedPlan && <WorkoutPlanView plan={access.savedPlan} />}
 
             {nextStep === 'view_routine' && (
-              <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-                <h2 className="text-lg font-black text-balance">Tạo lại giáo án</h2>
-                <p className="mt-2 text-sm text-pretty text-gray-600">
-                  Nêu phần muốn đổi. Giáo án mới vẫn chờ bạn lưu trước khi thay lịch đang có.
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+                <h2 className="text-lg font-black text-balance">Tạo lại gợi ý tập</h2>
+                <p className="mt-2 text-sm text-pretty text-slate-600">
+                  Nêu phần muốn đổi. Gợi ý mới vẫn chờ bạn lưu trước khi thay lịch đang có.
                 </p>
-                <label className="mt-4 block text-sm font-bold text-gray-700">
+                <label className="mt-4 block text-sm font-bold text-slate-700">
                   Lý do tạo lại
                   <textarea
                     value={regenerateNote}
@@ -520,13 +516,13 @@ export default function AiWorkoutPage() {
             )}
           </div>
         )}
-    </WorkspaceShell>
+    </>
   );
 }
 
 function stepHint(nextStep) {
-  if (nextStep === 'input_goals') return 'Đã có BMI. Nhập mục tiêu để hệ thống lập giáo án.';
-  if (nextStep === 'decide') return 'Giáo án đang chờ bạn lưu hoặc yêu cầu chỉnh.';
-  if (nextStep === 'view_routine') return 'Giáo án đã nằm trên lịch cá nhân.';
+  if (nextStep === 'input_goals') return 'Đã có BMI. Nhập mục tiêu để nhận gợi ý tập.';
+  if (nextStep === 'decide') return 'Gợi ý tập đang chờ bạn lưu hoặc yêu cầu chỉnh.';
+  if (nextStep === 'view_routine') return 'Gợi ý tập đã nằm trên lịch cá nhân.';
   return 'Bắt đầu bằng chiều cao và cân nặng.';
 }
