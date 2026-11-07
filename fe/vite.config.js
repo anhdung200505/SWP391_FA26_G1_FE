@@ -11,11 +11,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://anhduysport.loca.lt',
+        target: 'http://localhost:5080',
         changeOrigin: true,
-        headers: {
-          'bypass-tunnel-reminder': 'true',
-        },
       },
     },
   },
