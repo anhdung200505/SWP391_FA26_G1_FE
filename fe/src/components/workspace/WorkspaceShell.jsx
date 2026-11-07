@@ -152,7 +152,11 @@ export default function WorkspaceShell({
 // Group menu cấp 2 (nếu có)
 function NavGroup({ item }) {
   const { pathname } = useLocation();
-  const childActive = item.children.some((child) => pathname === child.to.split('#')[0]);
+  // Khớp cả trang con sâu hơn (vd. /quan-ly/lop-hoc/moi vẫn thuộc nhóm của /quan-ly/lop-hoc).
+  const childActive = item.children.some((child) => {
+    const base = child.to.split('#')[0];
+    return pathname === base || pathname.startsWith(`${base}/`);
+  });
   const [manual, setManual] = useState(null);
   const expanded = manual && manual.for === childActive ? manual.value : childActive;
   const panelId = `nav-group-${item.id}`;
