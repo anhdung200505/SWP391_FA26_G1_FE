@@ -1,6 +1,8 @@
 import { readSession, clearSession } from '../auth/session';
 import { notifyDataChanged } from './dataChanged';
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+
 // Hàm gửi request dùng chung
 async function request(path, options = {}) {
   const { headers, ...rest } = options;
@@ -8,11 +10,11 @@ async function request(path, options = {}) {
 
   let response;
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${API_BASE_URL}/api${path}`, {
       ...rest,
       headers: {
         'Content-Type': 'application/json',
-        'accept': 'application/json',
+        accept: 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(headers || {}),
       },
@@ -93,11 +95,19 @@ export function resolveMemberSupport(requestId, note) {
 }
 
 export function resolveAccountIssue(requestId, note) {
-  return handleSupportRequest(requestId, { action: 'resolve', category: 'account_issue', note });
+  return handleSupportRequest(requestId, {
+    action: 'resolve',
+    category: 'account_issue',
+    note,
+  });
 }
 
 export function provideConsultation(requestId, note) {
-  return handleSupportRequest(requestId, { action: 'resolve', category: 'consultation', note });
+  return handleSupportRequest(requestId, {
+    action: 'resolve',
+    category: 'consultation',
+    note,
+  });
 }
 
 export function escalateSupportRequest(requestId, reason) {
@@ -125,10 +135,12 @@ export function submitAdminDecision(requestId, decision, note = '') {
 export function readSupportRequestType(reason) {
   const text = String(reason || '').replace(/\r/g, '');
   const line = text.split('\n').find((row) => row.startsWith('Loại:'));
+
   if (!line) {
     const older = text.match(/Học viên chọn loại\s+(.+?)\./);
     return older ? older[1].trim() : '';
   }
+
   return line.slice('Loại:'.length).trim();
 }
 
@@ -136,5 +148,6 @@ export function readEscalationReason(reason) {
   const text = String(reason || '');
   const marker = 'Lễ tân chuyển lên vì ngoài phạm vi:';
   const index = text.indexOf(marker);
+
   return index >= 0 ? text.slice(index + marker.length).trim() : '';
 }
