@@ -10,19 +10,30 @@ public sealed record ReceptionMemberDto(
 // keyword: mã học viên (user id), email hoặc số điện thoại 10 số.
 public sealed record ReceptionCheckInRequest(string? Keyword);
 
-public sealed record ReceptionCheckInDto(
+// Status: inside (đang ở trong), left (đã check-out), auto_closed (hôm trước quên check-out, tự đóng 00:00), voided (đã hoàn tác).
+public sealed record CenterCheckInDto(
+    string Id,
     string MemberUserId,
     string FullName,
     string Phone,
-    string ClassId,
-    string ClassName,
-    string SessionId,
-    string SessionLabel,
-    string StartTime,
-    string EndTime,
+    string? Email,
+    string? MembershipName,
+    DateOnly? MembershipEndDate,
     DateTime CheckInAt,
-    bool AlreadyCheckedIn,
-    string Message);
+    DateTime? CheckOutAt,
+    string Status,
+    string CheckedInBy,
+    string? VoidReason,
+    DateTime? VoidedAt);
+
+// Outcome: checked_in (tạo lượt mới), already_inside (đang ở trong, chưa check-out), duplicate (vừa check-in dưới 10 phút).
+public sealed record CenterCheckInResultDto(string Outcome, CenterCheckInDto CheckIn, string Message);
+
+public sealed record CenterCheckInSummaryDto(int Total, int UniqueMembers, int Inside, int Voided);
+
+public sealed record CenterCheckInListDto(DateOnly Date, CenterCheckInSummaryDto Summary, IReadOnlyList<CenterCheckInDto> Items);
+
+public sealed record VoidCheckInRequest(string? Reason);
 
 // paymentMethod: cash, transfer hoặc card.
 public sealed record ConfirmCounterPaymentRequest(string PaymentMethod);

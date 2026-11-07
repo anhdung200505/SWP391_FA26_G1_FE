@@ -381,13 +381,13 @@ function ChangeClassCoachModal({ item, onClose, onChanged }) {
             </label>
 
             <label className="block space-y-1.5">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Lý do (gửi kèm thông báo cho học viên)</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Ghi chú (xuống dòng trong thông báo)</span>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
                 maxLength={500}
-                placeholder="VD: HLV cũ chuyển công tác, HLV mới tiếp nhận lớp đến hết khóa."
+                placeholder="VD: HLV cũ chuyển công tác. Hệ thống sẽ ghi đây là HLV thay thế, ghi chú này nằm ở dòng dưới."
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-800 outline-none focus:border-[#e31b23] resize-none"
               />
             </label>

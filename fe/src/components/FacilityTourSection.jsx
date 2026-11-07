@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { registrationOnly, registrationOnlyMessage } from '../auth/destination';
 import { useAuth } from '../context/AuthContext';
 import { createEnrollmentConsultation } from '../api/managementApi';
 
 export default function FacilityTourSection({ formRef }) {
   const { user } = useAuth();
   const sectionRef = useRef(null);
-  const [actionNotice, setActionNotice] = useState('');
+  
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
     email: '',
+    age: '',
     date: '',
     groupSize: '10',
     notes: '',
@@ -19,6 +19,25 @@ export default function FacilityTourSection({ formRef }) {
   const [errors, setErrors] = useState({});
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // State quản lý Modal thông báo giới hạn quyền dành cho Nhân viên/HLV/Lễ tân
+  const [showStaffRestrictionModal, setShowStaffRestrictionModal] = useState(false);
+
+  // Lấy role của user hiện tại
+  const userRole = (user?.role || user?.roleName || '').toUpperCase();
+  const isMemberOrGuest = !user || userRole === 'MEMBER' || userRole === 'HỌC VIÊN';
+
+  // Tự động điền thông tin nếu user đã đăng nhập
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        fullName: prev.fullName || user.fullName || user.userName || '',
+        phone: prev.phone || user.phone || '',
+        email: prev.email || user.email || '',
+      }));
+    }
+  }, [user]);
 
   // Observer cho hiệu ứng Fade-In-Up
   useEffect(() => {
@@ -50,11 +69,13 @@ export default function FacilityTourSection({ formRef }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (registrationOnly(user)) {
-      setActionNotice(registrationOnlyMessage);
+
+    // Bật Popup nếu tài khoản là Nhân viên/HLV/Lễ tân/Quản lý/Admin
+    if (!isMemberOrGuest) {
+      setShowStaffRestrictionModal(true);
       return;
     }
-    setActionNotice('');
+
     const newErrors = {};
 
     if (!formData.fullName.trim()) {
@@ -65,7 +86,17 @@ export default function FacilityTourSection({ formRef }) {
     if (!formData.phone.trim()) {
       newErrors.phone = 'Vui lòng nhập số điện thoại';
     } else if (!phoneRegex.test(formData.phone)) {
-      newErrors.phone = 'Số điện thoại không hợp lệ';
+      newErrors.phone = 'Số điện thoại không hợp lệ (gồm 10 chữ số)';
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = 'Vui lòng nhập email';
+    }
+
+    if (!formData.age || String(formData.age).trim() === '') {
+      newErrors.age = 'Vui lòng nhập độ tuổi học viên';
+    } else if (Number(formData.age) < 1 || Number(formData.age) > 99) {
+      newErrors.age = 'Độ tuổi học viên từ 1 đến 99.';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -77,11 +108,11 @@ export default function FacilityTourSection({ formRef }) {
     setIsLoading(true);
 
     try {
-      // Gom nhóm các thông tin tham quan vào note
+      // Gom nhóm các thông tin tham quan chi tiết vào phần note
       const tourNoteDetails = [
         formData.date ? `Ngày dự kiến: ${formData.date}` : '',
-        formData.groupSize ? `Số lượng: ${formData.groupSize} người` : '',
-        formData.notes ? `Nhu cầu: ${formData.notes}` : '',
+        formData.groupSize ? `Số lượng đoàn: ${formData.groupSize} người` : '',
+        formData.notes ? `Ghi chú nhu cầu: ${formData.notes}` : '',
       ]
         .filter(Boolean)
         .join(' | ');
@@ -90,14 +121,15 @@ export default function FacilityTourSection({ formRef }) {
         fullName: formData.fullName.trim(),
         phone: formData.phone.trim(),
         email: formData.email.trim(),
-        sports: 'Đăng ký Tham quan Cơ sở',
+        sports: 'Tham quan cơ sở vật chất',
+        age: Number(formData.age),
         title: 'Đăng ký tham quan cơ sở vật chất',
-        note: tourNoteDetails,
+        note: tourNoteDetails || 'Khách đăng ký lịch hẹn khảo sát trực tiếp',
       });
 
       setIsSuccess(true);
     } catch (requestError) {
-      setActionNotice(requestError.message || 'Gửi đăng ký tham quan thất bại. Vui lòng thử lại.');
+      alert(requestError.message || 'Gửi đăng ký tham quan thất bại. Vui lòng thử lại.');
     } finally {
       setIsLoading(false);
     }
@@ -260,7 +292,15 @@ export default function FacilityTourSection({ formRef }) {
                 <button
                   onClick={() => {
                     setIsSuccess(false);
-                    setFormData({ fullName: '', phone: '', email: '', date: '', groupSize: '10', notes: '' });
+                    setFormData({
+                      fullName: user?.fullName || user?.userName || '',
+                      phone: user?.phone || '',
+                      email: user?.email || '',
+                      age: '',
+                      date: '',
+                      groupSize: '10',
+                      notes: '',
+                    });
                   }}
                   className="mt-5 text-xs font-bold text-[#e31b23] underline hover:text-black cursor-pointer"
                 >
@@ -269,9 +309,6 @@ export default function FacilityTourSection({ formRef }) {
               </div>
             ) : (
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
-                {actionNotice && (
-                  <p className="rounded-sm bg-[#fff2f2] px-3 py-2 text-xs font-bold text-[#b1131a]">{actionNotice}</p>
-                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
@@ -312,18 +349,43 @@ export default function FacilityTourSection({ formRef }) {
 
                 <div>
                   <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
-                    EMAIL
+                    EMAIL <span className="text-[#e31b23]">*</span>
                   </label>
                   <input
                     type="email"
                     placeholder="email@example.com"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+                    }}
                     className="w-full bg-[#f2f4f8] text-gray-900 placeholder-gray-400 px-4 py-3 text-sm font-medium border border-transparent focus:bg-white focus:border-gray-400 focus:outline-none"
                   />
+                  {errors.email && (
+                    <p className="text-[#e31b23] text-xs font-semibold mt-1">⚠️ {errors.email}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
+                      ĐỘ TUỔI HỌC VIÊN <span className="text-[#e31b23]">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="VD: 18"
+                      value={formData.age}
+                      onChange={(e) => {
+                        setFormData({ ...formData, age: e.target.value });
+                        if (errors.age) setErrors((prev) => ({ ...prev, age: '' }));
+                      }}
+                      className="w-full bg-[#f2f4f8] text-gray-900 placeholder-gray-400 px-4 py-3 text-sm font-medium border border-transparent focus:bg-white focus:border-gray-400 focus:outline-none"
+                    />
+                    {errors.age && (
+                      <p className="text-[#e31b23] text-xs font-semibold mt-1">⚠️ {errors.age}</p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
                       NGÀY DỰ KIẾN
@@ -335,19 +397,19 @@ export default function FacilityTourSection({ formRef }) {
                       className="w-full bg-[#f2f4f8] text-gray-800 px-4 py-3 text-sm font-medium border border-transparent focus:bg-white focus:border-gray-400 focus:outline-none"
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
-                      SỐ LƯỢNG
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="10"
-                      value={formData.groupSize}
-                      onChange={(e) => setFormData({ ...formData, groupSize: e.target.value })}
-                      className="w-full bg-[#f2f4f8] text-gray-900 placeholder-gray-400 px-4 py-3 text-sm font-medium border border-transparent focus:bg-white focus:border-gray-400 focus:outline-none"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-[11px] font-black uppercase text-gray-700 mb-1">
+                    SỐ LƯỢNG (NGƯỜI)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="10"
+                    value={formData.groupSize}
+                    onChange={(e) => setFormData({ ...formData, groupSize: e.target.value })}
+                    className="w-full bg-[#f2f4f8] text-gray-900 placeholder-gray-400 px-4 py-3 text-sm font-medium border border-transparent focus:bg-white focus:border-gray-400 focus:outline-none"
+                  />
                 </div>
 
                 <div>
@@ -368,7 +430,7 @@ export default function FacilityTourSection({ formRef }) {
                     type="submit"
                     disabled={isLoading}
                     className={`w-full bg-[#e31b23] hover:bg-red-700 text-white font-black text-sm md:text-base py-3.5 transform -skew-x-6 transition-all duration-200 shadow-xl cursor-pointer ${
-                      isLoading ? 'opacity-80 cursor-not-allowed' : 'hover:scale-[1.01]'
+                      isLoading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-[1.01]'
                     }`}
                   >
                     <span className="transform skew-x-6 flex items-center justify-center space-x-2">
@@ -396,6 +458,29 @@ export default function FacilityTourSection({ formRef }) {
           </div>
         </div>
       </div>
+
+      {/* MODAL POPUP CẢNH BÁO DÀNH CHO NHÂN VIÊN/HLV/LỄ TÂN/ADMIN */}
+      {showStaffRestrictionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-fadeIn">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-2xl text-center space-y-4 border-t-4 border-[#e31b23]">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-[#e31b23] text-xl font-bold">
+              ⚠️
+            </div>
+            <h3 className="text-base font-black text-gray-900 uppercase">
+              KHU VỰC DÀNH CHO KHÁCH HÀNG
+            </h3>
+            <p className="text-xs text-gray-600 font-medium leading-relaxed">
+              Tính năng đăng ký tham quan chỉ dành cho Khách hàng và Học viên. Tài khoản nội bộ (Nhân viên / HLV / Lễ tân / Quản lý) không thể thực hiện thao tác này.
+            </p>
+            <button
+              onClick={() => setShowStaffRestrictionModal(false)}
+              className="w-full bg-[#12151e] hover:bg-black text-white font-extrabold text-xs py-2.5 rounded-sm transition-colors uppercase tracking-wider cursor-pointer"
+            >
+              Đã hiểu
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

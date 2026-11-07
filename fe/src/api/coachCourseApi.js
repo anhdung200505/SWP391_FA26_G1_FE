@@ -64,6 +64,17 @@ export function getEvaluations(classId) {
   return request(classPath(classId, '/evaluations'));
 }
 
+export function getIntake(classId) {
+  return request(classPath(classId, '/intake'));
+}
+
+export function saveIntake(classId, payload) {
+  return request(classPath(classId, '/intake'), {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function saveEvaluation(classId, payload) {
   return request(classPath(classId, '/evaluations'), {
     method: 'PUT',
@@ -99,17 +110,17 @@ export function getCourseAi(classId) {
   return request(classPath(classId, '/ai'));
 }
 
-export function generateCourseAi(classId, brief) {
+export function generateCourseAi(classId, brief, sessionId) {
   return request(classPath(classId, '/ai/generate'), {
     method: 'POST',
-    body: JSON.stringify({ brief }),
+    body: JSON.stringify({ brief, sessionId }),
   });
 }
 
-export function regenerateCourseAi(classId, brief, changes) {
+export function regenerateCourseAi(classId, brief, changes, sessionId) {
   return request(classPath(classId, '/ai/regenerate'), {
     method: 'POST',
-    body: JSON.stringify({ brief, changes }),
+    body: JSON.stringify({ brief, changes, sessionId }),
   });
 }
 

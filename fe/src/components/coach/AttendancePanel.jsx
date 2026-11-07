@@ -8,9 +8,26 @@ const MARKS = [
   { id: 'absent', label: 'Vắng' },
 ];
 
+function todayIso() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function sessionDay(session) {
+  return String(session?.sessionDate || '').slice(0, 10);
+}
+
+function pickSession(sessions) {
+  const today = todayIso();
+  const due = sessions.filter((session) => sessionDay(session) && sessionDay(session) <= today);
+  return (due.at(-1) || sessions[0])?.sessionId || '';
+}
+
 export default function AttendancePanel({ classId, sessions }) {
   const openSessions = (sessions || []).filter((session) => session.status !== 'cancelled');
-  const [sessionId, setSessionId] = useState(openSessions[0]?.sessionId || '');
+  const [sessionId, setSessionId] = useState(() => pickSession(openSessions));
   const [sheet, setSheet] = useState(null);
   const [marks, setMarks] = useState({});
   const [loading, setLoading] = useState(false);
@@ -19,7 +36,7 @@ export default function AttendancePanel({ classId, sessions }) {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    setSessionId(openSessions[0]?.sessionId || '');
+    setSessionId(pickSession(openSessions));
   }, [classId]);
 
   useEffect(() => {
@@ -71,12 +88,12 @@ export default function AttendancePanel({ classId, sessions }) {
   };
 
   if (!openSessions.length) {
-    return <p className="rounded-3xl border border-gray-200 bg-white p-5 text-sm text-gray-600">Lớp chưa có buổi để điểm danh.</p>;
+    return <p className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 text-sm text-slate-600">Lớp chưa có buổi để điểm danh.</p>;
   }
 
   return (
-    <section className="rounded-3xl border border-gray-200 bg-white p-5">
-      <label className="block text-sm font-bold text-gray-700">
+    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+      <label className="block text-sm font-bold text-slate-700">
         Buổi học
         <select value={sessionId} onChange={(event) => setSessionId(event.target.value)} className={fieldClass}>
           {openSessions.map((session) => (
@@ -87,14 +104,18 @@ export default function AttendancePanel({ classId, sessions }) {
         </select>
       </label>
 
-      {loading && <p className="mt-4 text-sm text-gray-500">Đang tải sĩ số...</p>}
-      {error && <p className="mt-4 text-sm font-semibold text-[#b1131a]">{error}</p>}
-      {notice && <p className="mt-4 text-sm font-semibold text-emerald-800">{notice}</p>}
+      {loading && <p className="mt-4 text-sm text-slate-500">Đang tải sĩ số...</p>}
+      {error && <p className="mt-4 text-sm font-semibold text-red-700">{error}</p>}
+      {notice && <p className="mt-4 text-sm font-semibold text-emerald-700">{notice}</p>}
+
+      {sheet && !loading && !sheet.canEdit && sheet.lockReason && (
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{sheet.lockReason}</p>
+      )}
 
       {sheet && !loading && (
-        <ul className="mt-4 divide-y divide-gray-100">
+        <ul className="mt-4 divide-y divide-slate-100">
           {(sheet.rows || []).length === 0 && (
-            <li className="py-3 text-sm text-gray-600">Lớp chưa có học viên để điểm danh.</li>
+            <li className="py-3 text-sm text-slate-600">Lớp chưa có học viên để điểm danh.</li>
           )}
           {(sheet.rows || []).map((row) => (
             <li key={row.memberUserId} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -106,9 +127,10 @@ export default function AttendancePanel({ classId, sessions }) {
                     <button
                       key={mark.id}
                       type="button"
+                      disabled={!sheet.canEdit}
                       onClick={() => setMarks((current) => ({ ...current, [row.memberUserId]: mark.id }))}
-                      className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                        active ? 'bg-[#12141d] text-white' : 'bg-[#f4f5f7] text-gray-600'
+                      className={`rounded-full px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
+                        active ? 'bg-[#12141d] text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                       }`}
                     >
                       {mark.label}
@@ -121,7 +143,7 @@ export default function AttendancePanel({ classId, sessions }) {
         </ul>
       )}
 
-      <button type="button" onClick={submit} disabled={saving || loading || !sheet?.rows?.length} className={`${primaryButtonClass} mt-4`}>
+      <button type="button" onClick={submit} disabled={saving || loading || !sheet?.rows?.length || !sheet?.canEdit} className={`${primaryButtonClass} mt-4`}>
         {saving ? 'Đang lưu...' : 'Lưu điểm danh'}
       </button>
     </section>

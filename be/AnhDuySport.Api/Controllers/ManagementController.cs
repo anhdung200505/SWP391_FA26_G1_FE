@@ -14,6 +14,12 @@ public class ManagementController(ManagementDashboardService dashboard) : Contro
     public async Task<ActionResult<DashboardDto>> AccessDashboard() =>
         Ok(await dashboard.AccessDashboardAsync());
 
+    [HttpGet("revenue")]
+    [EndpointSummary("Doanh thu khóa học và hội viên")]
+    [EndpointDescription("Hai phần riêng. Course là học phí lớp đã thanh toán. Membership là tiền mua, gia hạn hoặc lên cấp gói. Gói tặng kèm lớp không tính.")]
+    public async Task<ActionResult<RevenueReportDto>> Revenue() =>
+        Ok(await dashboard.ListRevenueAsync());
+
     [HttpGet("ai-token-usage")]
     [EndpointSummary("Xem token AI đã dùng")]
     [EndpointDescription("Quản trị trung tâm xem hạn mức AI của từng gói, token từng học viên đang dùng gói đó, và tổng token 12 tháng gần nhất. packageId dùng để chỉnh hạn mức của cả gói.")]

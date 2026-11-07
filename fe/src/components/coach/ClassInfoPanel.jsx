@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { formatDate, formatTime } from './coachUi';
 import WeekSlotTable, { formatClock, toIso, weekContaining } from '../schedule/WeekSlotTable';
+import SessionCoachLine from '../schedule/SessionCoachLine';
+import SessionRoomLine from '../schedule/SessionRoomLine';
 
 const BADGES = {
   cancelled: { label: 'Đã hủy', className: 'border-red-200 bg-red-50 text-[#e31b23]' },
@@ -38,42 +40,52 @@ export default function ClassInfoPanel({ detail }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-3xl border border-gray-200 bg-white p-5">
-          <h2 className="text-lg font-black text-balance">Thông tin lớp</h2>
-          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+          <h2 className="text-lg font-black text-balance text-slate-900">Thông tin lớp</h2>
+          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm sm:grid-cols-4">
             <div>
-              <dt className="text-gray-500">Phòng</dt>
+              <dt className="text-slate-500">Phòng</dt>
               <dd className="font-bold">{detail.roomName || 'Chưa xếp phòng'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Sĩ số</dt>
+              <dt className="text-slate-500">Sĩ số</dt>
               <dd className="font-bold tabular-nums">{detail.enrolledCount}/{detail.capacity ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Bắt đầu</dt>
+              <dt className="text-slate-500">Bắt đầu</dt>
               <dd className="font-bold tabular-nums">{formatDate(detail.startDate) || '—'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Kết thúc</dt>
+              <dt className="text-slate-500">Kết thúc</dt>
               <dd className="font-bold tabular-nums">{formatDate(detail.endDate) || '—'}</dd>
             </div>
           </dl>
         </section>
 
-        <section className="rounded-3xl border border-gray-200 bg-white p-5">
-          <h2 className="text-lg font-black text-balance">Học viên đang học</h2>
-          {detail.roster?.length ? (
-            <ul className="mt-4 divide-y divide-gray-100">
-              {detail.roster.map((member) => (
-                <li key={member.memberUserId} className="py-2.5 text-sm font-semibold">
-                  {member.memberName}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 text-sm text-pretty text-gray-600">Chưa có học viên ghi danh.</p>
-          )}
-        </section>
+        <details className="group/roster rounded-3xl border border-slate-200 bg-white shadow-xs">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-3xl p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23] sm:p-6 [&::-webkit-details-marker]:hidden">
+            <span>
+              <span className="block text-lg font-black text-balance text-slate-900">Học viên đang học</span>
+              <span className="mt-0.5 block text-sm text-slate-500 tabular-nums">{detail.roster?.length || 0} học viên</span>
+            </span>
+            <svg className="size-5 shrink-0 text-slate-400 transition-transform group-open/roster:rotate-180" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </summary>
+          <div className="border-t border-slate-100 px-5 pb-3 sm:px-6">
+            {detail.roster?.length ? (
+              <ul className="divide-y divide-slate-100">
+                {detail.roster.map((member) => (
+                  <li key={member.memberUserId} className="py-2.5 text-sm font-semibold text-slate-800">
+                    {member.memberName}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="py-4 text-sm text-pretty text-slate-600">Chưa có học viên ghi danh.</p>
+            )}
+          </div>
+        </details>
       </div>
 
       <WeekSlotTable
@@ -84,19 +96,22 @@ export default function ClassInfoPanel({ detail }) {
           const badge = BADGES[badgeKey(session, now)];
           const cancelled = session.status === 'cancelled';
           return (
-            <div className={cancelled ? 'text-gray-400' : 'text-gray-900'}>
+            <div className={cancelled ? 'text-slate-400' : 'text-slate-900'}>
               <p className={`font-semibold leading-snug ${cancelled ? 'line-through' : ''}`}>{detail.className}</p>
-              <p className="mt-1 text-xs text-gray-500 tabular-nums">
+              <p className="mt-1 text-xs text-slate-500 tabular-nums">
                 {formatClock(session.startTime)}–{formatClock(session.endTime)}
               </p>
-              <p className="text-xs text-gray-500">{detail.roomName || 'Chưa xếp phòng'}</p>
-              {session.sessionNo ? <p className="text-xs text-gray-500 tabular-nums">Buổi {session.sessionNo}</p> : null}
+              <SessionRoomLine session={session} fallback={detail.roomName || 'Chưa xếp phòng'} />
+              {session.sessionNo ? <p className="text-xs text-slate-500 tabular-nums">Buổi {session.sessionNo}</p> : null}
+              {session.coachChange && <SessionCoachLine session={session} />}
               {badge && (
                 <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
                   {badge.label}
                 </span>
               )}
-              {session.note && <p className="mt-1 text-xs text-pretty text-gray-600">{session.note}</p>}
+              {session.note && (cancelled || !(session.coachChange || session.roomChanged) || session.note.startsWith('Buổi bù')) && (
+                <p className="mt-1 text-xs text-pretty whitespace-pre-line text-slate-600">{session.note}</p>
+              )}
             </div>
           );
         }}

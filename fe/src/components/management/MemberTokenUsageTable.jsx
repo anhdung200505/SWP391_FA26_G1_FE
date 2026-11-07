@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAiTokenUsage } from '../../api/managementApi';
+import {
+  estimateTokenCost,
+  formatEstimatedVnd,
+  GEMINI_MODEL,
+  INPUT_USD_PER_MILLION,
+  loadUsdVndRate,
+  OUTPUT_USD_PER_MILLION,
+} from './aiTokenCost';
 
 function formatCount(value) {
   return Number(value || 0).toLocaleString('vi-VN');
@@ -28,6 +36,7 @@ function foldName(value) {
 function TokenMonthChart({ months, caption }) {
   const rows = Array.isArray(months) ? months : [];
   const max = Math.max(1, ...rows.map((item) => Number(item.tokensUsed) || 0));
+  const monthTokens = rows.reduce((sum, item) => sum + (Number(item.tokensUsed) || 0), 0);
   return (
     <figure className="border-b border-gray-100 px-5 py-5 sm:px-6">
       <figcaption className="text-sm font-bold text-balance text-slate-900">{caption}</figcaption>
@@ -50,6 +59,9 @@ function TokenMonthChart({ months, caption }) {
               );
             })}
           </div>
+          <p className="mt-3 text-sm text-pretty text-gray-500 tabular-nums">
+            12 tháng trên biểu đồ: {formatCount(monthTokens)} token.
+          </p>
           <table className="sr-only">
             <caption>{caption}</caption>
             <thead>
@@ -73,20 +85,81 @@ function TokenMonthChart({ months, caption }) {
   );
 }
 
-function MemberRows({ members }) {
+function MemberCost({ tokens, rate }) {
+  return <span className="font-semibold">{formatEstimatedVnd(estimateTokenCost(tokens, rate))}</span>;
+}
+
+function MoneyMonthChart({ months, caption, vndPerUsd }) {
+  const rows = Array.isArray(months) ? months : [];
+  const costs = rows.map((item) => estimateTokenCost(item.tokensUsed, vndPerUsd));
+  const max = Math.max(1, ...costs.map((item) => Number(item.vndEstimate) || 0));
+  const total = costs.reduce((sum, item) => sum + (Number(item.vndEstimate) || 0), 0);
+  const totalLabel = formatEstimatedVnd({ vndEstimate: vndPerUsd == null ? null : total });
+  return (
+    <figure className="px-5 py-5 sm:px-6">
+      <figcaption className="text-sm font-bold text-balance text-slate-900">{caption}</figcaption>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-pretty text-gray-500">Chưa có chi phí theo tháng.</p>
+      ) : (
+        <>
+          <div className="mt-4 flex h-44 items-end gap-2" aria-hidden="true">
+            {rows.map((item, index) => {
+              const amount = Number(costs[index].vndEstimate) || 0;
+              const height = Math.round((amount / max) * 100);
+              return (
+                <div key={`${item.year}-${item.month}-vnd`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                  <span className="max-w-full truncate text-[10px] tabular-nums text-gray-500">
+                    {amount > 0 ? Math.round(amount).toLocaleString('vi-VN') : ''}
+                  </span>
+                  <div className="flex h-28 w-full items-end rounded-t bg-gray-100">
+                    <div className="w-full rounded-t bg-[#12141d]" style={{ height: `${Math.max(height, amount > 0 ? 4 : 0)}%` }} />
+                  </div>
+                  <span className="truncate text-xs text-gray-500">{monthLabel(item.year, item.month)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-sm text-pretty text-gray-500 tabular-nums">
+            12 tháng trên biểu đồ: {totalLabel}. Mỗi cột là mức giữa giá đầu vào và giá đầu ra, đã quy sang đồng.
+          </p>
+          <table className="sr-only">
+            <caption>{caption}</caption>
+            <thead>
+              <tr>
+                <th>Tháng</th>
+                <th>Chi phí ước tính</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item, index) => (
+                <tr key={`${item.year}-${item.month}-vnd-text`}>
+                  <td>{monthLabel(item.year, item.month)} {item.year}</td>
+                  <td>{formatEstimatedVnd(costs[index])}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </figure>
+  );
+}
+
+function MemberRows({ members, vndPerUsd }) {
   if (members.length === 0) {
     return <p className="mt-4 text-sm text-pretty text-gray-500">Không có học viên khớp với tên này.</p>;
   }
   return (
     <div className="mt-4 max-h-96 overflow-auto">
-      <table className="w-full min-w-[40rem] text-left text-sm">
+      <table className="w-full min-w-[52rem] text-left text-sm">
         <thead className="sticky top-0 bg-white">
           <tr className="border-b border-gray-100 text-gray-500">
             <th className="py-2 pr-3 font-medium">Học viên</th>
             <th className="py-2 pr-3 font-medium">Gói</th>
             <th className="py-2 pr-3 font-medium">Lượt tạo lại</th>
-            <th className="py-2 pr-3 font-medium">Token kỳ này</th>
-            <th className="py-2 font-medium">Tổng token</th>
+            <th className="py-2 pr-3 font-medium">Token kỳ hội viên</th>
+            <th className="py-2 pr-3 font-medium">Tổng token</th>
+            <th className="py-2 font-medium">Chi phí ước tính</th>
           </tr>
         </thead>
         <tbody>
@@ -105,7 +178,10 @@ function MemberRows({ members }) {
                 {formatCount(member.periodTokensUsed)}
                 <span className="text-gray-400"> / {formatCount(member.tokenLimit)}</span>
               </td>
-              <td className="py-2.5 font-semibold tabular-nums text-slate-900">{formatCount(member.tokensUsed)}</td>
+              <td className="py-2.5 pr-3 font-semibold tabular-nums text-slate-900">{formatCount(member.tokensUsed)}</td>
+              <td className="py-2.5 tabular-nums text-slate-900">
+                <MemberCost tokens={member.tokensUsed} rate={vndPerUsd} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -114,7 +190,7 @@ function MemberRows({ members }) {
   );
 }
 
-function SelectedMember({ member }) {
+function SelectedMember({ member, vndPerUsd }) {
   const share = usedShare(member.periodTokensUsed, member.tokenLimit);
   return (
     <dl className="mt-4 grid gap-4 sm:grid-cols-4">
@@ -131,14 +207,14 @@ function SelectedMember({ member }) {
         </dd>
       </div>
       <div>
-        <dt className="text-sm text-gray-500">Token kỳ này</dt>
+        <dt className="text-sm text-gray-500">Token kỳ hội viên</dt>
         <dd className="mt-1 font-semibold tabular-nums text-slate-900">
           {formatCount(member.periodTokensUsed)}
           <span className="font-medium text-gray-400"> / {formatCount(member.tokenLimit)}</span>
         </dd>
         <div
           role="meter"
-          aria-label={`Token kỳ này của ${member.memberName}`}
+          aria-label={`Token kỳ hội viên của ${member.memberName}`}
           aria-valuemin={0}
           aria-valuemax={member.tokenLimit || 0}
           aria-valuenow={member.periodTokensUsed || 0}
@@ -150,8 +226,40 @@ function SelectedMember({ member }) {
       <div>
         <dt className="text-sm text-gray-500">Tổng token</dt>
         <dd className="mt-1 text-lg font-black tabular-nums text-slate-900">{formatCount(member.tokensUsed)}</dd>
+        <dd className="mt-1 text-sm font-semibold tabular-nums text-slate-700">
+          <MemberCost tokens={member.tokensUsed} rate={vndPerUsd} />
+        </dd>
       </div>
     </dl>
+  );
+}
+
+function TokenCostPanel({ lifetimeTokens, monthTokens, subject, vndPerUsd, rateFallback }) {
+  const lifetime = estimateTokenCost(lifetimeTokens, vndPerUsd);
+  const month = estimateTokenCost(monthTokens, vndPerUsd);
+  const rateLabel = vndPerUsd == null
+    ? 'Đang lấy tỷ giá sang đồng.'
+    : rateFallback
+      ? `Chưa lấy được tỷ giá mới, tạm tính 1 USD = ${formatCount(Math.round(vndPerUsd))} ₫.`
+      : `Tỷ giá tham chiếu hôm nay: 1 USD = ${formatCount(Math.round(vndPerUsd))} ₫.`;
+  const who = subject ? ` của ${subject}` : '';
+  return (
+    <section className="border-b border-gray-100 px-5 py-5 sm:px-6" aria-label="Quy đổi token ra tiền">
+      <h3 className="text-sm font-black text-slate-900">Chi phí ước tính phải trả cho AI</h3>
+      <p className="mt-1 max-w-3xl text-sm text-pretty text-gray-500">
+        Số đồng là mức giữa giá đầu vào ({INPUT_USD_PER_MILLION.toLocaleString('vi-VN', { minimumFractionDigits: 2 })} USD) và giá đầu ra ({OUTPUT_USD_PER_MILLION.toLocaleString('vi-VN', { minimumFractionDigits: 2 })} USD) cho 1 triệu token của {GEMINI_MODEL}, gồm token suy luận. {rateLabel}
+      </p>
+      <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl bg-gray-50 px-4 py-3">
+          <dt className="text-sm text-gray-500">Tổng chi phí{who}</dt>
+          <dd className="mt-1 text-xl font-black tabular-nums text-slate-900">{formatEstimatedVnd(lifetime)}</dd>
+        </div>
+        <div className="rounded-2xl bg-gray-50 px-4 py-3">
+          <dt className="text-sm text-gray-500">Chi phí tháng này{who}</dt>
+          <dd className="mt-1 text-xl font-black tabular-nums text-slate-900">{formatEstimatedVnd(month)}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 
@@ -162,6 +270,8 @@ export default function MemberTokenUsageTable() {
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedId, setSelectedId] = useState('');
   const [nameQuery, setNameQuery] = useState('');
+  const [vndPerUsd, setVndPerUsd] = useState(null);
+  const [rateFallback, setRateFallback] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -181,6 +291,18 @@ export default function MemberTokenUsageTable() {
       ignore = true;
     };
   }, [reloadKey]);
+
+  useEffect(() => {
+    let ignore = false;
+    loadUsdVndRate().then((result) => {
+      if (ignore) return;
+      setVndPerUsd(result.rate);
+      setRateFallback(result.fallback);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const members = [...(report?.members || [])].sort(
     (left, right) => String(left.memberName || '').localeCompare(String(right.memberName || ''), 'vi'),
@@ -203,7 +325,7 @@ export default function MemberTokenUsageTable() {
         <div>
           <h2 className="text-lg font-black text-balance text-slate-900">Tổng sử dụng token</h2>
           <p className="mt-1 text-sm text-pretty text-gray-500">
-            Token và lượt tạo lại của từng học viên đang có hội viên hiệu lực.
+            Token và lượt tạo lại gợi ý tập cá nhân của từng học viên đang có hội viên hiệu lực.
           </p>
         </div>
         <Link to="/quan-ly/han-muc-ai" className="text-sm font-bold text-[#e31b23]">
@@ -246,7 +368,7 @@ export default function MemberTokenUsageTable() {
               <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatCount(report.totalTokensUsed)}</dd>
             </div>
             <div className="border-t border-gray-100 px-5 py-4 sm:border-t-0 sm:px-6">
-              <dt className="text-sm text-gray-500">Token kỳ này</dt>
+              <dt className="text-sm text-gray-500">Token kỳ hội viên</dt>
               <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatCount(periodTokens)}</dd>
             </div>
             <div className="border-t border-gray-100 px-5 py-4 sm:border-t-0 sm:px-6">
@@ -254,6 +376,14 @@ export default function MemberTokenUsageTable() {
               <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatCount(regenerations)}</dd>
             </div>
           </dl>
+
+          <TokenCostPanel
+            lifetimeTokens={selected ? selected.tokensUsed : report.totalTokensUsed}
+            monthTokens={Number(chartMonths[chartMonths.length - 1]?.tokensUsed) || 0}
+            subject={selected ? selected.memberName : ''}
+            vndPerUsd={vndPerUsd}
+            rateFallback={rateFallback}
+          />
 
           {members.length === 0 ? (
             <div className="px-5 py-10 text-center sm:px-6">
@@ -302,10 +432,15 @@ export default function MemberTokenUsageTable() {
                   />
                 </label>
               </div>
-              {selected ? <SelectedMember member={selected} /> : <MemberRows members={matchedMembers} />}
+              {selected ? <SelectedMember member={selected} vndPerUsd={vndPerUsd} /> : <MemberRows members={matchedMembers} vndPerUsd={vndPerUsd} />}
             </div>
           )}
           <TokenMonthChart months={chartMonths} caption={chartCaption} />
+          <MoneyMonthChart
+            months={chartMonths}
+            caption={selected ? `Chi phí của ${selected.memberName} theo tháng` : 'Chi phí ước tính theo tháng'}
+            vndPerUsd={vndPerUsd}
+          />
         </>
       )}
     </section>

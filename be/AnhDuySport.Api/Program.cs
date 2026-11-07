@@ -20,17 +20,33 @@ if (File.Exists(databaseConfigPath))
 var payOsConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "payos.json"));
 builder.Configuration.AddJsonFile(payOsConfigPath, optional: true, reloadOnChange: true);
 
+// Mật khẩu ứng dụng SMTP nằm ở file local để merge main không xóa tài khoản gửi OTP.
+var emailConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "email.json"));
+builder.Configuration.AddJsonFile(emailConfigPath, optional: true, reloadOnChange: true);
+
+var googleConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "google.json"));
+builder.Configuration.AddJsonFile(googleConfigPath, optional: true, reloadOnChange: true);
+
+// Khóa Gemini nằm ở file local để không bị đẩy lên git.
+var aiConfigPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "config", "ai.json"));
+builder.Configuration.AddJsonFile(aiConfigPath, optional: true, reloadOnChange: true);
+
 var connectionString = builder.Configuration["connectionString"]
     ?? builder.Configuration.GetConnectionString("AnhDuySport")
     ?? throw new InvalidOperationException("Thiếu chuỗi kết nối AnhDuySport.");
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddSingleton<AppLinks>();
+builder.Services.AddSingleton<EmailQueue>();
 builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddHostedService<EmailDeliveryService>();
 builder.Services.AddHostedService<PendingRegistrationCleanupService>();
 // Mỗi phút đối chiếu đơn gói hội viên với payOS (webhook không tới được máy local).
 builder.Services.AddHostedService<MembershipPaymentSyncService>();
+builder.Services.AddHostedService<MembershipExpiryNoticeService>();
 builder.Services.AddScoped<CurrentActor>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailNotificationService>();
@@ -40,6 +56,8 @@ builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<ClassManagementFlowService>();
 builder.Services.AddScoped<ReceptionFlowService>();
+builder.Services.AddScoped<CenterCheckInFlowService>();
+builder.Services.AddScoped<PrivateClassFlowService>();
 builder.Services.AddScoped<SessionFlowService>();
 builder.Services.AddScoped<SessionManagementFlowService>();
 builder.Services.AddScoped<NotificationFlowService>();
@@ -57,6 +75,8 @@ builder.Services.AddScoped<WorkoutRecommendationFlowService>();
 builder.Services.AddScoped<CoachClassAccess>();
 builder.Services.AddScoped<CoachCourseFlowService>();
 builder.Services.AddScoped<CoachCourseAiFlowService>();
+builder.Services.AddScoped<CourseMaterialFlowService>();
+builder.Services.AddScoped<ClassIntakeFlowService>();
 
 var payOsClientId = builder.Configuration["PayOS:ClientId"];
 var payOsApiKey = builder.Configuration["PayOS:ApiKey"];
@@ -151,6 +171,12 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var startup = scope.ServiceProvider;
     await CoachCourseSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await CenterCheckInSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await PrivateClassSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await SessionChangeSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await MembershipNoticeSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await PaymentBonusSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await CourseMaterialSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await startup.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
 

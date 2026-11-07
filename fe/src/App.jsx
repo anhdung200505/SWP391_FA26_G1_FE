@@ -10,8 +10,10 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import HocVienDashboardPage from './pages/HocVienDashboardPage';
+import HocVienKhamPhaPage from './pages/HocVienKhamPhaPage';
+import GuestClassRegistrationPage from './pages/GuestClassRegistrationPage'; // Import trang Đăng ký dạng Header độc lập
 import ClassRegistrationPage from './pages/ClassRegistrationPage';
-import ReceptionistDashboardPage from './pages/receptionist/ReceptionistDashboardPage'; // Import trang Lễ tân
+import ReceptionistDashboardPage from './pages/receptionist/ReceptionistDashboardPage';
 import ManagementDashboard from './pages/management/ManagementDashboard';
 import UserAccountListPage from './pages/management/UserAccountListPage';
 import CreateStaffAccountPage from './pages/management/CreateStaffAccountPage';
@@ -26,9 +28,16 @@ import ClassSchedulePage from './pages/management/ClassSchedulePage';
 import CreateClassPage from './pages/management/CreateClassPage';
 import AiWorkoutPage from './pages/AiWorkoutPage';
 import AiQuotaPage from './pages/management/AiQuotaPage';
+import RevenuePage from './pages/management/RevenuePage';
 import EnrollmentConsultationsPage from './pages/management/EnrollmentConsultationsPage';
+import CenterCheckInPage from './pages/management/CenterCheckInPage';
+import PrivateRequestsPage from './pages/management/PrivateRequestsPage';
 import CoachCoursePage from './pages/CoachCoursePage';
 import MemberCoursePlanPage from './pages/MemberCoursePlanPage';
+import MemberCourseMaterialPage from './pages/MemberCourseMaterialPage';
+import CourseMaterialPage from './pages/management/CourseMaterialPage';
+import PaymentHistoryPage from './pages/PaymentHistoryPage';
+import StudentLayout from './components/workspace/StudentLayout';
 
 function Protected({ children, allowedRoles }) {
   return <RequireAuth allowedRoles={allowedRoles}>{children}</RequireAuth>;
@@ -50,50 +59,60 @@ export default function App() {
             {/* Route Tuyển sinh */}
             <Route path="/tuyen-sinh" element={<AdmissionsPage />} />
 
-            {/* Khai báo route Đăng nhập & Đăng ký */}
+            {/* Route Đăng nhập & Đăng ký */}
             <Route path="/dang-nhap" element={<LoginPage />} />
             <Route path="/dang-ky" element={<RegisterPage />} />
 
             {/* Route Hồ sơ cá nhân */}
             <Route path="/ho-so" element={<Protected><ProfilePage /></Protected>} />
 
-            {/* Route Dashboard Học viên */}
-            <Route 
-              path="/hoc-vien-dashboard" 
-              element={
-                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
-                  <HocVienDashboardPage />
-                </Protected>
-              } 
-            />
-
-            {/* Route Xác nhận Đăng ký Khóa học */}
-            <Route 
-              path="/dang-ky-khoa-hoc" 
-              element={
-                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
-                  <ClassRegistrationPage />
-                </Protected>
-              } 
-            />
-
+            {/* CÁC ROUTE KHÁM PHẢ ĐỘC LẬP (KHÔNG DÍNH STUDENTLAYOUT / SIDEBAR ĐEN) */}
             <Route
-              path="/hoc-vien/bai-tap-lop"
+              path="/hoc-vien-kham-pha"
               element={
-                <Protected allowedRoles={['MEMBER']}>
-                  <MemberCoursePlanPage />
+                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
+                  <HocVienKhamPhaPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/dang-ky-khoa-hoc-kham-pha"
+              element={
+                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
+                  <GuestClassRegistrationPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/dang-ky-thanh-vien-kham-pha"
+              element={
+                <Protected allowedRoles={['MEMBER', 'ADMIN']}>
+                  <GuestClassRegistrationPage membershipOnly />
                 </Protected>
               }
             />
 
-            <Route
-              path="/hoc-vien/giao-an-ai"
-              element={
-                <Protected allowedRoles={['MEMBER']}>
-                  <AiWorkoutPage />
-                </Protected>
-              }
-            />
+            {/* KHUNG CHUNG CHO MỌI TRANG HỌC VIÊN ĐÃ ACTIVE GÓI (CÓ SIDEBAR ĐEN) */}
+            <Route element={<Protected allowedRoles={['MEMBER', 'ADMIN']}><StudentLayout /></Protected>}>
+              <Route path="/hoc-vien-dashboard" element={<HocVienDashboardPage />} />
+              <Route path="/dang-ky-khoa-hoc" element={<ClassRegistrationPage />} />
+              <Route path="/dang-ky-thanh-vien" element={<ClassRegistrationPage membershipOnly />} />
+              <Route path="/hoc-vien/lich-su-thanh-toan" element={<PaymentHistoryPage />} />
+              <Route
+                path="/hoc-vien/bai-tap-lop"
+                element={<Protected allowedRoles={['MEMBER']}><MemberCoursePlanPage /></Protected>}
+              />
+              <Route
+                path="/hoc-vien/giao-trinh"
+                element={<Protected allowedRoles={['MEMBER']}><MemberCourseMaterialPage /></Protected>}
+              />
+              <Route
+                path="/hoc-vien/giao-an-ai"
+                element={<Protected allowedRoles={['MEMBER']}><AiWorkoutPage /></Protected>}
+              />
+            </Route>
+
+            <Route path="/hoc-vien/hoc-1-1" element={<Navigate to="/dang-ky-khoa-hoc?type=private" replace />} />
 
             <Route
               path="/hlv/lop-hoc"
@@ -106,7 +125,7 @@ export default function App() {
 
             <Route path="/hlv/lich-su-tap" element={<Navigate to="/hlv/lop-hoc?tab=history" replace />} />
 
-            {/* Route LỄ TÂN DASHBOARD (Không chứa Header/Footer chung) */}
+            {/* Route LỄ TÂN DASHBOARD */}
             <Route 
               path="/le-tan" 
               element={
@@ -116,8 +135,9 @@ export default function App() {
               } 
             />
 
-            {/* Khai báo các route Quản lý (ADMIN) */}
+            {/* Route Quản lý (ADMIN) */}
             <Route path="/quan-ly" element={<Protected allowedRoles={['ADMIN']}><ManagementDashboard /></Protected>} />
+            <Route path="/quan-ly/doanh-thu" element={<Protected allowedRoles={['ADMIN']}><RevenuePage /></Protected>} />
             <Route path="/quan-ly/tai-khoan" element={<Protected allowedRoles={['ADMIN']}><UserAccountListPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/moi" element={<Protected allowedRoles={['ADMIN']}><CreateStaffAccountPage /></Protected>} />
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected allowedRoles={['ADMIN']}><UserAccountPage /></Protected>} />
@@ -127,6 +147,9 @@ export default function App() {
             <Route path="/quan-ly/goi/moi" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="create" /></Protected>} />
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
             <Route path="/quan-ly/tu-van-ghi-danh" element={<Protected allowedRoles={['ADMIN']}><EnrollmentConsultationsPage /></Protected>} />
+            <Route path="/quan-ly/check-in" element={<Protected allowedRoles={['ADMIN']}><CenterCheckInPage /></Protected>} />
+            <Route path="/quan-ly/yeu-cau-1-1" element={<Protected allowedRoles={['ADMIN']}><PrivateRequestsPage /></Protected>} />
+            <Route path="/quan-ly/giao-trinh" element={<Protected allowedRoles={['ADMIN']}><CourseMaterialPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/moi" element={<Protected allowedRoles={['ADMIN']}><CreateClassPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/:classId/lich" element={<Protected allowedRoles={['ADMIN']}><ClassSchedulePage /></Protected>} />

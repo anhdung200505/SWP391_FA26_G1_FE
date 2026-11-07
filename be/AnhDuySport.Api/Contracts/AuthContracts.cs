@@ -4,6 +4,16 @@ public sealed record LoginRequest(string Email, string Password, string? Portal 
 
 public sealed record MemberLoginRequest(string Email, string Password);
 
+public sealed record GoogleLoginRequest(string? IdToken, string? Portal = null, string? AccessToken = null, bool LinkExisting = false);
+
+public sealed record GoogleLoginResult(LoginResponse? Login, GoogleAccountChoice? Choice);
+
+public sealed record GoogleAccountChoice(string Email, string FullName);
+
+public sealed record GmailOtpRequest(string Email, string? Portal = null);
+
+public sealed record GmailConfirmRequest(string Email, string Code, string? Portal = null);
+
 public sealed record RegisterGuestRequest(string FullName, string Email, string? Phone, string Password);
 
 public sealed record RegisterOtpRequest(string FullName, string Email, string? Phone, string Password);
