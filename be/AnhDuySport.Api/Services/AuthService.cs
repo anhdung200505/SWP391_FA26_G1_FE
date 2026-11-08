@@ -16,6 +16,7 @@ public class AuthService(
     PasswordHasher passwords,
     IConfiguration configuration,
     SmtpEmailSender emailSender,
+    EmailNotificationService emailNotifications,
     IHttpClientFactory httpClientFactory)
 {
     public async Task EnsureBootstrapAdminPasswordAsync()
@@ -101,6 +102,11 @@ public class AuthService(
             {
                 return new GoogleLoginResult(null, new GoogleAccountChoice(user.Email ?? email, user.FullName));
             }
+        }
+
+        if (string.IsNullOrEmpty(user.PasswordHash))
+        {
+            await EnsureGoogleWelcomeAsync(user);
         }
 
         return new GoogleLoginResult(await IssueAsync(user), null);
@@ -249,6 +255,11 @@ public class AuthService(
         else if (user.Role is null || user.Role.RoleCode != "MEMBER")
         {
             throw new UnauthorizedAccessException("Chỉ học viên đăng nhập được ở đây.");
+        }
+
+        if (string.IsNullOrEmpty(user.PasswordHash))
+        {
+            await EnsureGoogleWelcomeAsync(user);
         }
 
         return await IssueAsync(user);
@@ -872,6 +883,49 @@ public class AuthService(
         }
 
         return user;
+    }
+
+    // Tài khoản tạo bằng Google không có mật khẩu. Gửi lời cảm ơn một lần: chuông thông báo và thư, thư không chặn đăng nhập.
+    private async Task EnsureGoogleWelcomeAsync(UserAccount user)
+    {
+        const string title = "Cảm ơn bạn đã đăng ký";
+        var alreadyWelcomed = await db.Notifications.AnyAsync(item => item.UserId == user.UserId && item.Title == title);
+        if (alreadyWelcomed)
+        {
+            return;
+        }
+
+        db.Notifications.Add(new AccountNotification
+        {
+            UserId = user.UserId,
+            Title = title,
+            Content = $"Cảm ơn {user.FullName}. AnhDuy Sport đã tạo tài khoản học viên của bạn. Hãy hoàn tất hồ sơ và chọn khóa học để bắt đầu tập.",
+            IsRead = false,
+            CreatedAt = DateTime.Now,
+        });
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Không lưu được thông báo chào học viên {user.UserId}: {exception.Message}");
+            return;
+        }
+
+        if (!NotificationEmail.CanDeliver(user.Email))
+        {
+            return;
+        }
+
+        try
+        {
+            await emailNotifications.SendMemberRegisteredAsync(user);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Không gửi được thư cảm ơn học viên {user.UserId}: {exception.Message}");
+        }
     }
 
     private static string ReadJsonString(JsonElement root, string name) =>
