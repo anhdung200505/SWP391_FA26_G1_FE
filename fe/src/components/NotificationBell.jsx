@@ -15,7 +15,7 @@ const POLL_MS = 60000;
 
 // Chuông thông báo của học viên (chỉ thông báo của chính mình), cùng giao diện với chuông Hoạt động của lễ tân và quản trị.
 // Bấm một thông báo để đánh dấu đã đọc và xem đầy đủ. light = true khi header trong suốt (chữ trắng).
-export default function NotificationBell({ light = false }) {
+export default function NotificationBell({ light = false, compact = false, variant }) {
   const [feed, setFeed] = useState({ unreadCount: 0, items: [] });
   const [open, setOpen] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -87,7 +87,13 @@ export default function NotificationBell({ light = false }) {
 
   return (
     <div className="relative" ref={rootRef}>
-      <BellButton label="Thông báo" count={feed.unreadCount} variant={light ? 'light' : 'default'} onClick={toggle} />
+      <BellButton
+        label="Thông báo"
+        count={feed.unreadCount}
+        compact={compact}
+        variant={variant || (light ? 'light' : 'default')}
+        onClick={toggle}
+      />
 
       {open && (
         <BellPanel

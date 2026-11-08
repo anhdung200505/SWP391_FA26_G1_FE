@@ -132,7 +132,7 @@ export default function Header({ forceWhite = false }) {
           : 'bg-white shadow-md py-3 text-gray-800'
       }`}
     >
-      <div className="flex items-center justify-between w-full px-6 md:px-12 mx-auto">
+      <div className="mx-auto flex w-full items-center justify-between gap-2 px-3 py-0 sm:px-6 md:px-12">
         {/* LOGO */}
         <a
           href="/home"
@@ -143,10 +143,10 @@ export default function Header({ forceWhite = false }) {
             src={logoImg}
             alt="AnhDuy Sport Logo"
             className={`w-auto object-contain transition-all duration-300 filter drop-shadow-lg ${
-              barTransparent ? 'h-12 md:h-14' : 'h-10 md:h-12'
+              barTransparent ? 'h-8 sm:h-12 md:h-14' : 'h-8 sm:h-10 md:h-12'
             }`}
           />
-          <div className="hidden min-[380px]:flex items-center font-black italic tracking-wider text-xl md:text-2xl uppercase transition-colors duration-300 select-none">
+          <div className="hidden min-[360px]:flex items-center font-black italic tracking-wider text-base sm:text-xl md:text-2xl uppercase transition-colors duration-300 select-none">
             <span
               className={`transition-colors duration-300 ${
                 barTransparent ? 'text-white drop-shadow-md' : 'text-gray-900'
@@ -377,20 +377,20 @@ export default function Header({ forceWhite = false }) {
           )}
         </nav>
 
-        <div className="flex items-center gap-2 lg:hidden">
-          {user && isMember && <NotificationBell light={false} />}
+        <div className="flex shrink-0 items-center gap-1.5 lg:hidden">
+          {user && isMember && <NotificationBell compact variant="dark" />}
           {!user && (
             <button
               type="button"
               onClick={() => go('/dang-nhap')}
-              className="bg-[#e31b23] px-3 py-2 text-[11px] font-black uppercase tracking-wide text-white shadow-md"
+              className="rounded-full bg-[#e31b23] px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-white"
             >
               Đăng nhập
             </button>
           )}
           <button
             type="button"
-            className="inline-flex size-11 items-center justify-center bg-[#12141d] text-white shadow-md"
+            className="inline-flex size-9 items-center justify-center rounded-full bg-[#12141d] text-white"
             aria-expanded={menuOpen}
             aria-label={menuOpen ? 'Đóng menu' : 'Mở menu'}
             onClick={() => setMenuOpen((open) => !open)}
