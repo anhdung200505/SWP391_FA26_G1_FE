@@ -158,16 +158,28 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 // ================================================================
-// CORS: Cho phép Frontend Localhost và Azure Static Web Apps
+// CORS: localhost, Azure Static Web Apps, và site trên Vercel
 // ================================================================
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins(
-                "http://localhost:5173",
-                "https://purple-stone-04f71a000.6.azurestaticapps.net"
-            )
+        policy.SetIsOriginAllowed(origin =>
+            {
+                if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                    return false;
+
+                if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) && uri.Port == 5173)
+                    return true;
+
+                if (uri.Host.Equals("purple-stone-04f71a000.6.azurestaticapps.net", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                return uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)
+                    && (uri.Host.Equals("vercel.app", StringComparison.OrdinalIgnoreCase)
+                        || uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase)
+                        || uri.Host.EndsWith(".tmp.now", StringComparison.OrdinalIgnoreCase));
+            })
             .AllowAnyHeader()
             .AllowAnyMethod());
 });
