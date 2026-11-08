@@ -35,3 +35,5 @@ be/AnhDuySport.Api/uploads/
 
 # Khóa Gemini chỉ ở máy local, không đưa lên git
 be/config/ai.json
+.vercel
+.env*

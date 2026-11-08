@@ -1,6 +1,7 @@
 {
-  "buildCommand": "npx vite build --outDir dist-vercel",
-  "outputDirectory": "dist-vercel",
+  "installCommand": "npm install --include=dev",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
