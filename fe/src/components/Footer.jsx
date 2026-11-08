@@ -513,10 +513,10 @@ export default function Footer() {
 
       {/* ================= 3. FLOATING BUTTON & POPUP DÀNH CHO TÀI KHOẢN ĐÃ ĐĂNG NHẬP ================= */}
       {user && (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans">
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(0.75rem,env(safe-area-inset-right))] z-50 flex flex-col items-end font-sans">
           {/* POPUP CONTAINER */}
           {isHelpOpen && (
-            <div className="mb-4 w-80 sm:w-96 bg-[#181d2a] border border-gray-700 rounded-3xl p-6 shadow-2xl text-white animate-in fade-in slide-in-from-bottom-5 duration-200">
+            <div className="mb-4 w-[min(24rem,calc(100vw-1.5rem))] bg-[#181d2a] border border-gray-700 rounded-3xl p-5 sm:p-6 shadow-2xl text-white animate-in fade-in slide-in-from-bottom-5 duration-200">
               <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-800">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{hasMembership ? '🎧' : '📝'}</span>

@@ -28,6 +28,7 @@ const navItems = [
 
 export default function Header({ forceWhite = false }) {
   const [isHeaderTransparent, setIsHeaderTransparent] = useState(!forceWhite);
+  const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -59,6 +60,17 @@ export default function Header({ forceWhite = false }) {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [forceWhite]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [menuOpen]);
 
   // Xử lý click điều hướng
   const handleNavClick = (e, path) => {
@@ -104,11 +116,18 @@ export default function Header({ forceWhite = false }) {
   const userRole = user?.roleId || user?.role;
   const isMember = userRole === 'MEMBER' || userRole === 'STUDENT' || !userRole;
   const hasClass = useHasClassRegistration(Boolean(user?.id) && (userRole === 'MEMBER' || userRole === 'STUDENT'));
+  const barTransparent = isHeaderTransparent && !menuOpen;
+
+  const go = (path) => {
+    setMenuOpen(false);
+    navigate(path);
+    window.scrollTo(0, 0);
+  };
 
   return (
     <header
       className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ease-in-out ${
-        isHeaderTransparent
+        barTransparent
           ? 'bg-transparent py-4 text-white'
           : 'bg-white shadow-md py-3 text-gray-800'
       }`}
@@ -124,13 +143,13 @@ export default function Header({ forceWhite = false }) {
             src={logoImg}
             alt="AnhDuy Sport Logo"
             className={`w-auto object-contain transition-all duration-300 filter drop-shadow-lg ${
-              isHeaderTransparent ? 'h-12 md:h-14' : 'h-10 md:h-12'
+              barTransparent ? 'h-12 md:h-14' : 'h-10 md:h-12'
             }`}
           />
-          <div className="flex items-center font-black italic tracking-wider text-xl md:text-2xl uppercase transition-colors duration-300 select-none">
+          <div className="hidden min-[380px]:flex items-center font-black italic tracking-wider text-xl md:text-2xl uppercase transition-colors duration-300 select-none">
             <span
               className={`transition-colors duration-300 ${
-                isHeaderTransparent ? 'text-white drop-shadow-md' : 'text-gray-900'
+                barTransparent ? 'text-white drop-shadow-md' : 'text-gray-900'
               }`}
             >
               AnhDuy
@@ -157,7 +176,7 @@ export default function Header({ forceWhite = false }) {
                   className={`relative overflow-hidden px-3.5 py-2 text-xs xl:text-sm font-bold tracking-wider transition-colors duration-300 whitespace-nowrap block cursor-pointer select-none ${
                     isActive
                       ? 'bg-[#e31b23] text-white shadow-md'
-                      : isHeaderTransparent
+                      : barTransparent
                       ? 'text-white/90 hover:text-white'
                       : 'text-gray-800 hover:text-white'
                   }`}
@@ -217,7 +236,7 @@ export default function Header({ forceWhite = false }) {
               className={`relative overflow-hidden px-3.5 py-2 text-xs xl:text-sm font-bold tracking-wider transition-colors duration-300 whitespace-nowrap block cursor-pointer select-none ${
                 location.pathname === '/dang-nhap'
                   ? 'bg-[#e31b23] text-white shadow-md'
-                  : isHeaderTransparent
+                  : barTransparent
                   ? 'text-white/90 hover:text-white'
                   : 'text-gray-800 hover:text-white'
               }`}
@@ -227,7 +246,7 @@ export default function Header({ forceWhite = false }) {
             </a>
           ) : (
             <div className="flex items-center gap-3 ml-2">
-              {isMember && <NotificationBell light={isHeaderTransparent} />}
+              {isMember && <NotificationBell light={barTransparent} />}
               <div className="relative group">
                 <button
                   type="button"
@@ -357,7 +376,114 @@ export default function Header({ forceWhite = false }) {
             </div>
           )}
         </nav>
+
+        <div className="flex items-center gap-2 lg:hidden">
+          {user && isMember && <NotificationBell light={false} />}
+          {!user && (
+            <button
+              type="button"
+              onClick={() => go('/dang-nhap')}
+              className="bg-[#e31b23] px-3 py-2 text-[11px] font-black uppercase tracking-wide text-white shadow-md"
+            >
+              Đăng nhập
+            </button>
+          )}
+          <button
+            type="button"
+            className="inline-flex size-11 items-center justify-center bg-[#12141d] text-white shadow-md"
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? 'Đóng menu' : 'Mở menu'}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? (
+              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeWidth="2.5" d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            ) : (
+              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeWidth="2.5" d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
+
+      {menuOpen && (
+        <nav className="absolute inset-x-0 top-full max-h-[calc(100dvh-4.5rem)] overflow-y-auto border-t border-gray-200 bg-white text-gray-900 shadow-2xl lg:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {navItems.map((item) => (
+            <div key={item.path}>
+              <button
+                type="button"
+                onClick={() => go(item.path)}
+                className="block w-full px-5 py-3.5 text-left text-sm font-black uppercase tracking-wide text-gray-800"
+              >
+                {item.name}
+              </button>
+              {item.hasDropdown && (
+                <div className="grid grid-cols-2 gap-1 px-5 pb-3">
+                  {courseCategories.map((cat) => (
+                    <button
+                      key={cat.path}
+                      type="button"
+                      onClick={() => go(cat.path)}
+                      className="px-2 py-2 text-left text-sm font-semibold text-gray-600"
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {!user ? (
+            <button
+              type="button"
+              onClick={() => go('/dang-nhap')}
+              className="m-4 block w-[calc(100%-2rem)] bg-[#e31b23] px-4 py-3 text-sm font-black uppercase tracking-wide text-white"
+            >
+              Đăng nhập
+            </button>
+          ) : (
+            <div className="border-t border-gray-100 px-5 py-3">
+              <p className="truncate text-sm font-black">{user.fullName || user.userName || 'Học viên'}</p>
+              <p className="truncate text-xs text-gray-500">{user.email}</p>
+              <div className="mt-2 flex flex-col">
+                {(userRole === 'MEMBER' || userRole === 'STUDENT' || !userRole) && (
+                  <>
+                    <button type="button" onClick={() => go('/hoc-vien-dashboard')} className="py-2.5 text-left text-sm font-bold">Khóa học của tôi</button>
+                    {hasClass && (
+                      <>
+                        <button type="button" onClick={() => go('/hoc-vien/bai-tap-lop')} className="py-2.5 text-left text-sm font-bold">Bài tập lớp</button>
+                        <button type="button" onClick={() => go('/hoc-vien/giao-an-ai')} className="py-2.5 text-left text-sm font-bold">Gợi ý tập</button>
+                      </>
+                    )}
+                  </>
+                )}
+                {userRole === 'COACH' && (
+                  <button type="button" onClick={() => go('/hlv/lop-hoc')} className="py-2.5 text-left text-sm font-bold">Lớp của tôi</button>
+                )}
+                {userRole === 'ADMIN' && (
+                  <button type="button" onClick={() => go('/quan-ly')} className="py-2.5 text-left text-sm font-bold">Trang quản lý</button>
+                )}
+                {userRole === 'RECEPTIONIST' && (
+                  <button type="button" onClick={() => go('/le-tan')} className="py-2.5 text-left text-sm font-bold">Trang lễ tân</button>
+                )}
+                <button type="button" onClick={() => go('/ho-so')} className="py-2.5 text-left text-sm font-bold">Hồ sơ cá nhân</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="py-2.5 text-left text-sm font-bold text-red-600"
+                >
+                  Đăng xuất
+                </button>
+              </div>
+            </div>
+          )}
+        </nav>
+      )}
     </header>
   );
 }
