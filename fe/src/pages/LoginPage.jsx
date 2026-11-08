@@ -260,7 +260,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-[#0d0f17] font-sans select-none overflow-hidden">
+    <div className="flex min-h-dvh w-full bg-[#0d0f17] font-sans select-none overflow-x-hidden">
       {/* BÊN TRÁI: BANNER THỂ THAO */}
       <div className="relative hidden w-1/2 lg:flex flex-col justify-between p-12 overflow-hidden bg-[#0d0f17]">
         <div className="absolute inset-0 z-0">
@@ -312,8 +312,8 @@ export default function LoginPage() {
       </div>
 
       {/* BÊN PHẢI: FORM ĐĂNG NHẬP */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 md:p-16 bg-[#12141d] relative z-10">
-        <div className="w-full max-w-md bg-[#181d2a] rounded-2xl p-8 sm:p-10 border border-gray-800 shadow-2xl">
+      <div className="w-full lg:w-1/2 flex items-start sm:items-center justify-center overflow-y-auto px-4 py-6 sm:p-12 md:p-16 bg-[#12141d] relative z-10">
+        <div className="w-full max-w-md bg-[#181d2a] rounded-2xl p-5 sm:p-10 border border-gray-800 shadow-2xl">
           <div className="lg:hidden mb-6 flex justify-center">
             <Link to="/home" className="inline-flex items-center gap-2.5">
               <img src={logoImg} alt="AnhDuy Sport" className="h-10 w-auto object-contain" />

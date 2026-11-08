@@ -59,7 +59,7 @@ export default function CoursesSection() {
     <section
       ref={sectionRef}
       id="courses-section"
-      className="relative w-full h-[680px] md:h-[760px] lg:h-[820px] bg-black overflow-hidden flex flex-col justify-between pt-28 md:pt-36 pb-12 font-sans select-none"
+      className="relative w-full min-h-[680px] md:min-h-[760px] lg:min-h-[820px] bg-black overflow-x-hidden flex flex-col justify-between pt-28 md:pt-36 pb-12 font-sans select-none"
     >
       {/* 1. KHỐI ẢNH NỀN FADE MƯỢT MÀ */}
       <div className="absolute inset-0 z-0">

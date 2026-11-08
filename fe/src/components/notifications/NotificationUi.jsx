@@ -40,7 +40,7 @@ export function BellButton({ label, count, variant = 'default', onClick, ariaLab
 
 export function BellPanel({ title, subtitle, action, toolbar, children }) {
   return (
-    <div className="absolute right-0 top-full pt-2 w-80 sm:w-[420px] z-50">
+    <div className="absolute right-0 top-full z-50 w-[min(20rem,calc(100vw-1rem))] pt-2 sm:w-[min(26rem,calc(100vw-2rem))]">
       <div className="bg-white rounded-xl shadow-2xl border border-gray-100 text-gray-900 overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-100">
           <div>
