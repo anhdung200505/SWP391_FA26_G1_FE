@@ -33,6 +33,12 @@ export default function LoginPage() {
     return () => clearTimeout(timer);
   }, [resendSeconds]);
 
+  const returnPath = (() => {
+    const from = new URLSearchParams(location.search).get('next') || location.state?.from || '';
+    if (!from.startsWith('/') || from.startsWith('//') || from.startsWith('/dang-nhap')) return '';
+    return from;
+  })();
+
   // Hàm helper điều hướng theo vai trò người dùng
   const getRoleRedirectPath = (userInfo) => {
     const role = userInfo?.roleId || userInfo?.role;
@@ -40,9 +46,8 @@ export default function LoginPage() {
     if (role === 'ADMIN') return '/quan-ly';
     if (role === 'STAFF') return '/le-tan';
     if (role === 'COACH') return '/hlv/lop-hoc';
-    
-    // Với tài khoản MEMBER (hoặc mặc định), luôn tự động vào /hoc-vien-dashboard
-    return '/hoc-vien-dashboard';
+
+    return returnPath || '/hoc-vien-dashboard';
   };
 
   if (user && !needsContact) {
