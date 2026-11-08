@@ -315,12 +315,21 @@ export default function LoginPage() {
       <div className="w-full lg:w-1/2 flex items-start sm:items-center justify-center overflow-y-auto px-4 py-6 sm:p-12 md:p-16 bg-[#12141d] relative z-10">
         <div className="w-full max-w-md bg-[#181d2a] rounded-2xl p-5 sm:p-10 border border-gray-800 shadow-2xl">
           <div className="lg:hidden mb-6 flex justify-center">
-            <Link to="/home" className="inline-flex items-center gap-2.5">
-              <img src={logoImg} alt="AnhDuy Sport" className="h-10 w-auto object-contain" />
-              <span className="text-xl font-black italic tracking-wider text-white">
-                AnhDuy <span className="text-[#e31b23]">Sport</span>
-              </span>
-            </Link>
+            {needsContact ? (
+              <div className="inline-flex items-center gap-2.5">
+                <img src={logoImg} alt="AnhDuy Sport" className="h-10 w-auto object-contain" />
+                <span className="text-xl font-black italic tracking-wider text-white">
+                  AnhDuy <span className="text-[#e31b23]">Sport</span>
+                </span>
+              </div>
+            ) : (
+              <Link to="/home" className="inline-flex items-center gap-2.5">
+                <img src={logoImg} alt="AnhDuy Sport" className="h-10 w-auto object-contain" />
+                <span className="text-xl font-black italic tracking-wider text-white">
+                  AnhDuy <span className="text-[#e31b23]">Sport</span>
+                </span>
+              </Link>
+            )}
           </div>
 
           <div className="mb-6">
@@ -626,7 +635,7 @@ export default function LoginPage() {
           </>
           )}
 
-          {!forgotStep && (
+          {!forgotStep && !needsContact && (
             <div className="mt-4 text-center">
               <Link to="/home" className="inline-block text-xs font-semibold text-gray-500 hover:text-gray-300 transition-colors">
                 ← Quay lại trang chủ
