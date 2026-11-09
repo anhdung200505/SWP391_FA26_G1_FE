@@ -727,3 +727,22 @@ export function rejectPrivateRequest(requestId, reason) {
     body: JSON.stringify({ reason }),
   });
 }
+
+// ==========================================
+// Phòng tập (quản trị)
+// ==========================================
+export function getRoomOverview() {
+  return request('/management/rooms/overview');
+}
+
+// Các lớp còn buổi sắp tới trong phòng: dùng để báo trước khi ngưng dùng.
+export function getRoomUsage(roomId) {
+  return request(`/management/rooms/${roomId}/usage`);
+}
+
+export function setRoomStatus(roomId, isActive) {
+  return request(`/management/rooms/${roomId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ isActive }),
+  });
+}
