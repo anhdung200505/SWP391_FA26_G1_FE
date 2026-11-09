@@ -657,6 +657,20 @@ export function getPrivateCourses(sportId) {
   return request(`/private-classes/courses${toQuery({ sportId })}`);
 }
 
+// HLV dạy môn của gói 1-1 (học viên chọn HLV trước rồi mới xem lịch)
+export function getPrivateCoaches(courseId) {
+  return request(`/private-classes/coaches${toQuery({ courseId })}`);
+}
+
+// { courseId, coachUserId, startDate } (startDate từ hôm nay + 3 ngày)
+// → { sessionCount, busyCells: [{ weekday, timeSlotId, reason }] }: ô HLV hoặc học viên đã bận
+export function getPrivateCoachSchedule(payload) {
+  return request('/private-classes/coach-schedule', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 // { courseId, startDate, slots: [{ weekday, timeSlotId }] }
 // → số buổi, còn phòng, HLV kèm isBusy/busyReason
 export function checkPrivateAvailability(payload) {
