@@ -161,6 +161,7 @@ CREATE TABLE room (
     room_type           NVARCHAR(100)  NULL,
     capacity            INT            NOT NULL,
     private_concurrency INT            NOT NULL CONSTRAINT DF_room_private_concurrency DEFAULT (1),
+    is_active           BIT            NOT NULL CONSTRAINT DF_room_is_active DEFAULT (1),
     area_m2             DECIMAL(10,2)  NULL,
     description         NVARCHAR(MAX)  NULL,
     image_path          NVARCHAR(500)  NULL,
