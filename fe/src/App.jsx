@@ -24,6 +24,7 @@ import RequireAuth from './components/RequireAuth';
 import { AccountManagementProvider } from './context/AccountManagementContext';
 import { AuthProvider } from './context/AuthContext';
 import ClassListPage from './pages/management/ClassListPage';
+import RoomListPage from './pages/management/RoomListPage';
 import ClassSchedulePage from './pages/management/ClassSchedulePage';
 import CreateClassPage from './pages/management/CreateClassPage';
 import AiWorkoutPage from './pages/AiWorkoutPage';
@@ -150,6 +151,7 @@ export default function App() {
             <Route path="/quan-ly/check-in" element={<Protected allowedRoles={['ADMIN']}><CenterCheckInPage /></Protected>} />
             <Route path="/quan-ly/yeu-cau-1-1" element={<Protected allowedRoles={['ADMIN']}><PrivateRequestsPage /></Protected>} />
             <Route path="/quan-ly/giao-trinh" element={<Protected allowedRoles={['ADMIN']}><CourseMaterialPage /></Protected>} />
+            <Route path="/quan-ly/phong-tap" element={<Protected allowedRoles={['ADMIN']}><RoomListPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc" element={<Protected allowedRoles={['ADMIN']}><ClassListPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/moi" element={<Protected allowedRoles={['ADMIN']}><CreateClassPage /></Protected>} />
             <Route path="/quan-ly/lop-hoc/:classId/lich" element={<Protected allowedRoles={['ADMIN']}><ClassSchedulePage /></Protected>} />

@@ -18,6 +18,7 @@ const links = [
     label: 'Đào tạo',
     children: [
       { id: 'classes', to: '/quan-ly/lop-hoc', label: 'Lớp học' },
+      { id: 'rooms', to: '/quan-ly/phong-tap', label: 'Phòng tập' },
       { id: 'material', to: '/quan-ly/giao-trinh', label: 'Giáo trình môn học' },
       { id: 'private', to: '/quan-ly/yeu-cau-1-1', label: 'Yêu cầu 1-1' },
     ],

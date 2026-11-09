@@ -57,6 +57,7 @@ builder.Services.AddScoped<MembershipPackageFlowService>();
 builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<ClassManagementFlowService>();
+builder.Services.AddScoped<RoomManagementFlowService>();
 builder.Services.AddScoped<ReceptionFlowService>();
 builder.Services.AddScoped<CenterCheckInFlowService>();
 builder.Services.AddScoped<PrivateClassFlowService>();
@@ -229,6 +230,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     await MembershipNoticeSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await PaymentBonusSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await CourseMaterialSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await RoomSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
 
     await startup.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }

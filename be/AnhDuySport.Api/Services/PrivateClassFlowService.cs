@@ -735,6 +735,7 @@ public class PrivateClassFlowService(
         var rooms = await db.SportRooms.AsNoTracking()
             .Where(link => link.SportId == sportId && link.AllowPrivate)
             .Join(db.Rooms, link => link.RoomId, room => room.RoomId, (link, room) => room)
+            .Where(room => room.IsActive)
             .OrderBy(room => room.RoomId)
             .ToListAsync();
         if (rooms.Count == 0)

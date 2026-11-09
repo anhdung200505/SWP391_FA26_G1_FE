@@ -158,6 +158,12 @@ export function cancelReceptionRegistration(paymentId) {
 // Check-in vào trung tâm (không gắn lớp, cần gói hội viên còn hạn).
 // Trả { outcome: checked_in | already_inside | duplicate, checkIn, message }.
 
+// Tìm học viên trước khi check-in (tên không dấu, mã, email, SĐT), tối đa 10.
+// Mỗi dòng: { id, fullName, phone, email, status, membershipName, membershipEndDate, insideCheckInId, insideSince }.
+export function searchCheckInMembers(q) {
+  return request(`/reception/check-in/members?q=${encodeURIComponent(q)}`);
+}
+
 export function checkInMember(keyword) {
   return request('/reception/check-ins', {
     method: 'POST',
