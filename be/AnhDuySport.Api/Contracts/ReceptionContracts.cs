@@ -35,6 +35,19 @@ public sealed record CenterCheckInListDto(DateOnly Date, CenterCheckInSummaryDto
 
 public sealed record VoidCheckInRequest(string? Reason);
 
+// Kết quả tìm học viên ở màn check-in. MembershipName/MembershipEndDate: gói còn hạn hôm nay (null = chưa có gói còn hạn).
+// InsideCheckInId/InsideSince: lượt hôm nay chưa check-out (có giá trị = đang ở trong, nên hiện Check-out thay vì Check-in).
+public sealed record CenterCheckInMemberDto(
+    string Id,
+    string FullName,
+    string Phone,
+    string Email,
+    string Status,
+    string? MembershipName,
+    DateOnly? MembershipEndDate,
+    string? InsideCheckInId,
+    DateTime? InsideSince);
+
 // paymentMethod: cash, transfer hoặc card.
 public sealed record ConfirmCounterPaymentRequest(string PaymentMethod);
 
