@@ -51,6 +51,26 @@ public sealed class CreatePrivateRequest : PrivateAvailabilityRequest
     public string? Gender { get; set; }
 }
 
+public sealed record PrivateCoachDto(string Id, string FullName);
+
+// Xem lịch của một HLV cho gói và ngày bắt đầu đã chọn (ngày bắt đầu phải từ hôm nay + 3 ngày).
+public sealed class PrivateCoachScheduleRequest
+{
+    [Required]
+    public string CourseId { get; set; } = "";
+
+    [Required]
+    public string CoachUserId { get; set; } = "";
+
+    [Required]
+    public DateOnly? StartDate { get; set; }
+}
+
+// Ô bận: Weekday 2..7, TimeSlotId là khung giờ 1-1; Reason nói bận vì lớp nào, ngày nào.
+public sealed record PrivateBusyCellDto(int Weekday, string TimeSlotId, string Reason);
+
+public sealed record PrivateCoachScheduleDto(int SessionCount, IReadOnlyList<PrivateBusyCellDto> BusyCells);
+
 public sealed record RejectPrivateRequest([StringLength(500)] string? Reason = null);
 
 public sealed record PrivateCoachOptionDto(string Id, string FullName, bool IsBusy, string? BusyReason);

@@ -72,7 +72,7 @@ export default function FacilitiesPage() {
       <Header forceWhite />
 
       {/* 2. HERO BANNER FULL MÀN HÌNH */}
-      <section className="relative w-full h-screen pt-16 bg-[#0d0f17] overflow-hidden flex flex-col justify-between">
+      <section className="relative w-full min-h-dvh pt-16 bg-[#0d0f17] overflow-x-hidden flex flex-col justify-between">
         <div className="absolute inset-0 z-0">
           <img
             src={arenaImg}

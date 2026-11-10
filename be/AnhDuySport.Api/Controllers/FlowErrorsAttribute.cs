@@ -12,6 +12,7 @@ public sealed class FlowErrorsAttribute : ExceptionFilterAttribute
         context.Result = context.Exception switch
         {
             KeyNotFoundException e => new NotFoundObjectResult(new { message = e.Message }),
+            RoomInUseException e => new ConflictObjectResult(new { message = e.Message, usage = e.Usage }),
             RegistrationException e => new BadRequestObjectResult(new { message = e.Message }),
             _ => null,
         };

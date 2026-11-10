@@ -102,6 +102,14 @@ public class AiWorkoutRecommendation
     [Column("duration_weeks")]
     public int DurationWeeks { get; set; }
 
+    // Tổng số buổi hội viên muốn tập (null = tập đủ DurationWeeks tuần).
+    [Column("total_sessions")]
+    public int? TotalSessions { get; set; }
+
+    // Cường độ hội viên chọn: Rất nhẹ, Nhẹ, Trung bình, Cao, Tối đa.
+    [Column("intensity_level")]
+    public string? IntensityLevel { get; set; }
+
     [Column("preferred_start_time")]
     public TimeOnly PreferredStartTime { get; set; }
 

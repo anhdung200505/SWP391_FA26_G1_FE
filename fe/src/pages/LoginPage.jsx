@@ -33,6 +33,12 @@ export default function LoginPage() {
     return () => clearTimeout(timer);
   }, [resendSeconds]);
 
+  const returnPath = (() => {
+    const from = new URLSearchParams(location.search).get('next') || location.state?.from || '';
+    if (!from.startsWith('/') || from.startsWith('//') || from.startsWith('/dang-nhap')) return '';
+    return from;
+  })();
+
   // Hàm helper điều hướng theo vai trò người dùng
   const getRoleRedirectPath = (userInfo) => {
     const role = userInfo?.roleId || userInfo?.role;
@@ -40,9 +46,8 @@ export default function LoginPage() {
     if (role === 'ADMIN') return '/quan-ly';
     if (role === 'STAFF') return '/le-tan';
     if (role === 'COACH') return '/hlv/lop-hoc';
-    
-    // Với tài khoản MEMBER (hoặc mặc định), luôn tự động vào /hoc-vien-dashboard
-    return '/hoc-vien-dashboard';
+
+    return returnPath || '/hoc-vien-dashboard';
   };
 
   if (user && !needsContact) {
@@ -260,7 +265,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-[#0d0f17] font-sans select-none overflow-hidden">
+    <div className="flex min-h-dvh w-full bg-[#0d0f17] font-sans select-none overflow-x-hidden">
       {/* BÊN TRÁI: BANNER THỂ THAO */}
       <div className="relative hidden w-1/2 lg:flex flex-col justify-between p-12 overflow-hidden bg-[#0d0f17]">
         <div className="absolute inset-0 z-0">
@@ -312,15 +317,24 @@ export default function LoginPage() {
       </div>
 
       {/* BÊN PHẢI: FORM ĐĂNG NHẬP */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 md:p-16 bg-[#12141d] relative z-10">
-        <div className="w-full max-w-md bg-[#181d2a] rounded-2xl p-8 sm:p-10 border border-gray-800 shadow-2xl">
+      <div className="w-full lg:w-1/2 flex items-start sm:items-center justify-center overflow-y-auto px-4 py-6 sm:p-12 md:p-16 bg-[#12141d] relative z-10">
+        <div className="w-full max-w-md bg-[#181d2a] rounded-2xl p-5 sm:p-10 border border-gray-800 shadow-2xl">
           <div className="lg:hidden mb-6 flex justify-center">
-            <Link to="/home" className="inline-flex items-center gap-2.5">
-              <img src={logoImg} alt="AnhDuy Sport" className="h-10 w-auto object-contain" />
-              <span className="text-xl font-black italic tracking-wider text-white">
-                AnhDuy <span className="text-[#e31b23]">Sport</span>
-              </span>
-            </Link>
+            {needsContact ? (
+              <div className="inline-flex items-center gap-2.5">
+                <img src={logoImg} alt="AnhDuy Sport" className="h-10 w-auto object-contain" />
+                <span className="text-xl font-black italic tracking-wider text-white">
+                  AnhDuy <span className="text-[#e31b23]">Sport</span>
+                </span>
+              </div>
+            ) : (
+              <Link to="/home" className="inline-flex items-center gap-2.5">
+                <img src={logoImg} alt="AnhDuy Sport" className="h-10 w-auto object-contain" />
+                <span className="text-xl font-black italic tracking-wider text-white">
+                  AnhDuy <span className="text-[#e31b23]">Sport</span>
+                </span>
+              </Link>
+            )}
           </div>
 
           <div className="mb-6">
@@ -505,10 +519,11 @@ export default function LoginPage() {
           ) : (
           <>
           {/* CỔNG ĐĂNG NHẬP (TAB PORTAL) */}
-          <div className="grid grid-cols-2 gap-2 bg-[#0d0f17] p-1.5 rounded-xl border border-gray-800 mb-6">
+          <div className="grid grid-cols-2 gap-2 bg-[#0d0f17] p-1.5 rounded-xl border border-gray-800 mb-3">
             <button
               type="button"
               onClick={() => { setPortal('member'); setError(''); }}
+              aria-pressed={portal === 'member'}
               className={`py-2 text-xs font-bold rounded-lg transition-all ${
                 portal === 'member'
                   ? 'bg-[#e31b23] text-white shadow-md'
@@ -520,15 +535,22 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => { setPortal('staff'); setGoogleChoice(null); setError(''); }}
+              aria-pressed={portal === 'staff'}
               className={`py-2 text-xs font-bold rounded-lg transition-all ${
                 portal === 'staff'
                   ? 'bg-[#e31b23] text-white shadow-md'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Quản trị & Lễ tân
+              Nhân viên
             </button>
           </div>
+
+          <p className="mb-6 text-center text-[11px] font-medium text-gray-400" aria-live="polite">
+            {portal === 'member'
+              ? 'Dành cho học viên đã đăng ký.'
+              : 'Dành cho Quản lý, Lễ tân và Huấn luyện viên.'}
+          </p>
 
           <form className="space-y-4" onSubmit={submit}>
             <div>
@@ -572,7 +594,7 @@ export default function LoginPage() {
 
             {error && (
               <div className="rounded-xl bg-red-950/60 border border-red-800/80 px-4 py-3 text-xs font-semibold text-red-300">
-                ⚠️ {error}
+                {error}
               </div>
             )}
 
@@ -581,7 +603,7 @@ export default function LoginPage() {
               disabled={saving}
               className="w-full rounded-xl bg-[#e31b23] hover:bg-[#c4131a] px-4 py-3.5 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-red-900/40 cursor-pointer disabled:opacity-60 transition-all transform active:scale-[0.99]"
             >
-              {saving ? 'Đang xác thực...' : portal === 'member' ? 'Đăng nhập Học viên' : 'Đăng nhập Quản trị / Lễ tân'}
+              {saving ? 'Đang xác thực...' : portal === 'member' ? 'Đăng nhập Học viên' : 'Đăng nhập Nhân viên'}
             </button>
           </form>
 
@@ -618,7 +640,7 @@ export default function LoginPage() {
           </>
           )}
 
-          {!forgotStep && (
+          {!forgotStep && !needsContact && (
             <div className="mt-4 text-center">
               <Link to="/home" className="inline-block text-xs font-semibold text-gray-500 hover:text-gray-300 transition-colors">
                 ← Quay lại trang chủ

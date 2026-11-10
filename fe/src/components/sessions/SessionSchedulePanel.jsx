@@ -4,6 +4,9 @@ import SessionRoomLine from '../schedule/SessionRoomLine';
 import {
   cancelSession,
   changeSessionCoach,
+  getSessionSlots,
+  rescheduleSession,
+  scheduleSessionMakeup,
   getClasses,
   getSessionOptions,
   getSessions,
@@ -60,6 +63,7 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
 
   const [editing, setEditing] = useState(null);
   const [cancelling, setCancelling] = useState(null);
+  const [slotting, setSlotting] = useState(null);
 
   useEffect(() => {
     getSports('1').then((data) => setSports(Array.isArray(data) ? data : [])).catch(() => setSports([]));
@@ -116,6 +120,7 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
   const handleSaved = (message) => {
     setEditing(null);
     setCancelling(null);
+    setSlotting(null);
     setNotice(message);
     reload();
   };
@@ -276,6 +281,15 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
                             {isAdmin && (
                               <button
                                 type="button"
+                                onClick={() => setSlotting({ session, mode: 'reschedule' })}
+                                className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                              >
+                                Đổi lịch học
+                              </button>
+                            )}
+                            {isAdmin && (
+                              <button
+                                type="button"
                                 onClick={() => setCancelling(session)}
                                 className="border border-red-200 bg-white text-[#e31b23] hover:bg-red-50 font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                               >
@@ -283,6 +297,14 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
                               </button>
                             )}
                           </div>
+                        ) : isAdmin && session.status === 'cancelled' && !hasMakeup(sessions, session) && session.date >= today ? (
+                          <button
+                            type="button"
+                            onClick={() => setSlotting({ session, mode: 'makeup' })}
+                            className="bg-slate-900 hover:bg-[#e31b23] text-white font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                          >
+                            Xếp buổi bù
+                          </button>
                         ) : (
                           <span className="text-[11px] font-bold text-slate-300">—</span>
                         )}
@@ -315,7 +337,19 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
       {cancelling && (
         <CancelSessionModal session={cancelling} onClose={() => setCancelling(null)} onSaved={handleSaved} />
       )}
+
+      {slotting && (
+        <SessionSlotModal session={slotting.session} mode={slotting.mode} onClose={() => setSlotting(null)} onSaved={handleSaved} />
+      )}
     </div>
+  );
+}
+
+// Buổi đã hủy đã có buổi bù khi cùng lớp có buổi ghi "Buổi bù cho buổi ngày dd/MM/yyyy".
+export function hasMakeup(sessions, cancelled) {
+  const marker = `Buổi bù cho buổi ngày ${formatDate(String(cancelled.date).slice(0, 10))}`;
+  return sessions.some(
+    (item) => item.classId === cancelled.classId && item.status !== 'cancelled' && String(item.note || '').startsWith(marker),
   );
 }
 
@@ -480,10 +514,159 @@ export function EditSessionModal({ session, isAdmin, onClose, onSaved }) {
   );
 }
 
+// Chọn ngày rồi chọn khung giờ còn trống (khung bận bị khóa kèm lý do).
+export function SlotPicker({ session, date, onDate, slotId, onSlot, minDate }) {
+  const [slots, setSlots] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!date) {
+      setSlots([]);
+      return undefined;
+    }
+
+    let ignore = false;
+    setLoading(true);
+    getSessionSlots(session.id, date)
+      .then((data) => {
+        if (!ignore) setSlots(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!ignore) setSlots([]);
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [session.id, date]);
+
+  return (
+    <div className="space-y-3">
+      <label className="block space-y-1.5">
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Ngày học mới</span>
+        <input
+          type="date"
+          value={date}
+          min={minDate}
+          onChange={(event) => {
+            onDate(event.target.value);
+            onSlot('');
+          }}
+          className={`${inputClass} w-full`}
+        />
+      </label>
+      {date && (
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Khung giờ</span>
+          {loading ? (
+            <p className="text-xs font-semibold text-slate-400">Đang kiểm tra lịch trống...</p>
+          ) : slots.length === 0 ? (
+            <p className="text-xs font-semibold text-slate-400">Không có khung giờ phù hợp.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {slots.map((slot) => (
+                <button
+                  key={slot.id}
+                  type="button"
+                  disabled={slot.isBusy}
+                  title={slot.busyReason || ''}
+                  onClick={() => onSlot(slot.id)}
+                  className={`rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors ${
+                    String(slotId) === String(slot.id)
+                      ? 'border-[#e31b23] bg-red-50 text-[#e31b23]'
+                      : slot.isBusy
+                        ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
+                        : 'border-slate-200 bg-white text-slate-800 hover:border-[#e31b23]'
+                  }`}
+                >
+                  <span className="block tabular-nums">{slot.name}</span>
+                  {slot.isBusy && <span className="mt-0.5 block text-[10px] font-semibold text-red-500">{slot.busyReason}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// mode = 'reschedule': dời chính buổi này. mode = 'makeup': xếp buổi bù cho buổi đã hủy.
+export function SessionSlotModal({ session, mode, onClose, onSaved }) {
+  const [date, setDate] = useState('');
+  const [slotId, setSlotId] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const tomorrow = addDays(0);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!date || !slotId) {
+      setError('Chọn ngày và khung giờ.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      if (mode === 'makeup') {
+        await scheduleSessionMakeup(session.id, { date, timeSlotId: slotId });
+        onSaved(`Đã xếp buổi bù cho ${session.className} vào ${formatDate(date)}.`);
+      } else {
+        await rescheduleSession(session.id, { date, timeSlotId: slotId, reason });
+        onSaved(`Đã đổi lịch ${session.className}, buổi ${session.sessionNo} sang ${formatDate(date)}.`);
+      }
+    } catch (err) {
+      setError(err.message || 'Không lưu được thay đổi.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalFrame
+      title={mode === 'makeup' ? 'Xếp buổi bù' : 'Đổi lịch buổi học'}
+      badge={mode === 'makeup' ? 'Buổi bù' : 'Đổi lịch'}
+      session={session}
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <SlotPicker session={session} date={date} onDate={setDate} slotId={slotId} onSlot={setSlotId} minDate={tomorrow} />
+        {mode !== 'makeup' && (
+          <label className="block space-y-1.5">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Lý do đổi lịch (không bắt buộc)</span>
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              rows={2}
+              maxLength={500}
+              className={`${inputClass} w-full font-medium resize-none`}
+            />
+          </label>
+        )}
+        {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">{error}</div>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer">
+            Đóng
+          </button>
+          <button type="submit" disabled={saving || !slotId} className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-60">
+            {saving ? 'Đang lưu...' : mode === 'makeup' ? 'Xếp buổi bù' : 'Đổi lịch'}
+          </button>
+        </div>
+      </form>
+    </ModalFrame>
+  );
+}
+
 export function CancelSessionModal({ session, onClose, onSaved }) {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pickMakeup, setPickMakeup] = useState(true);
+  const [makeupDate, setMakeupDate] = useState('');
+  const [makeupSlot, setMakeupSlot] = useState('');
 
   const submit = async (event) => {
     event.preventDefault();
@@ -492,10 +675,19 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
       return;
     }
 
+    if (pickMakeup && (!makeupDate || !makeupSlot)) {
+      setError('Chọn ngày và khung giờ buổi bù, hoặc chọn "Xếp buổi bù sau".');
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
-      const result = await cancelSession(session.id, reason.trim());
+      const result = await cancelSession(
+        session.id,
+        reason.trim(),
+        pickMakeup ? { date: makeupDate, timeSlotId: makeupSlot } : null,
+      );
       const makeupDate = result?.makeupSession?.date ? formatDate(String(result.makeupSession.date).slice(0, 10)) : '';
       onSaved(
         makeupDate
@@ -512,8 +704,8 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
     <ModalFrame title="Hủy buổi học" badge="Xác nhận" session={session} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
         <div className="text-xs text-slate-600 bg-red-50/50 border border-red-100 p-3.5 rounded-xl">
-          Buổi học sẽ chuyển sang <strong className="text-[#e31b23]">Đã hủy</strong>. Hệ thống thêm một buổi bù cùng thứ, cùng giờ vào tuần sau.
-          Nếu tuần sau lớp đã có buổi này, buổi bù dời sang tuần cùng thứ còn trống.{' '}
+          Buổi học sẽ chuyển sang <strong className="text-[#e31b23]">Đã hủy</strong>. Bạn tự chọn ngày và giờ buổi bù bên dưới,
+          hệ thống không tự thêm vào cuối khóa.{' '}
           {session.enrolledCount} học viên trong lớp sẽ nhận thông báo kèm lý do và ngày bù.
         </div>
         <label className="block space-y-1.5">
@@ -527,6 +719,18 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
             className={`${inputClass} w-full font-medium resize-none`}
           />
         </label>
+
+        <div className="space-y-3 rounded-xl border border-slate-200 p-3.5">
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+            <input type="checkbox" checked={pickMakeup} onChange={(event) => setPickMakeup(event.target.checked)} />
+            Chọn buổi bù ngay
+          </label>
+          {pickMakeup ? (
+            <SlotPicker session={session} date={makeupDate} onDate={setMakeupDate} slotId={makeupSlot} onSlot={setMakeupSlot} minDate={addDays(0)} />
+          ) : (
+            <p className="text-[11px] font-semibold text-slate-500">Buổi bù sẽ được xếp sau bằng nút "Xếp buổi bù" trên buổi đã hủy.</p>
+          )}
+        </div>
 
         {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">⚠️ {error}</div>}
 

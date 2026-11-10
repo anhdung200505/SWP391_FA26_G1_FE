@@ -1,6 +1,10 @@
 import { clearSession, readSession } from '../auth/session';
 import { notifyDataChanged } from './dataChanged';
 
+// Backend URL: để trống khi chạy local (sử dụng Vite proxy),
+// production lấy từ VITE_API_BASE_URL trong .env.production.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+
 let onUnauthorized = () => {};
 
 export function setUnauthorizedHandler(handler) {
@@ -10,19 +14,23 @@ export function setUnauthorizedHandler(handler) {
 async function request(path, options = {}) {
   const { anonymous = false, headers, ...rest } = options;
   const token = anonymous ? '' : readSession()?.token || localStorage.getItem('token');
+
   let response;
+
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${API_BASE_URL}/api${path}`, {
       ...rest,
       headers: {
         'Content-Type': 'application/json',
-        'accept': 'application/json',
+        accept: 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(headers || {}),
       },
     });
   } catch {
-    throw new Error('Không kết nối được máy chủ. Vui lòng kiểm tra lại kết nối mạng hoặc API.');
+    throw new Error(
+      'Không kết nối được máy chủ. Vui lòng kiểm tra lại kết nối mạng hoặc API.',
+    );
   }
 
   if (response.status === 401 && !anonymous) {
@@ -33,17 +41,21 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     let message = 'Thao tác thất bại.';
+
     try {
       const body = await response.json();
       if (body.message) message = body.message;
     } catch {
       message = 'Máy chủ từ chối thao tác.';
     }
+
     throw new Error(message);
   }
 
   notifyDataChanged(rest.method);
+
   if (response.status === 204) return null;
+
   return response.json();
 }
 
@@ -160,10 +172,12 @@ export function getSportsByCenter(centerId = '1') {
 
 export function getClasses(centerId, sportId) {
   const params = new URLSearchParams();
+
   if (centerId) params.append('centerId', centerId);
   if (sportId) params.append('sportId', sportId);
 
   const queryString = params.toString();
+
   return request(`/catalog/classes${queryString ? `?${queryString}` : ''}`);
 }
 
@@ -181,8 +195,11 @@ export function getCoachesBySport(sportId) {
 
 function toQuery(params = {}) {
   const query = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, value]) => value)),
+    Object.fromEntries(
+      Object.entries(params).filter(([, value]) => value),
+    ),
   ).toString();
+
   return query ? `?${query}` : '';
 }
 
@@ -207,7 +224,8 @@ export function getTimeSlots(kind = 'group') {
   return request(`/time-slots${toQuery({ kind })}`);
 }
 
-// { courseId, startDate, endDate, capacity, schedules: [{ weekday, timeSlotId }] } → số buổi, HLV/phòng kèm isBusy
+// { courseId, startDate, endDate, capacity, schedules: [{ weekday, timeSlotId }] }
+// → số buổi, HLV/phòng kèm isBusy
 export function checkClassAvailability(payload) {
   return request('/management/classes/availability', {
     method: 'POST',
@@ -227,7 +245,8 @@ export function getClassCoachOptions(classId) {
   return request(`/management/classes/${classId}/coach-options`);
 }
 
-// Đổi HLV cho mọi buổi chưa diễn ra của lớp; học viên của lớp nhận thông báo. { coachUserId, note }
+// Đổi HLV cho mọi buổi chưa diễn ra của lớp;
+// học viên của lớp nhận thông báo. { coachUserId, note }
 export function changeClassCoach(classId, payload) {
   return request(`/management/classes/${classId}/coach`, {
     method: 'PUT',
@@ -235,28 +254,34 @@ export function changeClassCoach(classId, payload) {
   });
 }
 
-// Chỉ lớp canDelete = true (chưa ai đăng ký). Xóa cùng lịch tuần và buổi học. Trả null (204).
+// Chỉ lớp canDelete = true (chưa ai đăng ký).
+// Xóa cùng lịch tuần và buổi học. Trả null (204).
 export function deleteClass(classId) {
-  return request(`/management/classes/${classId}`, { method: 'DELETE' });
+  return request(`/management/classes/${classId}`, {
+    method: 'DELETE',
+  });
 }
 
 // ==========================================
 // API LỊCH BUỔI HỌC (SESSIONS)
 // ==========================================
 
-// params: classId, sportId, from, to (yyyy-MM-dd). Mặc định từ hôm nay trở đi.
+// params: classId, sportId, from, to (yyyy-MM-dd).
+// Mặc định từ hôm nay trở đi.
 export function getSessions(params = {}) {
   return request(`/sessions${toQuery(params)}`);
 }
 
-// Học viên: lịch học của mình (kể cả buổi đã hủy), mỗi buổi kèm attendanceStatus: present | late | absent | null.
+// Học viên: lịch học của mình (kể cả buổi đã hủy),
+// mỗi buổi kèm attendanceStatus: present | late | absent | null.
 // params: from, to (yyyy-MM-dd). Mặc định từ hôm nay trở đi.
 export function getMySessions(params = {}) {
   return request(`/sessions/mine${toQuery(params)}`);
 }
 
-// Học viên: lịch sử thanh toán (mua khóa học, mua/gia hạn/nâng hạng gói), mới nhất trước.
-// { id, invoiceCode, kind: class | membership, title, amount, paymentMethod, status, createdAt, paidAt }
+// Học viên: lịch sử thanh toán (mua khóa học, mua/gia hạn/nâng hạng gói),
+// mới nhất trước.
+// { id, invoiceCode, kind, title, amount, paymentMethod, status, createdAt, paidAt }
 export function getMyPayments() {
   return request('/payments/mine');
 }
@@ -282,31 +307,63 @@ export function changeSessionCoach(sessionId, payload) {
   });
 }
 
-// Quản trị xem và sửa điểm danh một buổi của lớp bất kỳ, mọi thời điểm. Trả { rows, canEdit, lockReason, ... }.
+// Quản trị xem và sửa điểm danh một buổi của lớp bất kỳ,
+// mọi thời điểm. Trả { rows, canEdit, lockReason, ... }.
 export function getAdminAttendance(classId, sessionId) {
-  return request(`/management/classes/${classId}/sessions/${sessionId}/attendance`);
+  return request(
+    `/management/classes/${classId}/sessions/${sessionId}/attendance`,
+  );
 }
 
-// marks: [{ memberUserId, status: present | late | absent }], phải đủ học viên đang học của lớp.
+// marks: [{ memberUserId, status: present | late | absent }],
+// phải đủ học viên đang học của lớp.
 export function saveAdminAttendance(classId, sessionId, marks) {
-  return request(`/management/classes/${classId}/sessions/${sessionId}/attendance`, {
-    method: 'PUT',
-    body: JSON.stringify({ marks }),
-  });
+  return request(
+    `/management/classes/${classId}/sessions/${sessionId}/attendance`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ marks }),
+    },
+  );
 }
 
-export function cancelSession(sessionId, reason) {
+// makeup = { date: 'yyyy-MM-dd', timeSlotId } do quản trị chọn; bỏ trống thì hủy trước, xếp buổi bù sau.
+export function cancelSession(sessionId, reason, makeup) {
   return request(`/sessions/${sessionId}/cancel`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({
+      reason,
+      makeupDate: makeup?.date || null,
+      makeupTimeSlotId: makeup?.timeSlotId ? Number(makeup.timeSlotId) : null,
+    }),
   });
 }
 
+export function rescheduleSession(sessionId, { date, timeSlotId, reason }) {
+  return request(`/sessions/${sessionId}/reschedule`, {
+    method: 'POST',
+    body: JSON.stringify({ date, timeSlotId: Number(timeSlotId), reason: reason || null }),
+  });
+}
+
+export function scheduleSessionMakeup(sessionId, { date, timeSlotId }) {
+  return request(`/sessions/${sessionId}/makeup`, {
+    method: 'POST',
+    body: JSON.stringify({ date, timeSlotId: Number(timeSlotId) }),
+  });
+}
+
+export function getSessionSlots(sessionId, date) {
+  return request(`/sessions/${sessionId}/slots?date=${encodeURIComponent(date)}`);
+}
+
 // ==========================================
-// API HOẠT ĐỘNG CỦA LỄ TÂN & QUẢN TRỊ (chuông ở trang quản trị và portal lễ tân)
+// API HOẠT ĐỘNG CỦA LỄ TÂN & QUẢN TRỊ
+// (chuông ở trang quản trị và portal lễ tân)
 // ==========================================
 
-// [{ id, actorUserId, actorName, actorRole, actorRoleLabel, action, entityName, entityId, detail, createdAt }], mới nhất trước.
+// [{ id, actorUserId, actorName, actorRole, actorRoleLabel,
+// action, entityName, entityId, detail, createdAt }], mới nhất trước.
 // role: RECEPTIONIST | ADMIN, để trống lấy cả hai.
 export function getStaffActivity({ role, limit = 60 } = {}) {
   return request(`/staff-activity${toQuery({ role, limit })}`);
@@ -316,17 +373,22 @@ export function getStaffActivity({ role, limit = 60 } = {}) {
 // API THÔNG BÁO CỦA TÔI (chuông ở header học viên)
 // ==========================================
 
-// { unreadCount, items: [{ id, title, content, isRead, createdAt }] }, mới nhất trước
+// { unreadCount, items: [{ id, title, content, isRead, createdAt }] },
+// mới nhất trước
 export function getMyNotifications(limit = 30) {
   return request(`/notifications/mine?limit=${limit}`);
 }
 
 export function markNotificationRead(notificationId) {
-  return request(`/notifications/${notificationId}/read`, { method: 'POST' });
+  return request(`/notifications/${notificationId}/read`, {
+    method: 'POST',
+  });
 }
 
 export function markAllNotificationsRead() {
-  return request('/notifications/read-all', { method: 'POST' });
+  return request('/notifications/read-all', {
+    method: 'POST',
+  });
 }
 
 // ==========================================
@@ -352,13 +414,16 @@ export function getClassRegistrationStatus(paymentId) {
   return request(`/class-registrations/${paymentId}`);
 }
 
-// Đơn đang chờ thanh toán còn trong 3 phút (đăng ký lớp và mua gói), mới nhất lên đầu
+// Đơn đang chờ thanh toán còn trong 3 phút
+// (đăng ký lớp và mua gói), mới nhất lên đầu
 export function getPendingCheckouts() {
   return request('/class-registrations/pending');
 }
 
 export function refreshClassCheckout(paymentId) {
-  return request(`/class-registrations/${paymentId}/refresh`, { method: 'POST' });
+  return request(`/class-registrations/${paymentId}/refresh`, {
+    method: 'POST',
+  });
 }
 
 export function payRegistration(payload) {
@@ -399,14 +464,18 @@ export function getRevenue() {
 }
 
 export function updatePackageAiQuota(packageId, payload) {
-  return request(`/management/packages/${encodeURIComponent(packageId)}/ai-quota`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
+  return request(
+    `/management/packages/${encodeURIComponent(packageId)}/ai-quota`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function getUserAccounts(params = {}) {
   const query = new URLSearchParams(params).toString();
+
   return request(`/user-accounts${query ? `?${query}` : ''}`);
 }
 
@@ -461,29 +530,39 @@ export function getMemberProfile(memberUserId) {
   return request(`/members/${memberUserId}/profile`);
 }
 
-// Hồ sơ và ảnh đại diện cùng một request. file bỏ trống thì giữ ảnh cũ.
+// Hồ sơ và ảnh đại diện cùng một request.
+// file bỏ trống thì giữ ảnh cũ.
 export async function updateMemberProfile(memberUserId, payload, file) {
   const token = readSession()?.token || localStorage.getItem('token');
+
   const form = new FormData();
+
   form.append('fullName', payload.fullName ?? '');
   form.append('phone', payload.phone ?? '');
   form.append('dateOfBirth', payload.dateOfBirth ?? '');
   form.append('gender', payload.gender ?? '');
+
   if (payload.email) form.append('email', payload.email);
   if (file) form.append('file', file);
 
   let response;
+
   try {
-    response = await fetch(`/api/members/${memberUserId}/profile`, {
-      method: 'PUT',
-      headers: {
-        accept: 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    response = await fetch(
+      `${API_BASE_URL}/api/members/${memberUserId}/profile`,
+      {
+        method: 'PUT',
+        headers: {
+          accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: form,
       },
-      body: form,
-    });
+    );
   } catch {
-    throw new Error('Không kết nối được máy chủ. Vui lòng kiểm tra lại kết nối mạng hoặc API.');
+    throw new Error(
+      'Không kết nối được máy chủ. Vui lòng kiểm tra lại kết nối mạng hoặc API.',
+    );
   }
 
   if (response.status === 401) {
@@ -493,10 +572,13 @@ export async function updateMemberProfile(memberUserId, payload, file) {
   }
 
   const body = await response.json().catch(() => null);
+
   if (!response.ok) {
     throw new Error(body?.message || 'Cập nhật hồ sơ thất bại.');
   }
+
   notifyDataChanged('PUT');
+
   return body;
 }
 
@@ -556,7 +638,8 @@ export function processSupportRequestDecision(requestId, { decision, note }) {
 }
 
 // ==========================================
-// API QUẢN LÝ GÓI HỘI VIÊN & GIA HẠN PAYOS (MEMBERSHIP & RENEWALS)
+// API QUẢN LÝ GÓI HỘI VIÊN & GIA HẠN PAYOS
+// (MEMBERSHIP & RENEWALS)
 // ==========================================
 
 // Lấy gói đang dùng, lịch sử & danh sách gói đang bán
@@ -579,21 +662,40 @@ export function createMembershipRenewal(memberUserId, packageId) {
 
 // Kiểm tra & xác nhận cập nhật hạn gói sau khi thanh toán PayOS
 export function confirmMembershipRenewal(memberUserId, paymentId) {
-  return request(`/members/${memberUserId}/membership/renewals/${paymentId}/confirm`, {
-    method: 'POST',
-  });
+  return request(
+    `/members/${memberUserId}/membership/renewals/${paymentId}/confirm`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 // ==========================================
 // API HỌC 1-1 (PRIVATE CLASSES)
 // ==========================================
 
-// Học viên: gói 1-1 (lọc theo môn), tìm HLV rảnh, gửi/hủy/thanh toán yêu cầu
+// Học viên: gói 1-1 (lọc theo môn), tìm HLV rảnh,
+// gửi/hủy/thanh toán yêu cầu
 export function getPrivateCourses(sportId) {
   return request(`/private-classes/courses${toQuery({ sportId })}`);
 }
 
-// { courseId, startDate, slots: [{ weekday, timeSlotId }] } → số buổi, còn phòng, HLV kèm isBusy/busyReason
+// HLV dạy môn của gói 1-1 (học viên chọn HLV trước rồi mới xem lịch)
+export function getPrivateCoaches(courseId) {
+  return request(`/private-classes/coaches${toQuery({ courseId })}`);
+}
+
+// { courseId, coachUserId, startDate } (startDate từ hôm nay + 3 ngày)
+// → { sessionCount, busyCells: [{ weekday, timeSlotId, reason }] }: ô HLV hoặc học viên đã bận
+export function getPrivateCoachSchedule(payload) {
+  return request('/private-classes/coach-schedule', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// { courseId, startDate, slots: [{ weekday, timeSlotId }] }
+// → số buổi, còn phòng, HLV kèm isBusy/busyReason
 export function checkPrivateAvailability(payload) {
   return request('/private-classes/availability', {
     method: 'POST',
@@ -614,15 +716,20 @@ export function getMyPrivateRequests() {
 }
 
 export function cancelPrivateRequest(requestId) {
-  return request(`/private-classes/requests/${requestId}/cancel`, { method: 'POST' });
+  return request(`/private-classes/requests/${requestId}/cancel`, {
+    method: 'POST',
+  });
 }
 
 // Tạo đơn thanh toán (mã QR giữ 3 phút) cho yêu cầu đã được duyệt
 export function payPrivateRequest(requestId) {
-  return request(`/private-classes/requests/${requestId}/pay`, { method: 'POST' });
+  return request(`/private-classes/requests/${requestId}/pay`, {
+    method: 'POST',
+  });
 }
 
-// Quản lý: danh sách (status: pending, approved, paid, rejected, cancelled, expired), chi tiết kèm buổi dự kiến, duyệt, từ chối
+// Quản lý: danh sách (status: pending, approved, paid, rejected, cancelled, expired),
+// chi tiết kèm buổi dự kiến, duyệt, từ chối
 export function getPrivateRequests(status) {
   return request(`/management/private-requests${toQuery({ status })}`);
 }
@@ -632,12 +739,41 @@ export function getPrivateRequestDetail(requestId) {
 }
 
 export function approvePrivateRequest(requestId) {
-  return request(`/management/private-requests/${requestId}/approve`, { method: 'POST' });
+  return request(`/management/private-requests/${requestId}/approve`, {
+    method: 'POST',
+  });
 }
 
 export function rejectPrivateRequest(requestId, reason) {
   return request(`/management/private-requests/${requestId}/reject`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
+  });
+}
+
+// ==========================================
+// Phòng tập (quản trị)
+// ==========================================
+export function getRoomOverview() {
+  return request('/management/rooms/overview');
+}
+
+// Các lớp còn buổi sắp tới trong phòng: dùng để báo trước khi ngưng dùng.
+export function getRoomUsage(roomId) {
+  return request(`/management/rooms/${roomId}/usage`);
+}
+
+export function createRoom(payload) {
+  return request('/management/rooms', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateRoom(roomId, payload) {
+  return request(`/management/rooms/${roomId}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export function setRoomStatus(roomId, isActive) {
+  return request(`/management/rooms/${roomId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ isActive }),
   });
 }

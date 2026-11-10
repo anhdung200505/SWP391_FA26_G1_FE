@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <None Update="Assets\email-logo.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\config\*.json" Link="config\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

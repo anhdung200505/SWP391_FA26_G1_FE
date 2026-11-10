@@ -63,7 +63,7 @@ export default function CoachPage() {
       <Header forceWhite />
 
       {/* 2. HERO BANNER FULL MÀN HÌNH (h-screen) */}
-      <section className="relative w-full h-screen pt-16 bg-[#0d0f17] overflow-hidden flex flex-col justify-between">
+      <section className="relative w-full min-h-dvh pt-16 bg-[#0d0f17] overflow-x-hidden flex flex-col justify-between">
         
         {/* KHỐI ẢNH NỀN HERO GYM & OVERLAY */}
         <div className="absolute inset-0 z-0">

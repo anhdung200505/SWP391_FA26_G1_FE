@@ -16,7 +16,7 @@ namespace AnhDuySport.Api.Services;
 //      ├─ Yes → Enter Required Changes → Send New Analysis Request → Generate lại
 //      └─ No  → Save Plan to Member Account → Sync Schedule to Personal Calendar
 //             → View Daily Exercise Routine
-public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClient gemini, CourseMaterialFlowService materials)
+public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClient gemini)
 {
     private static readonly TimeOnly DefaultStart = new(18, 0);
 
@@ -135,9 +135,9 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         var metric = await LatestBodyAsync(member.UserId)
             ?? throw new InvalidOperationException("Hãy nhập chỉ số BMI trước khi nhập mục tiêu.");
         var goal = RequireText(request.Goal, "Nhập mục tiêu cá nhân.", 500);
-        if (request.SessionsPerWeek is < 2 or > 6)
+        if (request.SessionsPerWeek is < 1 or > 7)
         {
-            throw new InvalidOperationException("Số buổi mỗi tuần phải từ 2 đến 6.");
+            throw new InvalidOperationException("Số buổi mỗi tuần phải từ 1 đến 7.");
         }
 
         if (request.SessionMinutes is < 20 or > 90)
@@ -146,10 +146,25 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         }
 
         var history = await CollectHistoryAsync(member.UserId);
-        RequireCoachHistory(history);
         AiMembershipQuota.EnsureCanCall(allowance, regenerating: false);
         var health = DescribeHealth(member, metric);
         var spec = BuildSpec(goal, request.SessionsPerWeek, request.SessionMinutes, metric.Bmi, history, null, DefaultStart);
+        spec = WithChosenIntensity(spec, request.Intensity, metric.Bmi);
+        int? totalSessions = null;
+        if (request.TotalSessions is int total)
+        {
+            if (total < request.SessionsPerWeek || total > 84)
+            {
+                throw new InvalidOperationException($"Tổng số buổi từ {request.SessionsPerWeek} (bằng số buổi mỗi tuần) đến 84.");
+            }
+
+            totalSessions = total;
+            spec = spec with { DurationWeeks = Math.Clamp((int)Math.Ceiling(total / (double)spec.SessionsPerWeek), 1, 12) };
+            if (total > spec.DurationWeeks * spec.SessionsPerWeek)
+            {
+                throw new InvalidOperationException($"Với {spec.SessionsPerWeek} buổi mỗi tuần, tối đa {spec.DurationWeeks * spec.SessionsPerWeek} buổi (12 tuần). Hãy tăng số buổi mỗi tuần hoặc giảm tổng số buổi.");
+            }
+        }
         var now = DateTime.Now;
         var recommendation = await db.WorkoutRecommendations
             .Include(item => item.Sessions)
@@ -172,6 +187,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         }
 
         var tokens = await ApplySpecAsync(recommendation, metric, goal, spec, health, history, member.FullName, null, now);
+        recommendation.TotalSessions = totalSessions;
         AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Generate, tokens, now);
         var log = AddLog(member, "Tạo gợi ý tập cá nhân", recommendation.PlanName, now);
         await db.SaveChangesAsync();
@@ -211,8 +227,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         {
             var changes = RequireText(request.Changes, "Nhập nội dung cần chỉnh.", 1000);
             var history = await CollectHistoryAsync(member.UserId);
-            RequireCoachHistory(history);
-            AiMembershipQuota.EnsureCanCall(allowance, regenerating: true);
+                AiMembershipQuota.EnsureCanCall(allowance, regenerating: true);
             var spec = BuildSpec(
                 recommendation.Goal,
                 recommendation.SessionsPerWeek,
@@ -252,11 +267,11 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         return await SaveAndSyncAsync(member, recommendation, now);
     }
 
-    // Member tạo yêu cầu regenerate sau khi đã có giáo án, kể cả giáo án đã lưu.
+    // Member tạo lại gợi ý sau khi đã có bài (kể cả bài đã lưu): ghi chú tự do và/hoặc chỉnh cường độ, số buổi, số phút, tổng số buổi.
+    // Mỗi lần tạo lại tính vào lượt tạo lại và token của gói.
     public async Task<WorkoutPlanResponse> RegenerateAsync(string memberUserId, RegenerateWorkoutRequest request)
     {
         var member = await FindActiveMemberAsync(memberUserId);
-        var changes = RequireText(request.Changes, "Nhập lý do muốn tạo lại gợi ý tập.", 1000);
         var metric = await LatestBodyAsync(member.UserId)
             ?? throw new InvalidOperationException("Hãy nhập chỉ số BMI trước khi tạo lại gợi ý tập.");
         var proposed = await db.WorkoutRecommendations
@@ -268,20 +283,80 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             .FirstOrDefaultAsync()
             ?? throw new InvalidOperationException("Chưa có gợi ý tập để tạo lại. Hãy nhập mục tiêu trước.");
 
+        var text = string.IsNullOrWhiteSpace(request.Changes) ? null : request.Changes.Trim();
+        if (text is { Length: > 1000 })
+        {
+            throw new InvalidOperationException("Nội dung chỉnh tối đa 1000 ký tự.");
+        }
+
+        var chosen = request.Intensity is null ? null : WorkoutIntensity.Normalize(request.Intensity)
+            ?? throw new InvalidOperationException("Cường độ phải là Rất nhẹ, Nhẹ, Trung bình, Cao hoặc Tối đa.");
+        var perWeek = request.SessionsPerWeek ?? source.SessionsPerWeek;
+        var minutes = request.SessionMinutes ?? source.SessionMinutes;
+        if (perWeek is < 1 or > 7)
+        {
+            throw new InvalidOperationException("Số buổi mỗi tuần phải từ 1 đến 7.");
+        }
+
+        if (minutes is < 20 or > 90)
+        {
+            throw new InvalidOperationException("Mỗi buổi phải từ 20 đến 90 phút.");
+        }
+
+        var parts = new List<string>();
+        if (chosen is not null && chosen != source.IntensityLevel)
+        {
+            parts.Add($"cường độ {chosen}");
+        }
+
+        if (perWeek != source.SessionsPerWeek)
+        {
+            parts.Add($"{perWeek} buổi mỗi tuần");
+        }
+
+        if (minutes != source.SessionMinutes)
+        {
+            parts.Add($"{minutes} phút mỗi buổi");
+        }
+
+        if (request.TotalSessions is int wanted)
+        {
+            parts.Add($"tổng {wanted} buổi");
+        }
+
+        if (text is null && parts.Count == 0)
+        {
+            throw new InvalidOperationException("Hãy đổi cường độ, số buổi, thời gian tập hoặc nhập nội dung cần chỉnh.");
+        }
+
+        var changes = string.Join(". ", new[] { parts.Count == 0 ? null : "Đổi " + string.Join(", ", parts), text }.Where(item => item is not null));
         var history = await CollectHistoryAsync(member.UserId);
-        RequireCoachHistory(history);
         var allowance = await AiMembershipQuota.LoadAsync(db, member.UserId);
         AiMembershipQuota.EnsureCanCall(allowance, regenerating: true);
         var health = DescribeHealth(member, metric);
-        var spec = BuildSpec(
-            source.Goal,
-            source.SessionsPerWeek,
-            source.SessionMinutes,
-            metric.Bmi,
-            history,
-            changes,
-            source.PreferredStartTime);
-        spec = spec with { DurationWeeks = AdjustWeeks(source.DurationWeeks, changes) };
+        var spec = BuildSpec(source.Goal, perWeek, minutes, metric.Bmi, history, text, source.PreferredStartTime);
+        spec = spec with { SessionsPerWeek = Math.Clamp(spec.SessionsPerWeek, 1, 7), SessionMinutes = Math.Clamp(spec.SessionMinutes, 20, 90) };
+        // Số buổi và phút do hội viên chọn rõ ràng thắng gợi ý theo từ khóa trong ghi chú.
+        spec = spec with
+        {
+            SessionsPerWeek = request.SessionsPerWeek ?? spec.SessionsPerWeek,
+            SessionMinutes = request.SessionMinutes ?? spec.SessionMinutes,
+            Intensity = chosen is null && text is null && source.IntensityLevel is not null ? source.IntensityLevel : spec.Intensity,
+            DurationWeeks = AdjustWeeks(source.DurationWeeks, text ?? ""),
+        };
+        spec = WithChosenIntensity(spec, chosen, metric.Bmi);
+        int? totalSessions = null;
+        if (request.TotalSessions is int total)
+        {
+            if (total < spec.SessionsPerWeek || total > spec.SessionsPerWeek * 12)
+            {
+                throw new InvalidOperationException($"Tổng số buổi từ {spec.SessionsPerWeek} (bằng số buổi mỗi tuần) đến {spec.SessionsPerWeek * 12} (tối đa 12 tuần).");
+            }
+
+            totalSessions = total;
+            spec = spec with { DurationWeeks = Math.Clamp((int)Math.Ceiling(total / (double)spec.SessionsPerWeek), 1, 12) };
+        }
+
         var now = DateTime.Now;
         var recommendation = proposed;
         if (recommendation is null)
@@ -302,6 +377,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         recommendation.Revision += 1;
         var tokens = await ApplySpecAsync(recommendation, metric, source.Goal, spec, health, history, member.FullName, changes, now);
+        recommendation.TotalSessions = totalSessions;
         AiMembershipQuota.Record(db, allowance, AiMembershipQuota.Regenerate, tokens, now);
         var log = AddLog(member, "Yêu cầu tạo lại gợi ý tập cá nhân", changes, now);
         await db.SaveChangesAsync();
@@ -457,52 +533,22 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             })
             .ToList();
         var classSchedule = scheduleLines.Count == 0
-            ? "Học viên chưa có buổi học môn nào."
+            ? "Hội viên không học lớp nào."
             : string.Join(" | ", scheduleLines);
 
-        var histories = await (
-            from history in db.CoachTrainingHistories.AsNoTracking()
-            join trainingClass in db.Classes.AsNoTracking() on history.ClassId equals trainingClass.ClassId
-            join course in db.Courses.AsNoTracking() on trainingClass.CourseId equals course.CourseId
-            join coach in db.UserAccounts.AsNoTracking() on history.CoachUserId equals coach.UserId
-            where history.MemberUserId == userId
-            orderby history.RecordedAt descending
-            select new { course.CourseName, coach.FullName, history.RecordedAt, history.Content, history.SessionId })
-            .Take(8)
-            .ToListAsync();
-        var sessionIds = histories.Where(item => item.SessionId != null).Select(item => item.SessionId!.Value).Distinct().ToList();
-        var sessionNotes = await SessionNotesAsync(sessionIds);
-        var summary = histories.Count == 0
-            ? "Coach chưa nhập lịch sử tập."
-            : string.Join(" | ", histories.Select(item =>
-                $"{item.CourseName}, {item.FullName}, {(item.SessionId is int sessionId && sessionNotes.TryGetValue(sessionId, out var note) ? note : "chưa gắn buổi")}, {item.RecordedAt:dd/MM/yyyy}: {item.Content}"));
-        var evaluations = await OverallEvaluationsOfMemberAsync(userId);
-        var overall = evaluations.Count == 0
-            ? "Huấn luyện viên chưa có đánh giá tổng."
-            : string.Join(" | ", evaluations.Select(item =>
-                $"{item.CourseName}: {(item.Score is decimal score ? score.ToString("0.0") : "chưa có điểm")}/10. {item.Comment}"));
-        var intakeRows = await (
-            from note in db.ClassIntakeNotes.AsNoTracking()
-            join trainingClass in db.Classes.AsNoTracking() on note.ClassId equals trainingClass.ClassId
-            join course in db.Courses.AsNoTracking() on trainingClass.CourseId equals course.CourseId
-            where note.MemberUserId == userId
-            select new { course.CourseName, note.Comment }).ToListAsync();
-        var intake = intakeRows.Count == 0
-            ? "Chưa có nhận xét đầu khóa."
-            : string.Join(" | ", intakeRows.Select(item => $"{item.CourseName}: {item.Comment}"));
-        var raft = await materials.RaftContextAsync(sessions.Select(item => item.SportId).ToList());
+        // Gợi ý tập cá nhân chỉ dựa trên chỉ số và mục tiêu hội viên nhập: không đưa nhận xét của HLV hay giáo án vào.
         var weekdays = sessions.Select(item => item.SessionDate.DayOfWeek).Distinct().ToList();
         return new TrainingHistory(
-            summary,
+            "",
             classSchedule,
             sessions.Select(item => item.CourseName).Distinct().Count(),
             sessions.Count,
             weekdays,
-            histories.Count,
-            overall,
-            evaluations.Count > 0,
-            intake,
-            raft);
+            0,
+            "",
+            false,
+            "",
+            "");
     }
 
     public async Task<CoachTrainingHistoryListDto> ListCoachHistoryAsync(string coachUserId)
@@ -736,14 +782,6 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
     private static string SessionNote(int? sessionNo, DateOnly sessionDate) =>
         $"{ClassSessionPlanner.SessionTitle(sessionNo)} {sessionDate:dd/MM/yyyy}";
 
-    private static void RequireCoachHistory(TrainingHistory history)
-    {
-        if (history.EntryCount == 0 && !history.HasOverallEvaluation)
-        {
-            throw new InvalidOperationException("Huấn luyện viên chưa ghi lịch sử buổi học hoặc đánh giá tổng. Cần một trong hai trước khi tạo gợi ý tập cá nhân.");
-        }
-    }
-
     private static string DescribeHealth(UserAccount member, MemberBodyMetric metric)
     {
         var gender = string.IsNullOrWhiteSpace(member.Gender) ? "chưa cập nhật" : member.Gender;
@@ -776,7 +814,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         var intensity = bmi switch
         {
-            >= 30 => "Thấp",
+            >= 30 => "Nhẹ",
             >= 25 or < 18.5m => "Trung bình",
             _ when focus is "suc_ben" or "tang_co" => "Cao",
             _ => "Trung bình",
@@ -833,7 +871,7 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         if (Has(text, "nhe", "de hon", "chan thuong", "tac dong thap"))
         {
-            intensity = "Thấp";
+            intensity = "Nhẹ";
             minutes -= 10;
         }
 
@@ -863,12 +901,31 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
 
         return spec with
         {
-            SessionsPerWeek = Math.Clamp(sessions, 2, 6),
+            SessionsPerWeek = Math.Clamp(sessions, 1, 7),
             SessionMinutes = Math.Clamp(minutes, 20, 90),
             DurationWeeks = Math.Clamp(weeks, 2, 12),
             Intensity = intensity,
             StartTime = start,
         };
+    }
+
+    // Hội viên chọn cường độ; BMI từ 30 trở lên bị giới hạn tối đa mức Trung bình để an toàn.
+    private static PlanSpec WithChosenIntensity(PlanSpec spec, string? chosen, decimal bmi)
+    {
+        var level = WorkoutIntensity.Normalize(chosen);
+        if (level is null)
+        {
+            return spec;
+        }
+
+        string? safety = spec.SafetyNote;
+        if (bmi >= 30 && WorkoutIntensity.Rank(level) > WorkoutIntensity.Rank("Trung bình"))
+        {
+            level = "Trung bình";
+            safety = (safety is null ? "" : safety + " ") + "BMI từ 30 trở lên nên cường độ được giới hạn ở mức Trung bình.";
+        }
+
+        return spec with { Intensity = level, SafetyNote = safety };
     }
 
     private async Task<int> ApplySpecAsync(
@@ -915,6 +972,8 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
             : $"{gemini.ProviderLabel}: Yêu cầu phân tích mới sau khi học viên sửa gợi ý tập: {changes}.{scheduleNote}";
         recommendation.PlanName = generated.PlanName;
         recommendation.DurationWeeks = spec.DurationWeeks;
+        recommendation.TotalSessions = null;
+        recommendation.IntensityLevel = spec.Intensity;
         recommendation.PreferredStartTime = spec.StartTime;
         recommendation.Status = "proposed";
         recommendation.UpdatedAt = now;
@@ -951,6 +1010,11 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
         var result = new List<PersonalExercise>();
         for (var date = start; date <= end; date = date.AddDays(1))
         {
+            if (recommendation.TotalSessions is int cap && result.Count >= cap)
+            {
+                break;
+            }
+
             var session = recommendation.Sessions.FirstOrDefault(item => item.Weekday == (int)date.DayOfWeek);
             if (session is null)
             {
@@ -1114,7 +1178,9 @@ public class WorkoutRecommendationFlowService(AppDbContext db, GeminiWorkoutClie
                 row.TrainingHistorySummary,
                 row.AnalysisRequest,
                 row.AnalysisSummary,
-                generated));
+                generated),
+            row.TotalSessions,
+            row.IntensityLevel);
     }
 
     private static BodyMetricDto ToBodyDto(MemberBodyMetric metric) =>

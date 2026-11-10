@@ -1,11 +1,11 @@
 namespace AnhDuySport.Api.Services;
 
-// Đường dẫn trang học viên gắn vào Gmail. Mặc định máy local; đổi App:PublicUrl khi có tên miền.
+// Đường dẫn trang học viên gắn vào Gmail. App:PublicUrl là https://anhduysport.vercel.app.
 public class AppLinks(IConfiguration configuration)
 {
-    public string MemberSchedule() => Url("/hoc-vien-dashboard#schedule");
+    public string MemberSchedule() => Url("/hoc-vien-dashboard?tab=schedule");
 
-    public string MemberOverview() => Url("/hoc-vien-dashboard#overview");
+    public string MemberOverview() => Url("/hoc-vien-dashboard?tab=overview");
 
     public string MembershipRenew() => Url("/dang-ky-khoa-hoc?mode=renew");
 

@@ -52,6 +52,10 @@ public class Room
     [Column("private_concurrency")]
     public int PrivateConcurrency { get; set; } = 1;
 
+    // false: phòng ngưng dùng, không hiện trong các ô chọn phòng. Lớp và buổi đã có giữ nguyên phòng.
+    [Column("is_active")]
+    public bool IsActive { get; set; } = true;
+
     public Center? Center { get; set; }
 }
 
