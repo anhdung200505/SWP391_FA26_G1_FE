@@ -91,7 +91,7 @@ export default function HocVienKhamPhaPage() {
       <StudentHeader user={user} onLogout={handleLogout} />
 
       {/* 2. HERO BANNER SANG TRỌNG & HIỆN ĐẠI */}
-      <section className="relative w-full min-h-[540px] flex items-center overflow-hidden bg-slate-950 border-b border-slate-800/80 pt-16">
+      <section className="relative flex w-full items-center overflow-hidden border-b border-slate-800/80 bg-slate-950 pt-32 pb-8 sm:min-h-[540px] sm:pt-28 sm:pb-0">
         {/* Glow ambient background effects */}
         <div className="absolute top-1/4 left-10 w-96 h-96 bg-red-600/15 rounded-full blur-[130px] pointer-events-none" />
         <div className="absolute bottom-10 right-10 w-[28rem] h-[28rem] bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
@@ -106,46 +106,46 @@ export default function HocVienKhamPhaPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
         </div>
 
-        <div className="relative z-10 w-full px-6 sm:px-12 lg:px-16 py-14 space-y-6 max-w-5xl animate-fade-in-up">
-          <div className="inline-flex items-center gap-2.5 px-3.5 py-1 rounded-sm bg-red-950/60 border border-red-800/50 text-red-400 text-xs font-bold uppercase tracking-widest backdrop-blur-md">
+        <div className="relative z-10 mx-auto flex w-full max-w-5xl animate-fade-in-up flex-col items-center space-y-4 px-4 py-6 text-center sm:items-start sm:space-y-6 sm:px-12 sm:py-14 sm:text-left lg:px-16">
+          <div className="inline-flex items-center gap-2 rounded-sm border border-red-800/50 bg-red-950/60 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-red-400 backdrop-blur-md sm:text-xs">
             <span className="size-1.5 rounded-full bg-red-500 animate-pulse" />
-            KHU PHỨC HỢP THỂ THAO CAO CẤP
+            Khu phức hợp thể thao
           </div>
 
-          <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white leading-none">
+          <h1 className="max-w-xl text-balance text-2xl font-black leading-tight tracking-tight text-white sm:text-5xl sm:leading-none">
             Chào mừng, <span className="bg-gradient-to-r from-red-500 via-rose-400 to-amber-300 bg-clip-text text-transparent">{displayName}</span>
           </h1>
 
-          <p className="text-slate-300 text-base sm:text-lg leading-relaxed font-normal max-w-3xl">
+          <p className="max-w-xl text-sm font-normal leading-relaxed text-slate-300 sm:max-w-3xl sm:text-lg">
             Khám phá không gian tập luyện chuẩn quốc tế. Chọn chương trình huấn luyện phù hợp hoặc kích hoạt gói hội viên để mở khóa toàn bộ tiện ích cùng trợ lý AI tối ưu lịch trình.
           </p>
 
           {/* User info badges with professional SVG icons */}
-          <div className="flex flex-wrap gap-3 text-xs pt-1">
-            <div className="bg-slate-900/90 backdrop-blur-md px-3.5 py-2 rounded-md border border-slate-800 text-slate-300 flex items-center gap-2 font-medium">
+          <div className="flex w-full max-w-md flex-col items-stretch gap-2 pt-1 text-xs sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-800 bg-slate-900/90 px-3 py-2 font-medium text-slate-300 backdrop-blur-md sm:w-auto sm:justify-start">
               <svg className="size-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
               </svg>
-              <span>{displayEmail}</span>
+              <span className="min-w-0 truncate">{displayEmail}</span>
             </div>
 
-            <div className="bg-slate-900/90 backdrop-blur-md px-3.5 py-2 rounded-md border border-slate-800 text-slate-300 flex items-center gap-2 font-medium">
+            <div className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-800 bg-slate-900/90 px-3 py-2 font-medium text-slate-300 backdrop-blur-md sm:w-auto sm:justify-start">
               <svg className="size-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
               </svg>
-              <span>{displayPhone}</span>
+              <span className="min-w-0 truncate">{displayPhone}</span>
             </div>
 
-            <div className="bg-amber-500/10 backdrop-blur-md px-3.5 py-2 rounded-md border border-amber-500/30 text-amber-300 font-semibold flex items-center gap-2">
+            <div className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 font-semibold text-amber-300 backdrop-blur-md sm:w-auto sm:justify-start">
               <span className="size-1.5 rounded-full bg-amber-400" />
               <span>Chưa kích hoạt gói</span>
             </div>
           </div>
 
-          <div className="pt-4 flex flex-wrap gap-4">
+          <div className="flex w-full max-w-md flex-col gap-2 pt-2 sm:max-w-none sm:flex-row sm:flex-wrap sm:gap-4">
             <Link
               to="/dang-ky-khoa-hoc-kham-pha"
-              className="group inline-flex items-center justify-center gap-3 bg-[#e31b23] hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider px-7 py-4 rounded-md shadow-xl shadow-red-950/50 transition-all duration-200 cursor-pointer"
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#e31b23] px-5 py-3 text-xs font-bold uppercase tracking-wide text-white shadow-xl shadow-red-950/50 transition-all duration-200 hover:bg-red-700 sm:w-auto sm:px-7 sm:py-4 cursor-pointer"
             >
               <span>Khám phá các khóa học</span>
               <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -154,7 +154,7 @@ export default function HocVienKhamPhaPage() {
             </Link>
             <Link
               to="/dang-ky-thanh-vien-kham-pha"
-              className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold text-xs uppercase tracking-wider px-7 py-4 rounded-md border border-slate-800 backdrop-blur-md transition-all duration-200 cursor-pointer"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-800 bg-slate-900 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-200 backdrop-blur-md transition-all duration-200 hover:bg-slate-800 hover:text-white sm:w-auto sm:px-7 sm:py-4 cursor-pointer"
             >
               Đăng ký gói hội viên
             </Link>
@@ -172,12 +172,12 @@ export default function HocVienKhamPhaPage() {
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent" />
           </div>
 
-          <div className="relative z-10 p-8 sm:p-12 lg:p-14 flex flex-col lg:flex-row items-center justify-between gap-8">
-            <div className="space-y-4 max-w-2xl">
+          <div className="relative z-10 flex flex-col items-center justify-between gap-6 p-5 text-center sm:p-12 lg:flex-row lg:items-center lg:p-14 lg:text-left">
+            <div className="max-w-2xl space-y-3">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-sm bg-red-900/40 border border-red-700/40 text-red-400 text-[11px] font-bold uppercase tracking-widest backdrop-blur-md">
                 Chương Trình Đào Tạo Chuyên Nghiệp
               </div>
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-tight tracking-tight">
+              <h2 className="text-balance text-xl font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
                 Tìm Khóa Học Phù Hợp Cho Hành Trình Bứt Phá
               </h2>
               <p className="text-slate-300 text-sm sm:text-base leading-relaxed font-normal">

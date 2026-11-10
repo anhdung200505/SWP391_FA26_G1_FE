@@ -127,7 +127,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
             .ToListAsync();
 
         var rooms = await db.Rooms.AsNoTracking()
-            .Where(room => db.SportRooms.Any(link => link.RoomId == room.RoomId
+            .Where(room => room.IsActive && db.SportRooms.Any(link => link.RoomId == room.RoomId
                 && link.SportId == sportId
                 && (session.Class.ClassType == "private" ? link.AllowPrivate : link.AllowGroup)))
             .OrderBy(room => room.RoomName)
@@ -471,6 +471,11 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
         var id = int.TryParse(roomId, out var parsed) ? parsed : 0;
         var room = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(item => item.RoomId == id)
             ?? throw new RegistrationException("Phòng không hợp lệ.");
+        if (!room.IsActive)
+        {
+            throw new RegistrationException("Phòng này đã ngưng sử dụng.");
+        }
+
         var allowed = await db.SportRooms.AnyAsync(link => link.RoomId == id
             && link.SportId == trainingClass.Course!.SportId
             && (trainingClass.ClassType == "private" ? link.AllowPrivate : link.AllowGroup));

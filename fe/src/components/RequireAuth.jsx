@@ -7,7 +7,10 @@ export default function RequireAuth({ children, allowedRoles }) {
 
   // 1. Chưa đăng nhập -> Đá về trang Đăng nhập
   if (!user) {
-    return <Navigate to="/dang-nhap" replace state={{ from: location.pathname }} />;
+    const next = `${location.pathname}${location.search}${location.hash}`;
+    const params = new URLSearchParams();
+    params.set('next', next);
+    return <Navigate to={`/dang-nhap?${params.toString()}`} replace />;
   }
 
   // 2. Nếu route có quy định danh sách Role được phép vào
