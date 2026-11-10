@@ -54,6 +54,12 @@ public class ReceptionController(ReceptionFlowService reception, CenterCheckInFl
         return NoContent();
     }
 
+    [HttpGet("check-in/members")]
+    [EndpointSummary("Lễ tân tìm học viên trước khi check-in")]
+    [EndpointDescription("Tìm theo tên (không phân biệt dấu), mã học viên, email hoặc số điện thoại, tối đa 10 học viên. Mỗi dòng có gói hội viên còn hạn (membershipName, membershipEndDate) và lượt đang ở trong hôm nay (insideCheckInId, insideSince). Chưa ở trong thì check-in bằng POST /check-ins với keyword là mã học viên; đang ở trong thì check-out.")]
+    public async Task<ActionResult<IReadOnlyList<CenterCheckInMemberDto>>> SearchCheckInMembers([FromQuery] string? q) =>
+        Ok(await checkIns.SearchMembersAsync(q));
+
     [HttpPost("check-ins")]
     [EndpointSummary("Lễ tân check-in học viên vào trung tâm")]
     [EndpointDescription("Nhập mã học viên, email hoặc số điện thoại. Không gắn lớp học, chỉ cần gói hội viên còn hạn (400 kèm lý do nếu hết hạn, chưa bắt đầu, chưa có gói hoặc tài khoản bị khóa). Nhiều lượt mỗi ngày. outcome: checked_in (lượt mới), already_inside (đang ở trong, chưa check-out) hoặc duplicate (vừa check-in dưới 10 phút, không tạo thêm).")]

@@ -100,7 +100,7 @@ export default function WorkspaceShell({
 
       {/* KHU VỰC NỘI DUNG CHÍNH + FOOTER */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6 shadow-xs">
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/95 backdrop-blur-md px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:gap-4 sm:px-6 shadow-xs">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -128,14 +128,15 @@ export default function WorkspaceShell({
             </nav>
           </div>
 
-          <div className="flex shrink-0 items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2">
             {headerExtra}
             <Link
               to="/home"
-              className={`relative overflow-hidden px-4 py-2 text-xs font-bold tracking-wider transition-all duration-300 uppercase block cursor-pointer select-none border border-slate-300 text-slate-700 hover:text-white group ${focusRing}`}
+              className={`relative overflow-hidden px-2.5 py-2 text-[11px] font-bold tracking-wider transition-all duration-300 uppercase block cursor-pointer select-none border border-slate-300 text-slate-700 hover:text-white group sm:px-4 sm:text-xs ${focusRing}`}
             >
               <span className="absolute inset-0 bg-[#e31b23] transition-transform duration-300 ease-out origin-left -z-10 scale-x-0 group-hover:scale-x-100" />
-              <span className="relative z-10">Về trang chủ</span>
+              <span className="relative z-10 sm:hidden">Trang chủ</span>
+              <span className="relative z-10 hidden sm:inline">Về trang chủ</span>
             </Link>
           </div>
         </header>

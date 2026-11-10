@@ -10,15 +10,15 @@ const BUTTON_VARIANTS = {
 };
 
 // variant: default (header trắng), dark (portal lễ tân), light (header trong suốt chữ trắng).
-export function BellButton({ label, count, variant = 'default', onClick, ariaLabel }) {
+export function BellButton({ label, count, variant = 'default', compact = false, onClick, ariaLabel }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={ariaLabel || label}
-      className={`relative inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${
-        BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.default
-      }`}
+      className={`relative inline-flex items-center justify-center gap-1.5 text-xs font-bold transition-colors cursor-pointer ${
+        compact ? 'size-9 rounded-full p-0' : 'rounded-xl px-2.5 py-2 sm:px-3'
+      } ${BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.default}`}
     >
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -28,9 +28,15 @@ export function BellButton({ label, count, variant = 'default', onClick, ariaLab
           d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
         />
       </svg>
-      {label}
+      {!compact && <span className="hidden sm:inline">{label}</span>}
       {count > 0 && (
-        <span className="min-w-5 h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#e31b23] text-[10px] font-black text-white">
+        <span
+          className={`inline-flex items-center justify-center rounded-full bg-[#e31b23] font-black text-white ${
+            compact
+              ? 'absolute -right-1 -top-1 min-w-4 h-4 px-1 text-[9px]'
+              : 'min-w-5 h-5 px-1.5 text-[10px]'
+          }`}
+        >
           {count > 99 ? '99+' : count}
         </span>
       )}
@@ -40,7 +46,7 @@ export function BellButton({ label, count, variant = 'default', onClick, ariaLab
 
 export function BellPanel({ title, subtitle, action, toolbar, children }) {
   return (
-    <div className="absolute right-0 top-full pt-2 w-80 sm:w-[420px] z-50">
+    <div className="absolute right-0 top-full z-50 w-[min(20rem,calc(100vw-1rem))] pt-2 sm:w-[min(26rem,calc(100vw-2rem))]">
       <div className="bg-white rounded-xl shadow-2xl border border-gray-100 text-gray-900 overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-100">
           <div>

@@ -5,6 +5,7 @@ import NotificationBell from './NotificationBell';
 
 export default function StudentHeader({ user, onLogout }) {
   const [isTransparent, setIsTransparent] = useState(true);
+  const [accountOpen, setAccountOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -22,6 +23,10 @@ export default function StudentHeader({ user, onLogout }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    setAccountOpen(false);
+  }, [location.pathname]);
+
   const displayName = user?.fullName || user?.userName || 'Học viên';
   const displayEmail = user?.email || '';
 
@@ -38,36 +43,26 @@ export default function StudentHeader({ user, onLogout }) {
 
   return (
     <header
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ease-in-out ${
+      className={`fixed top-0 left-0 w-full z-50 pt-[env(safe-area-inset-top)] transition-all duration-300 ease-in-out ${
         isTransparent
-          ? 'bg-gradient-to-b from-slate-950/90 via-slate-950/50 to-transparent py-4 text-white backdrop-blur-xs'
-          : 'bg-slate-900/95 shadow-xl border-b border-slate-800/80 py-3 text-white backdrop-blur-md'
+          ? 'bg-slate-950/95 text-white backdrop-blur-md lg:bg-gradient-to-b lg:from-slate-950/90 lg:via-slate-950/50 lg:to-transparent lg:py-4'
+          : 'bg-slate-900/95 shadow-xl border-b border-slate-800/80 text-white backdrop-blur-md lg:py-3'
       }`}
     >
-      <div className="flex items-center justify-between w-full px-6 md:px-12 mx-auto">
-        {/* LOGO - DIRECT VỀ TRANG CHỦ HOME */}
-        <Link
-          to="/home"
-          className="flex items-center space-x-2.5 group shrink-0"
-        >
+      <div className="mx-auto flex w-full items-center justify-between gap-2 px-3 py-2 sm:px-6 md:px-12 lg:py-0">
+        <Link to="/home" className="flex min-w-0 items-center gap-2 group">
           <img
             src={logoImg}
             alt="AnhDuy Sport Logo"
-            className={`w-auto object-contain transition-all duration-300 filter drop-shadow-lg ${
-              isTransparent ? 'h-11 md:h-13' : 'h-10 md:h-11'
-            }`}
+            className="h-8 w-auto shrink-0 object-contain drop-shadow-md sm:h-10 lg:h-11"
           />
-          <div className="flex flex-col select-none">
-            <div className="flex items-center font-black italic tracking-wider text-xl md:text-2xl uppercase transition-colors">
-              <span className="text-white drop-shadow-md group-hover:text-red-400 transition-colors">
-                AnhDuy
-              </span>
-              <span className="text-[#e31b23] ml-1.5 drop-shadow-md">
-                Sport
-              </span>
+          <div className="min-w-0 select-none">
+            <div className="flex items-center font-black italic uppercase tracking-wide text-sm sm:text-xl lg:text-2xl">
+              <span className="text-white group-hover:text-red-400">AnhDuy</span>
+              <span className="ml-1 text-[#e31b23]">Sport</span>
             </div>
-            <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest -mt-1">
-              Portal Học Viên
+            <span className="block truncate text-[8px] font-bold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
+              Portal học viên
             </span>
           </div>
         </Link>
@@ -102,18 +97,18 @@ export default function StudentHeader({ user, onLogout }) {
         </nav>
 
         {/* KHU VỰC THÔNG BÁO & AVATAR DROPDOWN */}
-        <div className="flex items-center gap-4">
-          <div className="bg-slate-800/60 p-2 rounded-xl border border-slate-700/60 hover:border-slate-500 transition-all shadow-md">
-            <NotificationBell />
-          </div>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+          <NotificationBell compact variant="dark" />
 
-          {/* AVATAR KÈM HỘP THÔNG TIN KHI RÊ CHUỘT */}
-          <div className="relative group">
+          <div className="group relative">
             <button
               type="button"
-              className="flex items-center focus:outline-none cursor-pointer p-0.5"
+              aria-expanded={accountOpen}
+              aria-label="Tài khoản"
+              onClick={() => setAccountOpen((open) => !open)}
+              className="flex items-center focus:outline-none cursor-pointer"
             >
-              <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-[#e31b23] to-red-700 text-white flex items-center justify-center font-black text-base shadow-lg ring-2 ring-white/20 transition-all duration-300 group-hover:scale-105 group-hover:ring-red-500">
+              <div className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#e31b23] to-red-700 text-sm font-black text-white ring-2 ring-white/20 sm:size-10 sm:text-base">
                 {user?.avatarUrl && /^(\/|https?:)/.test(user.avatarUrl) ? (
                   <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
@@ -123,7 +118,7 @@ export default function StudentHeader({ user, onLogout }) {
             </button>
 
             {/* DROPDOWN MENU KHI HOVER VÀO AVATAR */}
-            <div className="absolute right-0 top-full hidden group-hover:block pt-3 w-64 z-50">
+            <div className={`absolute right-0 top-full z-50 w-[min(16rem,calc(100vw-1.5rem))] pt-2 ${accountOpen ? 'block' : 'hidden'} lg:group-hover:block`}>
               <div className="bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-2xl py-3 border border-slate-800 text-white animate-fadeIn">
                 <div className="px-4 py-2.5 border-b border-slate-800">
                   <p className="text-sm font-black text-white truncate">{displayName}</p>
@@ -172,12 +167,26 @@ export default function StudentHeader({ user, onLogout }) {
       </div>
 
       {/* MOBILE NAV BAR */}
-      <div className="lg:hidden flex items-center justify-around bg-slate-900/95 py-2.5 border-t border-slate-800 text-xs font-bold backdrop-blur-md">
-        <Link to="/home" className="text-slate-300">🏠 Trang chủ</Link>
-        <Link to="/hoc-vien-kham-pha" className="text-red-400 font-black">✨ Khám phá</Link>
-        <Link to="/dang-ky-khoa-hoc-kham-pha" className="text-slate-300">📝 Khóa học</Link>
-        <button onClick={onLogout} className="text-red-400">🚪 Thoát</button>
-      </div>
+      <nav className="grid grid-cols-4 border-t border-slate-800 bg-slate-950 lg:hidden">
+        {[
+          { label: 'Trang chủ', to: '/home' },
+          { label: 'Khám phá', to: '/hoc-vien-kham-pha' },
+          { label: 'Khóa học', to: '/dang-ky-khoa-hoc-kham-pha' },
+        ].map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className={`px-1 py-2.5 text-center text-[11px] font-bold ${
+              location.pathname === item.to ? 'text-[#e31b23]' : 'text-slate-300'
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
+        <button type="button" onClick={onLogout} className="px-1 py-2.5 text-center text-[11px] font-bold text-slate-300">
+          Thoát
+        </button>
+      </nav>
     </header>
   );
 }

@@ -95,7 +95,8 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor, Ema
     // sportId: chỉ phòng dùng được cho lớp nhóm của môn đó (sport_room).
     public async Task<IReadOnlyList<RoomOptionDto>> AccessRoomsAsync(string? centerId, string? sportId)
     {
-        var query = db.Rooms.AsNoTracking().AsQueryable();
+        // Phòng ngưng dùng không hiện trong ô chọn.
+        var query = db.Rooms.AsNoTracking().Where(room => room.IsActive);
 
         if (!string.IsNullOrWhiteSpace(centerId))
         {
@@ -692,6 +693,11 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor, Ema
         if (room is null)
         {
             throw new RegistrationException("Phòng không hợp lệ.");
+        }
+
+        if (!room.IsActive)
+        {
+            throw new RegistrationException("Phòng này đã ngưng sử dụng.");
         }
 
         if (!await db.SportRooms.AnyAsync(link => link.RoomId == roomId && link.SportId == sportId && link.AllowGroup))

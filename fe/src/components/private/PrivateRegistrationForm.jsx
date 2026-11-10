@@ -3,12 +3,13 @@ import { PrivateStatusBadge } from './privateUi';
 import { clock, formatDate, formatDateTime, scheduleText } from './privateFormat';
 import {
   cancelPrivateRequest,
-  checkPrivateAvailability,
   createPrivateRequest,
   getMemberMembership,
   getMemberProfile,
   getMyPrivateRequests,
   getPackages,
+  getPrivateCoachSchedule,
+  getPrivateCoaches,
   getPrivateCourses,
   getTimeSlots,
   payPrivateRequest,
@@ -33,9 +34,12 @@ const errorBox = 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm f
 
 const pad = (value) => String(value).padStart(2, '0');
 
-function tomorrowIso() {
+// Trung tâm cần vài ngày để duyệt và thu tiền nên chỉ nhận ngày bắt đầu từ hôm nay + 3 ngày (BE chặn cùng quy tắc).
+const MIN_LEAD_DAYS = 3;
+
+function earliestStartIso() {
   const date = new Date();
-  date.setDate(date.getDate() + 1);
+  date.setDate(date.getDate() + MIN_LEAD_DAYS);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
@@ -180,9 +184,11 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
   const [loadError, setLoadError] = useState('');
 
   const [sportId, setSportId] = useState('');
-  const [startDate, setStartDate] = useState(tomorrowIso);
+  const [startDate, setStartDate] = useState(earliestStartIso);
   const [cells, setCells] = useState([]);
-  const [availability, setAvailability] = useState(null);
+  const [coaches, setCoaches] = useState([]);
+  // Kết quả lịch HLV kèm khóa (gói|HLV|ngày) của lần hỏi, để biết còn khớp lựa chọn hiện tại hay đã cũ.
+  const [schedule, setSchedule] = useState({ key: '', busy: {} });
   const [coachId, setCoachId] = useState('');
   const [note, setNote] = useState('');
 
@@ -194,7 +200,6 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('Nam');
 
-  const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -246,6 +251,55 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
     return [...seen].map(([id, name]) => ({ id, name }));
   }, [courses]);
   const course = courses.find((item) => item.sportId === sportId);
+  const startOk = !!startDate && startDate >= earliestStartIso();
+  const scheduleKey = course && coachId && startOk ? `${course.id}|${coachId}|${startDate}` : '';
+  const busyCells = schedule.key === scheduleKey ? schedule.busy : {};
+  const loadingSchedule = !!scheduleKey && schedule.key !== scheduleKey;
+
+  // Chọn môn xong thì hiện HLV dạy môn đó.
+  useEffect(() => {
+    if (!course) return undefined;
+    let ignore = false;
+    getPrivateCoaches(course.id)
+      .then((list) => {
+        if (!ignore) setCoaches(Array.isArray(list) ? list : []);
+      })
+      .catch((err) => {
+        if (ignore) return;
+        setCoaches([]);
+        setError(err.message || 'Không tải được danh sách huấn luyện viên.');
+      });
+    return () => {
+      ignore = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course?.id]);
+
+  // Chọn HLV + ngày bắt đầu xong thì lấy các ô HLV (hoặc chính học viên) đã bận để tô xám.
+  useEffect(() => {
+    if (!scheduleKey) return undefined;
+    let ignore = false;
+    getPrivateCoachSchedule({ courseId: course.id, coachUserId: coachId, startDate })
+      .then((result) => {
+        if (ignore) return;
+        const next = {};
+        (result?.busyCells || []).forEach((cell) => {
+          next[`${cell.weekday}-${cell.timeSlotId}`] = cell.reason;
+        });
+        setSchedule({ key: scheduleKey, busy: next });
+        setCells((current) => current.filter((key) => !next[key]));
+        setError('');
+      })
+      .catch((err) => {
+        if (ignore) return;
+        setSchedule({ key: scheduleKey, busy: {} });
+        setError(err.message || 'Chưa tải được lịch của huấn luyện viên.');
+      });
+    return () => {
+      ignore = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleKey]);
 
   const ownedPackage = packages.find((pkg) => String(pkg.id) === String(ownedPackageId)) || null;
   const canSkipPackage = !!ownedPackage;
@@ -277,8 +331,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
 
   const toggleCell = (weekday, slotId) => {
     const key = `${weekday}-${slotId}`;
-    setAvailability(null);
-    setCoachId('');
+    if (busyCells[key]) return;
     setCells((current) => {
       if (current.includes(key)) return current.filter((item) => item !== key);
       const sameDay = current.some((item) => item.startsWith(`${weekday}-`));
@@ -290,23 +343,12 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
   const handleSportChange = (id) => {
     setSportId(id);
     setCells([]);
-    setAvailability(null);
     setCoachId('');
   };
 
-  const findCoaches = async () => {
-    setError('');
-    setChecking(true);
-    try {
-      const result = await checkPrivateAvailability({ courseId: course.id, startDate, slots: slotsPayload });
-      setAvailability(result);
-      setCoachId('');
-    } catch (err) {
-      setAvailability(null);
-      setError(err.message || 'Chưa kiểm tra được lịch.');
-    } finally {
-      setChecking(false);
-    }
+  const handleCoachChange = (id) => {
+    setCoachId(id);
+    setCells([]);
   };
 
   const handleSubmit = async (event) => {
@@ -314,12 +356,12 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
     if (submitting) return;
     setError('');
     setNotice('');
-    if (!course || cells.length === 0) {
-      setError('Vui lòng chọn gói và lịch học hằng tuần.');
+    if (!course || !coachId) {
+      setError('Vui lòng chọn huấn luyện viên.');
       return;
     }
-    if (!coachId) {
-      setError('Vui lòng tìm và chọn huấn luyện viên.');
+    if (cells.length === 0) {
+      setError('Vui lòng chọn lịch học hằng tuần.');
       return;
     }
     if (!(canSkipPackage && skipPackage) && !selectedPackage?.id) {
@@ -354,7 +396,6 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
       });
       setNotice('Đã gửi yêu cầu. Quản lý sẽ duyệt và bạn nhận thông báo, sau đó có 24 giờ để thanh toán. Xem ở mục "Yêu cầu của tôi".');
       setCells([]);
-      setAvailability(null);
       setCoachId('');
       setNote('');
       setRefreshKey((key) => key + 1);
@@ -427,119 +468,108 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
             </section>
 
             <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-              <h2 className="text-lg font-black">Lịch học hằng tuần</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Mỗi ngày chọn một khung giờ, tối đa {maxDays} ngày mỗi tuần. Lịch lặp hằng tuần cho tới đủ {course?.sessionCount} buổi. Chủ nhật trung tâm nghỉ.
-              </p>
-              <label className="mt-4 block text-sm font-bold text-gray-700 sm:max-w-xs">
-                Ngày bắt đầu
-                <input
-                  type="date"
-                  min={tomorrowIso()}
-                  value={startDate}
-                  onChange={(event) => {
-                    setStartDate(event.target.value);
-                    setAvailability(null);
-                    setCoachId('');
-                  }}
-                  className={fieldClass}
-                />
-              </label>
-              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="w-full min-w-[640px] border-collapse text-left text-xs">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-3 py-2 font-bold uppercase text-slate-400">Giờ</th>
-                      {DAYS.map((day) => (
-                        <th key={day.weekday} className="border-l border-slate-200 px-3 py-2 font-black text-slate-700">{day.name}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {timeSlots.map((slot) => (
-                      <tr key={slot.id} className="border-t border-slate-100">
-                        <th className="whitespace-nowrap bg-slate-50/60 px-3 py-2 font-bold tabular-nums text-slate-600">
-                          {clock(slot.startTime)}-{clock(slot.endTime)}
-                        </th>
-                        {DAYS.map((day) => {
-                          const on = cells.includes(`${day.weekday}-${slot.id}`);
-                          const full = !on && cells.length >= maxDays && !cells.some((item) => item.startsWith(`${day.weekday}-`));
-                          return (
-                            <td key={day.weekday} className="border-l border-slate-100 p-1.5">
-                              <button
-                                type="button"
-                                aria-pressed={on}
-                                aria-label={`${day.name} ${clock(slot.startTime)}`}
-                                disabled={full}
-                                onClick={() => toggleCell(day.weekday, slot.id)}
-                                className={`h-9 w-full rounded-lg text-[11px] font-bold ${
-                                  on
-                                    ? 'cursor-pointer bg-[#e31b23] text-white'
-                                    : full
-                                      ? 'cursor-not-allowed bg-slate-50 text-slate-300'
-                                      : 'cursor-pointer bg-slate-100 text-slate-400 hover:bg-slate-200'
-                                }`}
-                              >
-                                {on ? 'Đã chọn' : ''}
-                              </button>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <h2 className="text-lg font-black">Huấn luyện viên</h2>
+              <p className="mt-1 text-sm text-gray-500">Chọn huấn luyện viên dạy môn này, sau đó xem lịch rảnh của họ.</p>
+              {coaches.length === 0 && <p className="mt-3 text-sm text-gray-500">Môn này chưa có huấn luyện viên.</p>}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {coaches.map((coach) => (
+                  <label
+                    key={coach.id}
+                    className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm ${
+                      coachId === coach.id ? 'border-[#e31b23] bg-red-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="private_coach"
+                      checked={coachId === coach.id}
+                      onChange={() => handleCoachChange(coach.id)}
+                      className="mt-1 accent-[#e31b23]"
+                    />
+                    <span className="block font-black text-slate-900">{coach.fullName}</span>
+                  </label>
+                ))}
               </div>
-              <button
-                type="button"
-                disabled={checking || cells.length === 0 || !startDate}
-                onClick={findCoaches}
-                className={`${primaryButtonClass} mt-4`}
-              >
-                {checking ? 'Đang kiểm tra...' : 'Tìm HLV rảnh'}
-              </button>
             </section>
 
-            {availability && (
+            {coachId && (
               <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
-                <h2 className="text-lg font-black">Huấn luyện viên</h2>
-                <p className="mt-1 text-sm tabular-nums text-gray-500">
-                  {availability.sessionCount} buổi · {formatDate(availability.firstSession)} → {formatDate(availability.lastSession)}
+                <h2 className="text-lg font-black">Lịch học hằng tuần</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Mỗi ngày chọn một khung giờ, tối đa {maxDays} ngày mỗi tuần. Lịch lặp hằng tuần cho tới đủ {course?.sessionCount} buổi. Chủ nhật trung tâm nghỉ.
+                  Ô xám là giờ huấn luyện viên (hoặc bạn) đã bận trong các tuần học, không chọn được.
                 </p>
-                {!availability.roomsAvailable && (
-                  <p className={`mt-3 ${errorBox}`}>Lịch này hiện không còn phòng 1-1 trống cho cả gói. Hãy chọn lịch khác.</p>
-                )}
-                {availability.coaches.length === 0 && <p className="mt-3 text-sm text-gray-500">Môn này chưa có huấn luyện viên.</p>}
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {availability.coaches.map((coach) => (
-                    <label
-                      key={coach.id}
-                      className={`flex items-start gap-3 rounded-2xl border p-4 text-sm ${
-                        coach.isBusy
-                          ? 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-70'
-                          : coachId === coach.id
-                            ? 'cursor-pointer border-[#e31b23] bg-red-50/50'
-                            : 'cursor-pointer border-slate-200 bg-white hover:bg-slate-50'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="private_coach"
-                        disabled={coach.isBusy}
-                        checked={coachId === coach.id}
-                        onChange={() => setCoachId(coach.id)}
-                        className="mt-1 accent-[#e31b23]"
-                      />
-                      <span>
-                        <span className="block font-black text-slate-900">{coach.fullName}</span>
-                        <span className={`block text-xs font-semibold ${coach.isBusy ? 'text-red-600' : 'text-emerald-600'}`}>
-                          {coach.isBusy ? coach.busyReason || 'Bận một số buổi' : 'Rảnh toàn bộ các buổi'}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
+                <label className="mt-4 block text-sm font-bold text-gray-700 sm:max-w-xs">
+                  Ngày bắt đầu
+                  <input
+                    type="date"
+                    min={earliestStartIso()}
+                    value={startDate}
+                    onChange={(event) => {
+                      setStartDate(event.target.value);
+                      setCells([]);
+                    }}
+                    className={fieldClass}
+                  />
+                </label>
+                <p className="mt-1 text-xs text-gray-500">Sớm nhất là {MIN_LEAD_DAYS} ngày sau hôm nay để trung tâm kịp duyệt và bạn kịp thanh toán.</p>
+                {!startOk && <p className={`mt-3 ${errorBox}`}>Ngày bắt đầu phải từ {formatDate(earliestStartIso())} trở đi.</p>}
+                <div className={`mt-4 overflow-x-auto rounded-2xl border border-slate-200 ${loadingSchedule ? 'opacity-60' : ''}`} aria-busy={loadingSchedule}>
+                  <table className="w-full min-w-[640px] border-collapse text-left text-xs">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-2 font-bold uppercase text-slate-400">Giờ</th>
+                        {DAYS.map((day) => (
+                          <th key={day.weekday} className="border-l border-slate-200 px-3 py-2 font-black text-slate-700">{day.name}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {timeSlots.map((slot) => (
+                        <tr key={slot.id} className="border-t border-slate-100">
+                          <th className="whitespace-nowrap bg-slate-50/60 px-3 py-2 font-bold tabular-nums text-slate-600">
+                            {clock(slot.startTime)}-{clock(slot.endTime)}
+                          </th>
+                          {DAYS.map((day) => {
+                            const key = `${day.weekday}-${slot.id}`;
+                            const on = cells.includes(key);
+                            const busyReason = busyCells[key];
+                            const full = !on && cells.length >= maxDays && !cells.some((item) => item.startsWith(`${day.weekday}-`));
+                            return (
+                              <td key={day.weekday} className="border-l border-slate-100 p-1.5">
+                                <button
+                                  type="button"
+                                  aria-pressed={on}
+                                  aria-label={`${day.name} ${clock(slot.startTime)}${busyReason ? ' (bận)' : ''}`}
+                                  title={busyReason || undefined}
+                                  disabled={!!busyReason || full || !startOk}
+                                  onClick={() => toggleCell(day.weekday, slot.id)}
+                                  className={`h-9 w-full rounded-lg text-[11px] font-bold ${
+                                    busyReason
+                                      ? 'cursor-not-allowed bg-slate-300 text-slate-500'
+                                      : on
+                                        ? 'cursor-pointer bg-[#e31b23] text-white'
+                                        : full || !startOk
+                                          ? 'cursor-not-allowed bg-slate-50 text-slate-300'
+                                          : 'cursor-pointer bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {busyReason ? 'Bận' : on ? 'Đã chọn' : ''}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <label className="mt-4 block text-sm font-bold text-gray-700">
+              </section>
+            )}
+
+            {coachId && (
+              <section className="rounded-3xl border border-gray-200 bg-white p-5 sm:p-6">
+                <label className="block text-sm font-bold text-gray-700">
                   Ghi chú cho quản lý (không bắt buộc)
                   <textarea rows={2} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} className={`${fieldClass} resize-none`} />
                 </label>
@@ -686,7 +716,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
               </div>
               <div className="flex items-start justify-between gap-3">
                 <dt className="text-gray-600">HLV</dt>
-                <dd className="text-right font-semibold">{availability?.coaches.find((coach) => coach.id === coachId)?.fullName || 'Chưa chọn'}</dd>
+                <dd className="text-right font-semibold">{coaches.find((coach) => coach.id === coachId)?.fullName || 'Chưa chọn'}</dd>
               </div>
               <div className="flex items-start justify-between gap-3">
                 <dt className="text-gray-600">Gói hội viên</dt>
@@ -708,7 +738,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
             {error && <p className="mt-4 text-sm font-semibold text-[#b1131a]">{error}</p>}
             <button
               type="submit"
-              disabled={submitting || !course || cells.length === 0 || !coachId || !availability?.roomsAvailable}
+              disabled={submitting || !course || cells.length === 0 || !coachId || !startOk}
               className={`${primaryButtonClass} mt-4 w-full`}
             >
               {submitting ? 'Đang gửi...' : 'Gửi yêu cầu'}

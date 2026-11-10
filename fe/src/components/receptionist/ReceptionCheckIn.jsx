@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { checkInMember, checkOutMember, getCenterCheckIns, voidCheckIn } from '../../api/receptionClassRegistrationApi';
+import { checkInMember, checkOutMember, getCenterCheckIns, searchCheckInMembers, voidCheckIn } from '../../api/receptionClassRegistrationApi';
 
 const STATUS = {
   inside: { label: 'Đang ở trong', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -35,9 +35,13 @@ export default function ReceptionCheckIn() {
   const today = toIso(new Date());
 
   const [keyword, setKeyword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [members, setMembers] = useState(null);
+  const [working, setWorking] = useState('');
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const lastQuery = useRef('');
+  const searchSeq = useRef(0);
 
   const [date, setDate] = useState(today);
   const [statusFilter, setStatusFilter] = useState('');
@@ -76,27 +80,52 @@ export default function ReceptionCheckIn() {
     };
   }, [date, search, statusFilter, reloadKey]);
 
+  // Tìm học viên; trả về true nếu gọi thành công. Bỏ qua kết quả của lần tìm cũ nếu đã có lần tìm mới hơn.
+  const runSearch = async (value) => {
+    const seq = ++searchSeq.current;
+    try {
+      const rows = await searchCheckInMembers(value);
+      if (seq === searchSeq.current) setMembers(Array.isArray(rows) ? rows : []);
+      return true;
+    } catch (err) {
+      if (seq === searchSeq.current) {
+        setMembers(null);
+        setError(err.message || 'Không tìm được học viên.');
+      }
+      return false;
+    }
+  };
+
   const submit = async (event) => {
     event.preventDefault();
     const value = keyword.trim();
+    setResult(null);
     if (!value) {
-      setError('Nhập mã học viên, email hoặc số điện thoại.');
-      setResult(null);
+      setError('Nhập tên, mã học viên, email hoặc số điện thoại.');
+      setMembers(null);
       return;
     }
 
-    setSubmitting(true);
+    setSearching(true);
     setError('');
+    lastQuery.current = value;
+    await runSearch(value);
+    setSearching(false);
+  };
+
+  // Check-in bằng mã học viên (logic kiểm tra gói, trùng lượt giữ nguyên ở BE), xong tải lại danh sách đang hiển thị.
+  const checkIn = async (member) => {
+    setError('');
+    setWorking(member.id);
     try {
-      setResult(await checkInMember(value));
-      setKeyword('');
+      setResult(await checkInMember(member.id));
       load();
     } catch (err) {
       setResult(null);
       setError(err.message || 'Không check-in được học viên.');
-    } finally {
-      setSubmitting(false);
     }
+    await runSearch(lastQuery.current);
+    setWorking('');
   };
 
   const checkOut = async (id) => {
@@ -108,6 +137,13 @@ export default function ReceptionCheckIn() {
     } catch (err) {
       setError(err.message || 'Không check-out được.');
     }
+  };
+
+  const checkOutFound = async (member) => {
+    setWorking(member.id);
+    await checkOut(member.insideCheckInId);
+    await runSearch(lastQuery.current);
+    setWorking('');
   };
 
   const afterVoid = (next) => {
@@ -123,31 +159,86 @@ export default function ReceptionCheckIn() {
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
         <h2 className="text-xl font-black text-balance">Check-in trung tâm</h2>
         <p className="mt-2 text-sm text-pretty text-slate-500">
-          Nhập mã học viên, email hoặc số điện thoại. Chỉ cần gói hội viên còn hạn, không cần có lớp. Học viên có thể vào nhiều lần trong ngày.
+          Tìm học viên theo tên, mã, email hoặc số điện thoại, rồi bấm Check-in ở dòng đúng người. Chỉ cần gói hội viên còn hạn, không cần có lớp. Học viên có thể vào nhiều lần trong ngày.
         </p>
         <form onSubmit={submit} className="mt-5 flex gap-2">
           <label className="sr-only" htmlFor="reception-checkin">
-            Mã học viên, email hoặc số điện thoại
+            Tên, mã học viên, email hoặc số điện thoại
           </label>
           <input
             id="reception-checkin"
             type="text"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="Mã học viên, email hoặc số điện thoại"
+            placeholder="Tên, mã học viên, email hoặc số điện thoại"
             className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-[#e31b23]"
           />
           <button
             type="submit"
-            disabled={submitting}
+            disabled={searching}
             className="rounded-lg bg-[#e31b23] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {submitting ? 'Đang check-in...' : 'Check-in'}
+            {searching ? 'Đang tìm...' : 'Tìm'}
           </button>
         </form>
 
         {error && (
           <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>
+        )}
+
+        {members && (
+          <div className="mt-4">
+            {members.length === 0 ? (
+              <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                Không tìm thấy học viên phù hợp.
+              </p>
+            ) : (
+              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                {members.map((member) => (
+                  <li key={member.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-900">
+                        {member.fullName} <span className="font-semibold text-slate-400">#{member.id}</span>
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {[member.phone, member.email].filter(Boolean).join(' · ') || 'Chưa có liên hệ'}
+                      </p>
+                      <p className={`mt-0.5 text-xs font-semibold ${member.membershipName ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {member.membershipName
+                          ? `${planTitle(member.membershipName)} · hết hạn ${formatDay(member.membershipEndDate)}`
+                          : 'Chưa có gói hội viên còn hạn'}
+                        {member.status !== 'active' && ' · tài khoản không hoạt động'}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      {member.insideCheckInId ? (
+                        <>
+                          <span className="text-xs font-semibold text-emerald-700">Đang ở trong từ {formatTime(member.insideSince)}</span>
+                          <button
+                            type="button"
+                            disabled={working === member.id}
+                            onClick={() => checkOutFound(member)}
+                            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-[#e31b23] disabled:opacity-50 cursor-pointer"
+                          >
+                            Check-out
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={working === member.id}
+                          onClick={() => checkIn(member)}
+                          className="rounded-lg bg-[#e31b23] px-4 py-2 text-sm font-bold text-white disabled:opacity-50 cursor-pointer"
+                        >
+                          {working === member.id ? 'Đang check-in...' : 'Check-in'}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
 
         {result && (
