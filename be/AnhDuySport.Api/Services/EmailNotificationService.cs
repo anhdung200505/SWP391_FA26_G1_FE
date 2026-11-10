@@ -97,6 +97,14 @@ public class EmailNotificationService(SmtpEmailSender emailSender, EmailQueue qu
         return SendAsync(coach, subject, WithReason(body, reason));
     }
 
+    public Task<EmailDto> SendMemberRegisteredAsync(UserAccount member)
+    {
+        var subject = "[AnhDuy Sport] Cảm ơn bạn đã đăng ký";
+        var body = $"Xin chào {member.FullName}, cảm ơn bạn đã đăng ký tài khoản học viên AnhDuy Sport. "
+            + "Tài khoản đã sẵn sàng. Hãy hoàn tất hồ sơ và chọn khóa học để bắt đầu.";
+        return SendAsync(member, subject, body, links.MemberOverview(), "Vào trang học viên", wait: true);
+    }
+
     public Task<EmailDto> SendCourseRegisteredAsync(UserAccount member, string className)
     {
         var subject = "[AnhDuy Sport] Cảm ơn bạn đã đăng ký khóa học";

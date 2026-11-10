@@ -73,14 +73,26 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
 
         var package = await db.MembershipPackages.FirstOrDefaultAsync(item => item.MembershipPackageId == id)
             ?? throw new KeyNotFoundException("Không tìm thấy gói hội viên.");
-        var benefits = NormalizeBenefits(request.Benefits);
+        var aiEligible = AiMembershipQuota.IsEligible(package.PackageCode);
+        var nextRegenerations = request.AiRegenerationLimit ?? package.AiRegenerationLimit;
+        var nextTokens = request.AiTokenLimit ?? package.AiTokenLimit;
+        if (nextRegenerations < 0 || nextTokens < 0 || nextRegenerations > 1000 || nextTokens > 100_000_000)
+        {
+            throw new InvalidOperationException("Hạn mức AI không hợp lệ: lượt tạo lại từ 0 đến 1.000, token từ 0 đến 100.000.000.");
+        }
+
+        var nextDiscount = NormalizeDiscount(request.UpgradeDiscountPercent);
+        // Dòng quyền lợi AI và giảm giá luôn khớp số liệu thật mà hệ thống áp dụng.
+        var benefits = NormalizeBenefits(AiMembershipQuota.SyncBenefits(
+            NormalizeBenefits(request.Benefits), aiEligible, nextRegenerations, nextTokens, nextDiscount));
         ValidateSetting(request.Fee, request.ValidityMonths, benefits);
         var nextFee = decimal.Round(request.Fee, 0);
-        var nextDiscount = NormalizeDiscount(request.UpgradeDiscountPercent);
         var currentBenefits = AccountFlowMapper.SplitBenefits(package.Benefits);
         var unchanged = package.Fee == nextFee
             && package.ValidityMonths == request.ValidityMonths
             && package.UpgradeDiscountPercent == nextDiscount
+            && package.AiRegenerationLimit == nextRegenerations
+            && package.AiTokenLimit == nextTokens
             && currentBenefits.SequenceEqual(benefits);
         if (unchanged)
         {
@@ -93,10 +105,16 @@ public class MembershipPackageFlowService(AppDbContext db, CurrentActor actor)
         package.Fee = nextFee;
         package.ValidityMonths = request.ValidityMonths;
         package.UpgradeDiscountPercent = nextDiscount;
+        if (aiEligible)
+        {
+            package.AiRegenerationLimit = nextRegenerations;
+            package.AiTokenLimit = nextTokens;
+        }
+
         package.Benefits = AccountFlowMapper.JoinBenefits(benefits);
         package.UpdatedAt = DateTime.Now;
         var actor = await ActorNameAsync();
-        var detail = $"Phí {Money(previousFee)} → {Money(package.Fee)}. Thời hạn {previousMonths} tháng → {package.ValidityMonths} tháng. Giảm khi lên cấp kèm lớp {previousDiscount:0.##}% → {package.UpgradeDiscountPercent:0.##}%. {benefits.Count} quyền lợi.";
+        var detail = $"Phí {Money(previousFee)} → {Money(package.Fee)}. Thời hạn {previousMonths} tháng → {package.ValidityMonths} tháng. Giảm khi lên cấp kèm lớp {previousDiscount:0.##}% → {package.UpgradeDiscountPercent:0.##}%. Hạn mức AI {package.AiRegenerationLimit} lượt tạo lại, {package.AiTokenLimit:N0} token. {benefits.Count} quyền lợi.";
         var log = AddLog(Trim($"Sửa thiết lập gói {package.PackageName}", 100), package.MembershipPackageId, detail, package.UpdatedAt.Value);
         await db.SaveChangesAsync();
         return new PackageMutationResponse(AccountFlowMapper.ToDto(package), ToLogDto(log, actor, package.PackageName));

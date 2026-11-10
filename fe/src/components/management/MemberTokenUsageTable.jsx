@@ -263,7 +263,108 @@ function TokenCostPanel({ lifetimeTokens, monthTokens, subject, vndPerUsd, rateF
   );
 }
 
+function CoachTokenPanel({ report, vndPerUsd, rateFallback }) {
+  const coaches = report?.coaches || [];
+  const [selectedId, setSelectedId] = useState('');
+  const selected = coaches.find((item) => String(item.coachUserId) === String(selectedId)) || null;
+  const chartMonths = selected?.months || report?.coachMonths || [];
+  const generations = coaches.reduce((sum, item) => sum + (item.generations || 0), 0);
+  const regenerations = coaches.reduce((sum, item) => sum + (item.regenerations || 0), 0);
+  const total = selected ? selected.tokensUsed : report?.coachTotalTokensUsed || 0;
+  return (
+    <>
+      <dl className="grid border-b border-gray-100 sm:grid-cols-3 sm:divide-x sm:divide-gray-100">
+        <div className="px-5 py-4 sm:px-6">
+          <dt className="text-sm text-gray-500">Tổng token của HLV</dt>
+          <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatCount(report?.coachTotalTokensUsed)}</dd>
+        </div>
+        <div className="border-t border-gray-100 px-5 py-4 sm:border-t-0 sm:px-6">
+          <dt className="text-sm text-gray-500">Lượt sinh bài</dt>
+          <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatCount(generations)}</dd>
+        </div>
+        <div className="border-t border-gray-100 px-5 py-4 sm:border-t-0 sm:px-6">
+          <dt className="text-sm text-gray-500">Lượt tạo lại</dt>
+          <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatCount(regenerations)}</dd>
+        </div>
+      </dl>
+
+      <TokenCostPanel
+        lifetimeTokens={total}
+        monthTokens={Number(chartMonths[chartMonths.length - 1]?.tokensUsed) || 0}
+        subject={selected ? selected.coachName : 'huấn luyện viên'}
+        vndPerUsd={vndPerUsd}
+        rateFallback={rateFallback}
+      />
+
+      {coaches.length === 0 ? (
+        <div className="px-5 py-10 text-center sm:px-6">
+          <p className="font-bold text-slate-900">Chưa có huấn luyện viên nào dùng AI</p>
+          <p className="mt-1 text-sm text-pretty text-gray-500">
+            Khi huấn luyện viên sinh hoặc tạo lại bài tập cho một buổi học, token sẽ hiện ở đây.
+          </p>
+        </div>
+      ) : (
+        <div className="border-b border-gray-100 px-5 py-4 sm:px-6">
+          <label className="block max-w-sm text-sm font-semibold text-gray-700" htmlFor="token-coach">
+            Huấn luyện viên
+            <select
+              id="token-coach"
+              value={selected ? selectedId : ''}
+              onChange={(event) => setSelectedId(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-900"
+            >
+              <option value="">Tất cả huấn luyện viên</option>
+              {coaches.map((item) => (
+                <option key={item.coachUserId} value={item.coachUserId}>
+                  {item.coachName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mt-4 max-h-96 overflow-auto">
+            <table className="w-full min-w-[40rem] text-left text-sm">
+              <thead className="sticky top-0 bg-white">
+                <tr className="border-b border-gray-100 text-gray-500">
+                  <th className="py-2 pr-3 font-medium">Huấn luyện viên</th>
+                  <th className="py-2 pr-3 font-medium">Sinh bài</th>
+                  <th className="py-2 pr-3 font-medium">Tạo lại</th>
+                  <th className="py-2 pr-3 font-medium">Tổng token</th>
+                  <th className="py-2 pr-3 font-medium">Chi phí ước tính</th>
+                  <th className="py-2 font-medium">Lần cuối</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(selected ? [selected] : coaches).map((item) => (
+                  <tr key={item.coachUserId} className="border-b border-gray-100 last:border-b-0">
+                    <td className="py-2.5 pr-3 font-semibold text-slate-900">{item.coachName}</td>
+                    <td className="py-2.5 pr-3 tabular-nums">{formatCount(item.generations)}</td>
+                    <td className="py-2.5 pr-3 tabular-nums">{formatCount(item.regenerations)}</td>
+                    <td className="py-2.5 pr-3 font-semibold tabular-nums text-slate-900">{formatCount(item.tokensUsed)}</td>
+                    <td className="py-2.5 pr-3 tabular-nums text-slate-900">
+                      <MemberCost tokens={item.tokensUsed} rate={vndPerUsd} />
+                    </td>
+                    <td className="py-2.5 text-gray-500 tabular-nums">
+                      {item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleDateString('vi-VN') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <TokenMonthChart months={chartMonths} caption={selected ? `Token của ${selected.coachName} theo tháng` : 'Tổng token của huấn luyện viên theo tháng'} />
+      <MoneyMonthChart
+        months={chartMonths}
+        caption={selected ? `Chi phí của ${selected.coachName} theo tháng` : 'Chi phí ước tính của huấn luyện viên theo tháng'}
+        vndPerUsd={vndPerUsd}
+      />
+    </>
+  );
+}
+
 export default function MemberTokenUsageTable() {
+  const [tab, setTab] = useState('members');
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -325,7 +426,7 @@ export default function MemberTokenUsageTable() {
         <div>
           <h2 className="text-lg font-black text-balance text-slate-900">Tổng sử dụng token</h2>
           <p className="mt-1 text-sm text-pretty text-gray-500">
-            Token và lượt tạo lại gợi ý tập cá nhân của từng học viên đang có hội viên hiệu lực.
+            Token AI của học viên (gợi ý tập cá nhân) và của huấn luyện viên (soạn bài từng buổi).
           </p>
         </div>
         <Link to="/quan-ly/han-muc-ai" className="text-sm font-bold text-[#e31b23]">
@@ -360,7 +461,29 @@ export default function MemberTokenUsageTable() {
         </div>
       )}
 
-      {report && (
+      <div role="tablist" aria-label="Đối tượng dùng AI" className="flex gap-2 border-b border-gray-100 px-5 py-3 sm:px-6">
+        {[
+          ['members', 'Học viên'],
+          ['coaches', 'Huấn luyện viên'],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
+              tab === id ? 'bg-[#e31b23] text-white' : 'bg-gray-100 text-slate-700 hover:bg-gray-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {report && tab === 'coaches' && <CoachTokenPanel report={report} vndPerUsd={vndPerUsd} rateFallback={rateFallback} />}
+
+      {report && tab === 'members' && (
         <>
           <dl className="grid border-b border-gray-100 sm:grid-cols-3 sm:divide-x sm:divide-gray-100">
             <div className="px-5 py-4 sm:px-6">

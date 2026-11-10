@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   decideWorkout,
   getWorkoutAccess,
@@ -7,11 +8,38 @@ import {
   saveBodyMetrics,
   submitWorkoutGoals,
 } from '../api/workoutRecommendationApi';
+import ExerciseSteps from '../components/ai/ExerciseSteps';
 import WorkoutPlanView from '../components/ai/WorkoutPlanView';
 import { FlowTrail } from '../components/management/ManagementBits';
 import { useAuth } from '../context/AuthContext';
 
 const AI_STEPS = ['Chỉ số BMI', 'Mục tiêu', 'Gợi ý tập', 'Lịch tập'];
+
+// Năm mức cường độ: mỗi mức AI chọn kiểu bài tập riêng.
+const INTENSITIES = [
+  { value: 'Rất nhẹ', hint: 'Bài hồi phục: đi bộ chậm, giãn cơ, yoga nhẹ, bài thở.' },
+  { value: 'Nhẹ', hint: 'Tác động thấp: đi bộ nhanh, đạp xe nhẹ, bài thân người ít hiệp.' },
+  { value: 'Trung bình', hint: 'Cân bằng sức bền và sức mạnh: tạ vừa, cardio ổn định.' },
+  { value: 'Cao', hint: 'Gắng sức nhiều: HIIT vừa, tạ nặng vừa, chạy biến tốc.' },
+  { value: 'Tối đa', hint: 'Gần giới hạn: HIIT cao, tạ nặng, plyometric, nghỉ rất ngắn.' },
+];
+
+function IntensityField({ value, onChange, label = 'Cường độ' }) {
+  const hint = INTENSITIES.find((item) => item.value === value)?.hint;
+  return (
+    <label className="block text-sm font-bold text-slate-700">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className={fieldClass}>
+        {INTENSITIES.map((item) => (
+          <option key={item.value} value={item.value}>
+            {item.value}
+          </option>
+        ))}
+      </select>
+      {hint && <span className="mt-1 block text-xs font-normal text-slate-500">{hint}</span>}
+    </label>
+  );
+}
 
 const fieldClass =
   'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2';
@@ -45,8 +73,9 @@ function formatClock(value) {
 
 async function readMemberWorkout(memberUserId) {
   const accessData = await getWorkoutAccess(memberUserId);
-  const routineData =
-    accessData.nextStep === 'view_routine' ? await getWorkoutRoutine(memberUserId) : null;
+  const routineData = accessData.savedPlan
+    ? await getWorkoutRoutine(memberUserId).catch(() => null)
+    : null;
   return { accessData, routineData };
 }
 
@@ -55,27 +84,43 @@ function ActionError({ children }) {
   return <p className="mt-3 text-sm font-semibold text-[#b1131a]">{children}</p>;
 }
 
+// Lịch các buổi tập: chọn từng buổi bằng dropdown, mỗi bài tập một dòng.
 function ExerciseList({ title, items }) {
+  const [picked, setPicked] = useState(0);
   if (!items?.length) return null;
+  const index = Math.min(picked, items.length - 1);
+  const item = items[index];
   return (
     <section className="mt-4">
       <h3 className="text-sm font-black text-slate-900">{title}</h3>
-      <ul className="mt-2 space-y-2">
-        {items.map((item) => (
-          <li key={item.id} className="rounded-2xl border border-slate-200 px-4 py-3">
-            <p className="font-bold text-slate-900">{item.title}</p>
-            <p className="mt-1 text-xs font-bold text-slate-500 tabular-nums">
-              {formatDate(item.date)} · {formatClock(item.startTime)}–{formatClock(item.endTime)}
-            </p>
-            <p className="mt-2 text-sm text-pretty whitespace-pre-line text-slate-600">{item.detail}</p>
-          </li>
+      <select
+        value={index}
+        onChange={(event) => setPicked(Number(event.target.value))}
+        aria-label={`Chọn buổi trong ${title}`}
+        className={fieldClass}
+      >
+        {items.map((entry, itemIndex) => (
+          <option key={entry.id} value={itemIndex}>
+            {formatDate(entry.date)} · {formatClock(entry.startTime)}–{formatClock(entry.endTime)} · {entry.title}
+          </option>
         ))}
-      </ul>
+      </select>
+      <div className="mt-2 rounded-2xl border border-slate-200 px-4 py-3">
+        <p className="font-bold text-slate-900">{item.title}</p>
+        <p className="mt-1 text-xs font-bold text-slate-500 tabular-nums">
+          {formatDate(item.date)} · {formatClock(item.startTime)}–{formatClock(item.endTime)}
+        </p>
+        <ExerciseSteps text={item.detail} />
+      </div>
     </section>
   );
 }
 
-export default function AiWorkoutPage() {
+export default function AiWorkoutPage({ mode = 'suggest' }) {
+  const navigate = useNavigate();
+  const isAdjust = mode === 'adjust';
+  // Trang Lộ trình tập và trang Điều chỉnh lộ trình đều không hiện form BMI và mục tiêu.
+  const isRoutine = mode === 'routine' || isAdjust;
   const { user } = useAuth();
   const memberUserId = user?.id;
 
@@ -91,17 +136,38 @@ export default function AiWorkoutPage() {
   const [goal, setGoal] = useState('');
   const [sessionsPerWeek, setSessionsPerWeek] = useState('3');
   const [sessionMinutes, setSessionMinutes] = useState('45');
+  const [totalSessions, setTotalSessions] = useState('12');
+  const [intensity, setIntensity] = useState('Trung bình');
+  const [adjust, setAdjust] = useState({ key: '', intensity: 'Trung bình', perWeek: '3', minutes: '45', total: '12', note: '' });
   const [changes, setChanges] = useState('');
   const [showEdit, setShowEdit] = useState(false);
-  const [regenerateNote, setRegenerateNote] = useState('');
   const [bodyError, setBodyError] = useState('');
   const [goalError, setGoalError] = useState('');
   const [decisionError, setDecisionError] = useState('');
   const [regenerateError, setRegenerateError] = useState('');
 
   useEffect(() => {
-    document.title = 'Gợi ý tập cá nhân · AnhDuy Sport';
-  }, []);
+    document.title = `${isAdjust ? 'Điều chỉnh lộ trình' : isRoutine ? 'Lộ trình tập' : 'AI gợi ý bài tập'} · AnhDuy Sport`;
+  }, [isRoutine, isAdjust]);
+
+  // Điền sẵn bảng chỉnh theo gợi ý đang có (đã lưu hoặc chờ lưu).
+  useEffect(() => {
+    const plan = access?.proposedPlan || access?.savedPlan;
+    if (!plan) return;
+    const key = `${plan.id}-${plan.revision}`;
+    setAdjust((current) =>
+      current.key === key
+        ? current
+        : {
+            key,
+            intensity: plan.intensityLevel || 'Trung bình',
+            perWeek: String(plan.sessionsPerWeek),
+            minutes: String(plan.sessionMinutes),
+            total: String(plan.totalSessions || plan.sessionsPerWeek * plan.durationWeeks),
+            note: '',
+          },
+    );
+  }, [access]);
 
   const applySnapshot = (accessData, routineData) => {
     setAccess(accessData);
@@ -194,8 +260,13 @@ export default function AiWorkoutPage() {
       setGoalError('Nhập mục tiêu cá nhân.');
       return;
     }
-    if (sessions < 2 || sessions > 6 || minutes < 20 || minutes > 90) {
-      setGoalError('Số buổi mỗi tuần từ 2 đến 6, mỗi buổi từ 20 đến 90 phút.');
+    const total = Number(totalSessions);
+    if (!Number.isInteger(total) || total < sessions || total > sessions * 12) {
+      setGoalError(`Tổng số buổi từ ${sessions} (bằng số buổi mỗi tuần) đến ${sessions * 12} (tối đa 12 tuần).`);
+      return;
+    }
+    if (sessions < 1 || sessions > 7 || minutes < 20 || minutes > 90) {
+      setGoalError('Số buổi mỗi tuần từ 1 đến 7, mỗi buổi từ 20 đến 90 phút.');
       return;
     }
     setGoalError('');
@@ -205,6 +276,8 @@ export default function AiWorkoutPage() {
           goal: trimmedGoal,
           sessionsPerWeek: sessions,
           sessionMinutes: minutes,
+          totalSessions: total,
+          intensity,
         });
         setNotice(result.message);
         setShowEdit(false);
@@ -246,17 +319,30 @@ export default function AiWorkoutPage() {
   };
 
   const submitRegenerate = () => {
-    const trimmed = regenerateNote.trim();
-    if (!trimmed) {
-      setRegenerateError('Nhập lý do muốn tạo lại gợi ý tập.');
+    const perWeek = Number(adjust.perWeek);
+    const minutes = Number(adjust.minutes);
+    const total = Number(adjust.total);
+    if (!Number.isInteger(total) || total < perWeek || total > perWeek * 12) {
+      setRegenerateError(`Tổng số buổi từ ${perWeek} (bằng số buổi mỗi tuần) đến ${perWeek * 12} (tối đa 12 tuần).`);
+      return;
+    }
+    if (minutes < 20 || minutes > 90) {
+      setRegenerateError('Mỗi buổi từ 20 đến 90 phút.');
       return;
     }
     setRegenerateError('');
     run('regenerate', async () => {
       try {
-        const result = await regenerateWorkout(memberUserId, { changes: trimmed });
+        const result = await regenerateWorkout(memberUserId, {
+          changes: adjust.note.trim() || null,
+          intensity: adjust.intensity,
+          sessionsPerWeek: perWeek,
+          sessionMinutes: minutes,
+          totalSessions: total,
+        });
         setNotice(result.message);
-        setRegenerateNote('');
+        // Xong thì về trang Lộ trình tập, nơi bạn lưu hoặc bỏ gợi ý mới.
+        navigate('/hoc-vien/lo-trinh-tap');
         await reload();
       } catch (error) {
         setRegenerateError(error.message);
@@ -270,7 +356,7 @@ export default function AiWorkoutPage() {
 
   return (
     <>
-        <h1 className="text-2xl font-black text-balance">Gợi ý tập cá nhân</h1>
+        <h1 className="text-2xl font-black text-balance">{isAdjust ? 'Điều chỉnh lộ trình' : isRoutine ? 'Lộ trình tập' : 'AI gợi ý bài tập'}</h1>
         <p className="mt-2 max-w-2xl text-sm text-pretty text-slate-500">
           AI đề xuất lịch tập riêng theo chỉ số và mục tiêu của bạn. Đây không phải bài tập hay giáo án của lớp. Lưu xong, các buổi tập vào lịch cá nhân. Hạn mức lượt tạo lại và token lấy từ gói hội viên bạn đang dùng.
         </p>
@@ -305,10 +391,10 @@ export default function AiWorkoutPage() {
 
         {!loading && access && (
           <div className="mt-6 space-y-5">
-            <FlowTrail step={stepIndex(nextStep)} steps={AI_STEPS} />
+            {!isRoutine && <FlowTrail step={stepIndex(nextStep)} steps={AI_STEPS} />}
             <p className="text-sm text-pretty text-slate-600">{stepHint(nextStep)}</p>
 
-            {body && !showBodyForm && (
+            {!isRoutine && body && !showBodyForm && (
               <section className="rounded-3xl border border-slate-200 bg-white p-5">
                 <h2 className="text-lg font-black text-balance">Chỉ số gần nhất</h2>
                 <p className="mt-2 text-sm font-bold text-slate-800 tabular-nums">
@@ -320,7 +406,7 @@ export default function AiWorkoutPage() {
               </section>
             )}
 
-            {showBodyForm && (
+            {!isRoutine && showBodyForm && (
               <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
                 <h2 className="text-lg font-black text-balance">Nhập chiều cao và cân nặng</h2>
                 <p className="mt-2 text-sm text-pretty text-slate-600">
@@ -363,11 +449,11 @@ export default function AiWorkoutPage() {
               </section>
             )}
 
-            {nextStep === 'input_goals' && (
+            {!isRoutine && nextStep === 'input_goals' && (
               <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
                 <h2 className="text-lg font-black text-balance">Nhập mục tiêu cá nhân</h2>
                 <p className="mt-2 text-sm text-pretty text-slate-600">
-                  AI dùng chỉ số của bạn và lịch sử tập huấn luyện viên đã ghi để đề xuất lịch tập cá nhân, không phải bài tập của lớp.
+                  AI chỉ dùng chỉ số cơ thể và mục tiêu bạn nhập để đề xuất lịch tập cá nhân, không cần đăng ký lớp.
                 </p>
                 <label className="mt-4 block text-sm font-bold text-slate-700">
                   Mục tiêu
@@ -384,10 +470,15 @@ export default function AiWorkoutPage() {
                     Số buổi mỗi tuần
                     <select
                       value={sessionsPerWeek}
-                      onChange={(event) => setSessionsPerWeek(event.target.value)}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setSessionsPerWeek(next);
+                        // Tổng số buổi không được nhỏ hơn số buổi mỗi tuần.
+                        if (Number(totalSessions) < Number(next)) setTotalSessions(next);
+                      }}
                       className={fieldClass}
                     >
-                      {[2, 3, 4, 5, 6].map((value) => (
+                      {[1, 2, 3, 4, 5, 6, 7].map((value) => (
                         <option key={value} value={value}>
                           {value} buổi
                         </option>
@@ -409,6 +500,23 @@ export default function AiWorkoutPage() {
                     </select>
                   </label>
                 </div>
+                <div className="mt-4">
+                  <IntensityField value={intensity} onChange={setIntensity} />
+                </div>
+                <label className="mt-4 block text-sm font-bold text-slate-700">
+                  Tổng số buổi
+                  <input
+                    type="number"
+                    min={Number(sessionsPerWeek) || 1}
+                    max={(Number(sessionsPerWeek) || 1) * 12}
+                    value={totalSessions}
+                    onChange={(event) => setTotalSessions(event.target.value)}
+                    className={fieldClass}
+                  />
+                  <span className="mt-1 block text-xs font-normal text-slate-500">
+                    Tổng số buổi tập của cả lịch, tối đa 12 tuần (khoảng {Math.ceil((Number(totalSessions) || 0) / (Number(sessionsPerWeek) || 1))} tuần với số buổi mỗi tuần đã chọn).
+                  </span>
+                </label>
                 <ActionError>{goalError}</ActionError>
                 <button
                   type="button"
@@ -470,12 +578,41 @@ export default function AiWorkoutPage() {
               </section>
             )}
 
-            {nextStep === 'view_routine' && routine && (
+            {!isRoutine && nextStep === 'view_routine' && access.savedPlan && (
               <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-                <h2 className="text-lg font-black text-balance">{routine.planName}</h2>
+                <h2 className="text-lg font-black text-balance">Bạn đã có lộ trình tập</h2>
+                <p className="mt-2 text-sm text-pretty text-slate-600">
+                  Gợi ý đã lưu nằm ở tab Lộ trình tập. Ở đó bạn xem lịch từng buổi và chỉnh cường độ, số buổi, thời gian tập.
+                </p>
+                <Link to="/hoc-vien/lo-trinh-tap" className={`${primaryButtonClass} mt-4 inline-block`}>
+                  Xem lộ trình tập
+                </Link>
+              </section>
+            )}
+
+            {isRoutine && !access.savedPlan && !access.proposedPlan && (
+              <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-5 sm:p-6">
+                <h2 className="text-lg font-black text-balance">Chưa có lộ trình tập</h2>
+                <p className="mt-2 text-sm text-pretty text-slate-600">
+                  Lộ trình xuất hiện sau khi bạn lưu một gợi ý bài tập bằng AI.
+                </p>
+                <Link to="/hoc-vien/giao-an-ai" className={`${primaryButtonClass} mt-4 inline-block`}>
+                  Tạo gợi ý bài tập
+                </Link>
+              </section>
+            )}
+
+            {mode === 'routine' && routine && (
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <h2 className="text-lg font-black text-balance">{routine.planName}</h2>
+                  <Link to="/hoc-vien/lo-trinh-tap/dieu-chinh" className={primaryButtonClass}>
+                    Điều chỉnh lộ trình
+                  </Link>
+                </div>
                 <p className="mt-2 text-sm text-pretty text-slate-600">{routine.message}</p>
                 {!routine.today?.length && !routine.upcoming?.length ? (
-                  <p className="mt-4 text-sm text-slate-500">Chưa có buổi tập từ hôm nay trở đi. Yêu cầu tạo lại gợi ý ở bên dưới.</p>
+                  <p className="mt-4 text-sm text-slate-500">Chưa có buổi tập từ hôm nay trở đi. Chỉnh lộ trình ở bên dưới để tạo lại.</p>
                 ) : (
                   <>
                     <ExerciseList title="Hôm nay" items={routine.today} />
@@ -485,22 +622,75 @@ export default function AiWorkoutPage() {
               </section>
             )}
 
-            {nextStep === 'view_routine' && access.savedPlan && <WorkoutPlanView plan={access.savedPlan} />}
+            {mode === 'routine' && access.savedPlan && <WorkoutPlanView plan={access.savedPlan} />}
 
-            {nextStep === 'view_routine' && (
+            {mode === 'routine' && !routine && (access.savedPlan || access.proposedPlan) && (
+              <div className="flex justify-end">
+                <Link to="/hoc-vien/lo-trinh-tap/dieu-chinh" className={primaryButtonClass}>
+                  Điều chỉnh lộ trình
+                </Link>
+              </div>
+            )}
+
+            {isAdjust && (access.savedPlan || access.proposedPlan) && (
               <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-                <h2 className="text-lg font-black text-balance">Tạo lại gợi ý tập</h2>
+                <h2 className="text-lg font-black text-balance">Điều chỉnh lộ trình</h2>
                 <p className="mt-2 text-sm text-pretty text-slate-600">
-                  Nêu phần muốn đổi. Gợi ý mới vẫn chờ bạn lưu trước khi thay lịch đang có.
+                  Đổi cường độ (nặng hơn hoặc nhẹ hơn), số buổi và thời gian tập. AI tạo lại gợi ý mới, tính vào lượt tạo lại của gói. Gợi ý mới vẫn chờ bạn lưu trước khi thay lịch đang có.
                 </p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <IntensityField value={adjust.intensity} onChange={(value) => setAdjust((current) => ({ ...current, intensity: value }))} />
+                  <label className="block text-sm font-bold text-slate-700">
+                    Số buổi mỗi tuần
+                    <select
+                      value={adjust.perWeek}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setAdjust((current) => ({
+                          ...current,
+                          perWeek: next,
+                          total: Number(current.total) < Number(next) ? next : current.total,
+                        }));
+                      }}
+                      className={fieldClass}
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7].map((value) => (
+                        <option key={value} value={value}>{value} buổi</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-bold text-slate-700">
+                    Số phút mỗi buổi
+                    <select
+                      value={adjust.minutes}
+                      onChange={(event) => setAdjust((current) => ({ ...current, minutes: event.target.value }))}
+                      className={fieldClass}
+                    >
+                      {[20, 30, 45, 60, 75, 90].map((value) => (
+                        <option key={value} value={value}>{value} phút</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-bold text-slate-700">
+                    Tổng số buổi
+                    <input
+                      type="number"
+                      min={Number(adjust.perWeek) || 1}
+                      max={(Number(adjust.perWeek) || 1) * 12}
+                      value={adjust.total}
+                      onChange={(event) => setAdjust((current) => ({ ...current, total: event.target.value }))}
+                      className={fieldClass}
+                    />
+                  </label>
+                </div>
                 <label className="mt-4 block text-sm font-bold text-slate-700">
-                  Lý do tạo lại
+                  Ghi chú thêm (không bắt buộc)
                   <textarea
-                    value={regenerateNote}
-                    onChange={(event) => setRegenerateNote(event.target.value)}
-                    rows={3}
+                    value={adjust.note}
+                    onChange={(event) => setAdjust((current) => ({ ...current, note: event.target.value }))}
+                    rows={2}
                     className={fieldClass}
-                    placeholder="Ví dụ: Bổ trợ môn bơi, tránh ngày có buổi học"
+                    placeholder="Ví dụ: Tránh bài đau đầu gối, thêm bài cho vai"
                   />
                 </label>
                 <ActionError>{regenerateError}</ActionError>
@@ -510,8 +700,11 @@ export default function AiWorkoutPage() {
                   onClick={submitRegenerate}
                   className={`${primaryButtonClass} mt-4`}
                 >
-                  {busy === 'regenerate' ? 'Đang tạo lại...' : 'Yêu cầu tạo lại'}
+                  {busy === 'regenerate' ? 'AI đang tạo lại...' : 'Tạo lại lộ trình bằng AI'}
                 </button>
+                <Link to="/hoc-vien/lo-trinh-tap" className={`${secondaryButtonClass} ml-3 mt-4 inline-block`}>
+                  Quay lại lộ trình
+                </Link>
               </section>
             )}
           </div>

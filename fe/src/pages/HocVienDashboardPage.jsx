@@ -32,7 +32,7 @@ const SIDEBAR_ITEMS = [
 
 const REGISTER_TAB = { key: 'register', label: 'Đăng ký khóa học', href: '/dang-ky-khoa-hoc' };
 const COURSE_PLAN_TAB = { key: 'course-plan', label: 'Bài tập lớp', href: '/hoc-vien/bai-tap-lop' };
-const PERSONAL_AI_TAB = { key: 'personal-ai', label: 'Gợi ý tập', href: '/hoc-vien/giao-an-ai' };
+const PERSONAL_AI_TAB = { key: 'personal-ai', label: 'AI gợi ý bài tập', href: '/hoc-vien/giao-an-ai' };
 const MEMBER_ONLY_TABS = new Set(['schedule', 'support']);
 const SPY_OFFSET = 120; // lớn hơn scroll-mt-24 (96px) để mục vừa cuộn tới được tính là đang xem
 
@@ -217,13 +217,13 @@ export default function HocVienDashboardPage() {
   }, [sidebarItems]);
 
   useEffect(() => {
-    const key = window.location.hash.replace('#', '');
+    const key = searchParams.get('tab') || window.location.hash.replace('#', '');
     if (!sidebarItems.some((item) => item.key === key && !item.href)) return undefined;
     spyLockUntil.current = Date.now() + 600;
     setActiveTab(key);
     document.getElementById(key)?.scrollIntoView({ block: 'start' });
     return undefined;
-  }, [sidebarItems]);
+  }, [sidebarItems, searchParams]);
 
   const currentItem = sidebarItems.find((item) => item.key === activeTab);
 
