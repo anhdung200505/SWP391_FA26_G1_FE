@@ -217,13 +217,13 @@ export default function HocVienDashboardPage() {
   }, [sidebarItems]);
 
   useEffect(() => {
-    const key = window.location.hash.replace('#', '');
+    const key = searchParams.get('tab') || window.location.hash.replace('#', '');
     if (!sidebarItems.some((item) => item.key === key && !item.href)) return undefined;
     spyLockUntil.current = Date.now() + 600;
     setActiveTab(key);
     document.getElementById(key)?.scrollIntoView({ block: 'start' });
     return undefined;
-  }, [sidebarItems]);
+  }, [sidebarItems, searchParams]);
 
   const currentItem = sidebarItems.find((item) => item.key === activeTab);
 

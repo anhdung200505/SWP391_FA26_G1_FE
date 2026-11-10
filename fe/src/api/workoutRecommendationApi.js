@@ -1,12 +1,14 @@
 import { clearSession, readSession } from '../auth/session';
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+
 async function request(path, options = {}) {
   const { headers, ...rest } = options;
   const token = readSession()?.token || localStorage.getItem('token');
 
   let response;
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${API_BASE_URL}/api${path}`, {
       ...rest,
       headers: {
         'Content-Type': 'application/json',

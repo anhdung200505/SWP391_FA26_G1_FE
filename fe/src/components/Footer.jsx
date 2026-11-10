@@ -322,14 +322,14 @@ export default function Footer() {
           {/* ================= 2. KHỐI BÊN PHẢI: FORM TƯ VẤN GHI DANH (DÀNH CHO KHÁCH GUEST) ================= */}
           {!user && (
             <div
-              className="relative w-full lg:w-[50%] xl:w-[52%] bg-[#e31b23] px-6 sm:px-10 lg:pl-16 lg:pr-12 py-10 md:py-12 flex flex-col justify-center min-h-[500px]"
+              className="relative w-full lg:w-[50%] xl:w-[52%] bg-[#e31b23] px-4 sm:px-10 lg:pl-16 lg:pr-12 py-6 sm:py-10 md:py-12 flex flex-col justify-center lg:min-h-[500px]"
               style={{
                 clipPath: window.innerWidth >= 1024 ? 'polygon(8% 0, 100% 0, 100% 100%, 0% 100%)' : 'none',
               }}
             >
               <div className="max-w-md mx-auto w-full">
-                <h3 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight text-center mb-6 drop-shadow-md">
-                  TƯ VẤN GHI DANH
+                <h3 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tight text-center mb-3 sm:mb-6 drop-shadow-md">
+                  Tư vấn ghi danh
                 </h3>
 
                 {isSuccess ? (
@@ -371,7 +371,7 @@ export default function Footer() {
                           setFormData({ ...formData, fullName: e.target.value });
                           if (errors.fullName) setErrors({ ...errors, fullName: '' });
                         }}
-                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-sm shadow-inner ${
+                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-3 py-2 sm:px-4 sm:py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-xs sm:text-sm shadow-inner ${
                           errors.fullName ? 'ring-2 ring-yellow-300' : ''
                         }`}
                       />
@@ -392,7 +392,7 @@ export default function Footer() {
                         placeholder="Số điện thoại *"
                         value={formData.phone}
                         onChange={handlePhoneChange}
-                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-sm shadow-inner ${
+                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-3 py-2 sm:px-4 sm:py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-xs sm:text-sm shadow-inner ${
                           errors.phone ? 'ring-2 ring-yellow-300' : ''
                         }`}
                       />
@@ -415,7 +415,7 @@ export default function Footer() {
                           setFormData({ ...formData, email: e.target.value });
                           if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
                         }}
-                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-sm shadow-inner ${
+                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-3 py-2 sm:px-4 sm:py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-xs sm:text-sm shadow-inner ${
                           errors.email ? 'ring-2 ring-yellow-300' : ''
                         }`}
                       />
@@ -433,7 +433,7 @@ export default function Footer() {
                       <button
                         type="button"
                         onClick={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
-                        className="w-full bg-[#181d29] text-white px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none flex items-center justify-between text-sm font-semibold shadow-inner cursor-pointer"
+                        className="w-full bg-[#181d29] text-white px-3 py-2 sm:px-4 sm:py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none flex items-center justify-between text-xs sm:text-sm font-semibold shadow-inner cursor-pointer"
                       >
                         <span className="w-full text-center text-gray-300 truncate">
                           {formData.selectedSports.length > 0
@@ -476,7 +476,7 @@ export default function Footer() {
                         placeholder="Độ tuổi học viên *"
                         value={formData.age}
                         onChange={handleAgeChange}
-                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-4 py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-sm shadow-inner ${
+                        className={`w-full bg-[#181d29] text-white placeholder-gray-300 px-3 py-2 sm:px-4 sm:py-3 rounded-none border-0 focus:ring-1 focus:ring-white focus:outline-none text-center font-semibold text-xs sm:text-sm shadow-inner ${
                           errors.age ? 'ring-2 ring-yellow-300' : ''
                         }`}
                       />
@@ -494,7 +494,7 @@ export default function Footer() {
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className={`bg-white hover:bg-gray-100 text-[#e31b23] font-black text-sm md:text-base px-8 py-3 transform -skew-x-12 transition-all duration-200 shadow-xl flex items-center justify-center space-x-2 uppercase tracking-wider ${
+                        className={`bg-white hover:bg-gray-100 text-[#e31b23] font-black text-xs sm:text-sm px-6 py-2 sm:px-8 sm:py-3 transform -skew-x-12 transition-all duration-200 shadow-xl flex items-center justify-center space-x-2 uppercase tracking-wider ${
                           isLoading ? 'opacity-80 cursor-not-allowed' : 'hover:scale-105 cursor-pointer'
                         }`}
                       >
@@ -513,14 +513,14 @@ export default function Footer() {
 
       {/* ================= 3. FLOATING BUTTON & POPUP DÀNH CHO TÀI KHOẢN ĐÃ ĐĂNG NHẬP ================= */}
       {user && (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans">
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(0.75rem,env(safe-area-inset-right))] z-50 flex flex-col items-end font-sans">
           {/* POPUP CONTAINER */}
           {isHelpOpen && (
-            <div className="mb-4 w-80 sm:w-96 bg-[#181d2a] border border-gray-700 rounded-3xl p-6 shadow-2xl text-white animate-in fade-in slide-in-from-bottom-5 duration-200">
-              <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-800">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{hasMembership ? '🎧' : '📝'}</span>
-                  <h3 className="text-sm font-black uppercase text-white tracking-wider">
+            <div className="mb-2 max-h-[min(68dvh,26rem)] w-[min(17.5rem,calc(100vw-1.25rem))] overflow-y-auto rounded-2xl border border-gray-700 bg-[#181d2a] p-3.5 shadow-2xl text-white sm:w-[min(20rem,calc(100vw-2rem))] sm:p-5">
+              <div className="mb-3 flex items-center justify-between border-b border-gray-800 pb-2">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="text-sm">{hasMembership ? '🎧' : '📝'}</span>
+                  <h3 className="truncate text-xs font-black uppercase tracking-wide text-white">
                     {hasMembership ? 'Gửi hỗ trợ Lễ tân' : 'Đăng ký tư vấn ngay'}
                   </h3>
                 </div>
@@ -549,7 +549,7 @@ export default function Footer() {
                     </button>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmitEnrollment} className="space-y-3 text-xs">
+                  <form onSubmit={handleSubmitEnrollment} className="space-y-2 text-[11px]">
                     {actionNotice && <p className="text-xs text-red-400 font-bold">{actionNotice}</p>}
                     <div>
                       <label className="block text-gray-400 font-bold mb-1">Họ và tên *</label>
@@ -648,7 +648,7 @@ export default function Footer() {
                 )
               ) : (
                 /* TRƯỜNG HỢP 2: TÀI KHOẢN ĐÃ CÓ GÓI HỘI VIÊN -> FORM HỖ TRỢ LỄ TÂN GỐC */
-                <form onSubmit={handleSubmitSupport} className="space-y-3 text-xs">
+                <form onSubmit={handleSubmitSupport} className="space-y-2 text-[11px]">
                   <div>
                     <label className="block text-gray-400 font-bold mb-1">Loại yêu cầu *</label>
                     <input
@@ -711,15 +711,15 @@ export default function Footer() {
           <button
             type="button"
             onClick={() => setIsHelpOpen(!isHelpOpen)}
-            className="group flex items-center gap-2.5 bg-[#e31b23] hover:bg-[#c4131a] text-white font-black text-xs uppercase tracking-wider px-5 py-3.5 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 cursor-pointer border border-red-400/30"
+            className="group flex items-center gap-1.5 rounded-full border border-red-400/30 bg-[#e31b23] px-3 py-2 text-[10px] font-black uppercase tracking-wide text-white shadow-xl transition-all duration-300 hover:bg-[#c4131a] sm:gap-2 sm:px-4 sm:py-2.5 sm:text-xs cursor-pointer"
           >
-            <span className="text-lg">{hasMembership ? '💬' : '📝'}</span>
+            <span className="text-sm">{hasMembership ? '💬' : '📝'}</span>
             <span>
               {isHelpOpen
                 ? 'Đóng'
                 : hasMembership
-                ? 'Trợ Giúp'
-                : 'Đăng ký ghi danh ngay'}
+                ? 'Hỗ trợ'
+                : 'Ghi danh'}
             </span>
           </button>
         </div>

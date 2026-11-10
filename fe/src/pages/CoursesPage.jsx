@@ -33,7 +33,7 @@ export default function CoursesPage() {
     <div className="relative w-full min-h-screen font-sans bg-[#12141d] text-white select-none overflow-x-hidden">
       <Header forceWhite />
 
-      <section className="relative w-full h-screen pt-16 bg-[#0d0f17] overflow-hidden flex flex-col justify-between">
+      <section className="relative w-full min-h-dvh pt-16 bg-[#0d0f17] overflow-x-hidden flex flex-col justify-between">
         <div className="absolute inset-0 z-0">
           <img
             src={basketballImg}

@@ -1,0 +1,8 @@
+{
+  "installCommand": "npm --prefix fe install --include=dev",
+  "buildCommand": "npm --prefix fe run build",
+  "outputDirectory": "fe/dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

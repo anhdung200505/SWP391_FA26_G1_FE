@@ -61,6 +61,62 @@ public class PrivateClassFlowService(
             .ToList();
     }
 
+    // HLV dạy môn của gói, để học viên chọn HLV trước rồi mới xem lịch.
+    public async Task<IReadOnlyList<PrivateCoachDto>> AccessCoachesAsync(string courseId)
+    {
+        var course = await LoadPrivateCourseAsync(courseId);
+        return (await SportCoachesAsync(course.SportId))
+            .Select(coach => new PrivateCoachDto(coach.UserId.ToString(), coach.FullName))
+            .ToList();
+    }
+
+    // Ô (thứ x khung giờ) nào HLV hoặc chính học viên đã bận. Mỗi ô xét như học một buổi mỗi tuần cho tới đủ số buổi của gói
+    // (trường hợp dài nhất), nên HLV bận ở bất kỳ tuần nào trong khoảng đó thì ô bị xám.
+    public async Task<PrivateCoachScheduleDto> CoachScheduleAsync(int memberUserId, PrivateCoachScheduleRequest request)
+    {
+        await SweepAsync();
+        var course = await LoadPrivateCourseAsync(request.CourseId);
+        var start = RequireFutureStart(request.StartDate);
+        var coach = await FindSportCoachAsync(request.CoachUserId, course.SportId);
+        var count = course.SessionCount ?? 0;
+        if (count <= 0)
+        {
+            throw new RegistrationException("Gói học chưa cấu hình số buổi.");
+        }
+
+        var slots = await db.TimeSlots.AsNoTracking()
+            .Where(slot => slot.Kind == "private" && slot.IsActive)
+            .OrderBy(slot => slot.StartTime)
+            .ToListAsync();
+        var now = DateTime.Now;
+        var cells = new List<(byte Weekday, TimeSlot Slot, List<ClassSession> Planned)>();
+        for (byte weekday = 2; weekday <= 7; weekday++)
+        {
+            foreach (var slot in slots)
+            {
+                cells.Add((weekday, slot, ClassSessionPlanner.PlanCount(0, start, count, [(weekday, slot)], 0, 0, now)));
+            }
+        }
+
+        var from = cells.Min(cell => cell.Planned.Min(session => session.SessionDate));
+        var to = cells.Max(cell => cell.Planned.Max(session => session.SessionDate));
+        var coachBooked = await CoachBookedAsync([coach.UserId], from, to);
+        var memberBooked = await MemberBookedAsync(memberUserId, from, to);
+
+        var busy = new List<PrivateBusyCellDto>();
+        foreach (var (weekday, slot, planned) in cells)
+        {
+            var reason = FirstOverlap(coachBooked, planned, "Huấn luyện viên đã có lớp")
+                ?? FirstOverlap(memberBooked, planned, "Trùng lịch học của bạn với lớp");
+            if (reason is not null)
+            {
+                busy.Add(new PrivateBusyCellDto(weekday, slot.TimeSlotId.ToString(), reason));
+            }
+        }
+
+        return new PrivateCoachScheduleDto(count, busy);
+    }
+
     public async Task<PrivateAvailabilityDto> CheckAvailabilityAsync(int memberUserId, PrivateAvailabilityRequest request)
     {
         await SweepAsync();
@@ -618,20 +674,10 @@ public class PrivateClassFlowService(
             return result;
         }
 
-        var from = planned.Min(session => session.SessionDate);
-        var to = planned.Max(session => session.SessionDate);
-        var rows = await db.ClassSessions.AsNoTracking()
-            .Where(session => session.Status != "cancelled"
-                && coachIds.Contains(session.CoachUserId)
-                && session.SessionDate >= from
-                && session.SessionDate <= to)
-            .Select(session => new { session.CoachUserId, session.SessionDate, session.StartTime, session.EndTime, session.Class!.ClassName })
-            .ToListAsync();
+        var rows = await CoachBookedAsync(coachIds, planned.Min(session => session.SessionDate), planned.Max(session => session.SessionDate));
         foreach (var coachId in coachIds)
         {
-            var booked = rows.Where(row => row.CoachUserId == coachId)
-                .Select(row => new Booked(coachId, row.SessionDate, row.StartTime, row.EndTime, row.ClassName));
-            var reason = FirstOverlap(booked, planned, "Huấn luyện viên đã có lớp");
+            var reason = FirstOverlap(rows.Where(row => row.OwnerId == coachId), planned, "Huấn luyện viên đã có lớp");
             if (reason is not null)
             {
                 result[coachId] = reason;
@@ -644,6 +690,23 @@ public class PrivateClassFlowService(
     // Học viên không được có buổi (lớp đang học, lớp 1-1 đã duyệt chờ trả tiền, đơn đang giữ chỗ) trùng giờ với gói.
     private async Task<string?> MemberConflictAsync(int memberUserId, List<ClassSession> planned)
     {
+        var rows = await MemberBookedAsync(memberUserId, planned.Min(session => session.SessionDate), planned.Max(session => session.SessionDate));
+        return FirstOverlap(rows, planned, "Trùng lịch học của bạn với lớp");
+    }
+
+    // Các buổi chưa hủy của HLV trong khoảng ngày.
+    private async Task<List<Booked>> CoachBookedAsync(IReadOnlyCollection<int> coachIds, DateOnly from, DateOnly to) =>
+        await db.ClassSessions.AsNoTracking()
+            .Where(session => session.Status != "cancelled"
+                && coachIds.Contains(session.CoachUserId)
+                && session.SessionDate >= from
+                && session.SessionDate <= to)
+            .Select(session => new Booked(session.CoachUserId, session.SessionDate, session.StartTime, session.EndTime, session.Class!.ClassName))
+            .ToListAsync();
+
+    // Các buổi chưa hủy của học viên (lớp đang học, lớp 1-1 đã duyệt chờ trả tiền, đơn đang giữ chỗ) trong khoảng ngày.
+    private async Task<List<Booked>> MemberBookedAsync(int memberUserId, DateOnly from, DateOnly to)
+    {
         var classIds = await db.ClassEnrollments.AsNoTracking()
             .Where(enrollment => enrollment.UserId == memberUserId && enrollment.Status == "enrolled")
             .Select(enrollment => enrollment.ClassId)
@@ -654,20 +717,16 @@ public class PrivateClassFlowService(
             .ToListAsync();
         if (classIds.Count == 0)
         {
-            return null;
+            return [];
         }
 
-        var from = planned.Min(session => session.SessionDate);
-        var to = planned.Max(session => session.SessionDate);
-        var rows = await db.ClassSessions.AsNoTracking()
+        return await db.ClassSessions.AsNoTracking()
             .Where(session => session.Status != "cancelled"
                 && classIds.Contains(session.ClassId)
                 && session.SessionDate >= from
                 && session.SessionDate <= to)
             .Select(session => new Booked(memberUserId, session.SessionDate, session.StartTime, session.EndTime, session.Class!.ClassName))
             .ToListAsync();
-        var reason = FirstOverlap(rows, planned, "Trùng lịch học của bạn với lớp");
-        return reason;
     }
 
     // Một phòng cho cả gói: phòng dùng được cho 1-1 của môn, không có buổi nhóm nào trùng giờ, và số buổi 1-1 cùng lúc chưa chạm private_concurrency.
@@ -676,6 +735,7 @@ public class PrivateClassFlowService(
         var rooms = await db.SportRooms.AsNoTracking()
             .Where(link => link.SportId == sportId && link.AllowPrivate)
             .Join(db.Rooms, link => link.RoomId, room => room.RoomId, (link, room) => room)
+            .Where(room => room.IsActive)
             .OrderBy(room => room.RoomId)
             .ToListAsync();
         if (rooms.Count == 0)
@@ -782,11 +842,15 @@ public class PrivateClassFlowService(
         return course ?? throw new RegistrationException("Gói học 1-1 không hợp lệ.");
     }
 
+    // Cần vài ngày để quản lý duyệt và học viên thanh toán trước buổi đầu.
+    private const int MinLeadDays = 3;
+
     private static DateOnly RequireFutureStart(DateOnly? startDate)
     {
-        if (startDate is not { } start || start <= DateOnly.FromDateTime(DateTime.Now))
+        var earliest = DateOnly.FromDateTime(DateTime.Now).AddDays(MinLeadDays);
+        if (startDate is not { } start || start < earliest)
         {
-            throw new RegistrationException("Ngày bắt đầu phải sau hôm nay.");
+            throw new RegistrationException($"Ngày bắt đầu phải từ {earliest:dd/MM/yyyy} trở đi (cách hôm nay ít nhất {MinLeadDays} ngày để trung tâm kịp xử lý).");
         }
 
         return start;
