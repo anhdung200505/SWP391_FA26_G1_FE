@@ -12,11 +12,17 @@ public sealed record BodyMetricDto(
 
 public sealed record BodyMetricResponse(BodyMetricDto Body, string Message, ActivityLogDto Log);
 
-public sealed record PersonalGoalsRequest(string Goal, int SessionsPerWeek, int SessionMinutes);
+public sealed record PersonalGoalsRequest(string Goal, int SessionsPerWeek, int SessionMinutes, int? TotalSessions = null, string? Intensity = null);
 
 public sealed record WorkoutDecisionRequest(bool EditRequired, string? Changes);
 
-public sealed record RegenerateWorkoutRequest(string Changes);
+// Tạo lại gợi ý tập (tính vào lượt tạo lại): ghi chú tự do và/hoặc chỉnh cường độ, số buổi mỗi tuần, số phút mỗi buổi, tổng số buổi.
+public sealed record RegenerateWorkoutRequest(
+    string? Changes = null,
+    string? Intensity = null,
+    int? SessionsPerWeek = null,
+    int? SessionMinutes = null,
+    int? TotalSessions = null);
 
 public sealed record CoachTrainingHistoryRequest(string MemberUserId, int ClassId, int SessionId, string Content);
 
@@ -92,7 +98,9 @@ public sealed record WorkoutPlanDto(
     string StartTime,
     string? ChangeNote,
     IReadOnlyList<WorkoutSessionDto> Sessions,
-    AnalysisPipelineDto Pipeline);
+    AnalysisPipelineDto Pipeline,
+    int? TotalSessions = null,
+    string? IntensityLevel = null);
 
 public sealed record WorkoutPlanResponse(string RecommendationId, WorkoutPlanDto Plan, string Message, ActivityLogDto Log);
 
