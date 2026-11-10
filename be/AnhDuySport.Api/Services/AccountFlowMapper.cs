@@ -56,7 +56,10 @@ public static class AccountFlowMapper
             package.ValidityMonths,
             SplitBenefits(package.Benefits),
             package.UpdatedAt ?? package.CreatedAt,
-            package.UpgradeDiscountPercent);
+            package.UpgradeDiscountPercent,
+            package.AiRegenerationLimit,
+            package.AiTokenLimit,
+            AiMembershipQuota.IsEligible(package.PackageCode));
 
     public static IReadOnlyList<string> SplitBenefits(string? text)
     {
@@ -77,11 +80,7 @@ public static class AccountFlowMapper
 
     public static string JoinBenefits(IReadOnlyList<string> benefits)
     {
-        var sentences = benefits.Select(item =>
-        {
-            var trimmed = item.Trim().TrimEnd('.');
-            return $"{trimmed}.";
-        });
-        return string.Join(' ', sentences);
+        // Mỗi quyền lợi một dòng: tránh cắt nhầm quyền lợi có dấu chấm giữa câu.
+        return string.Join('\n', benefits.Select(item => item.Trim().TrimEnd('.')).Where(item => item.Length > 0));
     }
 }

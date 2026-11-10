@@ -71,7 +71,7 @@ export default function EvaluationPanel({ classId }) {
         <p className="mt-2 text-sm text-slate-500">
           {sheet.rubricSource === 'draft' && 'Từ bản nháp AI đã lưu.'}
           {sheet.rubricSource === 'published' && 'Từ bản AI đã phát hành.'}
-          {!sheet.rubricSource && 'Lưu giáo án ở tab Giáo án lớp để có tiêu chí. Điểm vẫn nhập được ngay.'}
+          {!sheet.rubricSource && 'Lưu bài ở tab AI để có tiêu chí. Điểm vẫn nhập được ngay.'}
         </p>
         {sheet.rubric?.length ? (
           <ul className="mt-4 space-y-3">
