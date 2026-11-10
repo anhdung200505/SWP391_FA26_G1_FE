@@ -77,7 +77,7 @@ export default function MemberSchedule() {
             const badge = BADGES[badgeKey(session, now)];
             const cancelled = session.status === 'cancelled';
             return (
-              <div className={cancelled ? 'text-gray-400' : 'text-gray-900'}>
+              <div className={cancelled ? 'text-gray-400' : ''}>
                 <p className={`font-semibold leading-snug ${cancelled ? 'line-through' : ''}`}>{session.className}</p>
                 <p className="mt-1 text-xs text-gray-500 tabular-nums">
                   {formatClock(session.startTime)}–{formatClock(session.endTime)}

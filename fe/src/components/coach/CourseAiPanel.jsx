@@ -58,26 +58,21 @@ function nowStamp(now) {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
-function hasFinished(session, now) {
-  if (session.status === 'cancelled') return false;
+function hasEnded(session, now) {
+  if (session.status === 'cancelled') return true;
   if (session.status === 'completed') return true;
   return stamp(session, session.endTime || session.startTime) <= nowStamp(now);
 }
 
-function nextSessionId(list, now = new Date()) {
-  const open = [...list]
-    .filter((session) => session.status !== 'cancelled')
+// Buổi hôm nay hoặc sắp tới, chưa hủy: coach chọn tự do buổi nào cũng được để AI soạn bài.
+function upcomingSessions(list, now = new Date()) {
+  return [...list]
+    .filter((session) => !hasEnded(session, now))
     .sort((left, right) => stamp(left, left.startTime).localeCompare(stamp(right, right.startTime))
       || (left.sessionNo || 0) - (right.sessionNo || 0));
-  const latest = open
-    .filter((session) => hasFinished(session, now))
-    .sort((left, right) => stamp(right, right.endTime || right.startTime).localeCompare(stamp(left, left.endTime || left.startTime)))[0];
-  if (!latest) return open[0]?.sessionId || '';
-  const index = open.findIndex((session) => String(session.sessionId) === String(latest.sessionId));
-  return index >= 0 && index + 1 < open.length ? open[index + 1].sessionId : '';
 }
 
-export default function CourseAiPanel({ classId, sessions = [], onOpenHistory }) {
+export default function CourseAiPanel({ classId, sessions = [], view = 'form', onView = () => {} }) {
   const [workspace, setWorkspace] = useState(null);
   const [brief, setBrief] = useState('');
   const [changes, setChanges] = useState('');
@@ -86,7 +81,7 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const openSessions = sessions.filter((session) => session.status !== 'cancelled');
+  const openSessions = useMemo(() => upcomingSessions(sessions), [sessions]);
   const [sessionId, setSessionId] = useState(openSessions[0]?.sessionId || '');
 
   const applyWorkspace = (next) => {
@@ -97,8 +92,7 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
   };
 
   useEffect(() => {
-    const open = sessions.filter((session) => session.status !== 'cancelled');
-    setSessionId(nextSessionId(open) || open[0]?.sessionId || '');
+    setSessionId(upcomingSessions(sessions)[0]?.sessionId || '');
   }, [classId]);
 
   useEffect(() => {
@@ -124,16 +118,14 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
 
   const dirty = useMemo(() => signature(editor) !== signature(workspace?.draft), [editor, workspace]);
   const showingPreview = Boolean(workspace?.preview) && signature(editor) === signature(workspace.preview);
-  const nextId = useMemo(() => nextSessionId(openSessions), [sessions]);
   const savedRows = [workspace?.preview, workspace?.draft, workspace?.published]
     .filter(Boolean)
     .flatMap((plan) => plan.sessions || [])
     .filter((session) => String(session.sessionId) === String(sessionId));
   const hasExercises = savedRows.some((session) => (session.exercises || []).length > 0);
-  const regenerated = savedRows.some((session) => session.regenerated);
-  const isNext = Boolean(sessionId) && String(sessionId) === String(nextId);
-  const canGenerate = isNext && !regenerated;
-  const canRegenerate = isNext && hasExercises;
+  const hasSession = Boolean(sessionId) && openSessions.some((session) => String(session.sessionId) === String(sessionId));
+  const canGenerate = hasSession;
+  const canRegenerate = hasSession && hasExercises;
 
   const run = async (label, action) => {
     setBusy(label);
@@ -189,22 +181,23 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
 
   return (
     <div className="space-y-4">
+      {view !== 'draft' && (
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black text-balance text-slate-900">Giáo án và bài tập của lớp</h2>
+            <h2 className="text-lg font-black text-balance text-slate-900">Bài tập từng buổi của lớp</h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Chỉ buổi kế tiếp được sinh bài, dựa trên giáo trình buổi đó và đánh giá buổi vừa học xong. Buổi đã qua và các buổi xa hơn không tạo được. Sinh lại chỉ bật sau khi buổi đó đã có bài. Sau khi sinh lại, không sinh mới buổi đó nữa.
+              Nhập mô tả, chọn buổi học, AI sẽ soạn bài tập cho đúng buổi đó. Bạn không cần đánh giá từng học viên. Bài sinh ra có thể sửa tay, hoặc yêu cầu AI tạo lại nhiều lần trước khi phát hành.
             </p>
           </div>
-          <button type="button" onClick={onOpenHistory} className="cursor-pointer text-sm font-bold text-[#e31b23] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23]">
-            Ghi lịch sử tập
+          <button type="button" onClick={() => onView('draft')} className={quietButtonClass}>
+            Bản nháp{editor ? ' (có bài)' : ''}
           </button>
         </div>
         <label className="mt-4 block text-sm font-bold text-slate-700">
           Buổi học
           <select value={sessionId} onChange={(event) => setSessionId(event.target.value)} className={fieldClass}>
-            {openSessions.length === 0 && <option value="">Lớp chưa có buổi</option>}
+            {openSessions.length === 0 && <option value="">Lớp không còn buổi sắp tới</option>}
             {openSessions.map((session) => (
               <option key={session.sessionId} value={session.sessionId}>
                 {sessionChoiceLabel(session)}
@@ -212,20 +205,23 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
             ))}
           </select>
         </label>
-        <textarea
-          rows={4}
-          value={brief}
-          onChange={(event) => setBrief(event.target.value)}
-          placeholder="Mục tiêu cuối khóa, nội dung muốn dạy, những gì cần tránh."
-          className={fieldClass}
-        />
+        <label className="mt-4 block text-sm font-bold text-slate-700">
+          Mô tả cho AI
+          <textarea
+            rows={4}
+            value={brief}
+            onChange={(event) => setBrief(event.target.value)}
+            placeholder="Nội dung muốn dạy trong buổi này, trình độ lớp, những gì cần tránh."
+            className={fieldClass}
+          />
+        </label>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={Boolean(busy) || !canGenerate}
             onClick={() => {
               if (!canGenerate) return;
-              run('generate', () => generateCourseAi(classId, brief, sessionId)).then((ok) => ok && setNotice('Đã sinh bài cho buổi kế tiếp.'));
+              run('generate', () => generateCourseAi(classId, brief, sessionId)).then((ok) => { if (ok) { setNotice('Đã sinh bài cho buổi đã chọn. Bạn có thể sửa, lưu nháp hoặc yêu cầu AI tạo lại.'); onView('draft'); } });
             }}
             className={primaryButtonClass}
           >
@@ -243,7 +239,7 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
           )}
         </div>
         <label className="mt-4 block text-sm font-bold text-slate-700">
-          Yêu cầu sửa khi sinh lại
+          Yêu cầu chỉnh khi tạo lại
           <textarea
             rows={2}
             value={changes}
@@ -252,14 +248,8 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
             className={fieldClass}
           />
         </label>
-        {!isNext && (
-          <p className="mt-3 text-sm text-slate-600">Buổi này không phải buổi kế tiếp nên không sinh và không sinh lại.</p>
-        )}
-        {isNext && regenerated && (
-          <p className="mt-3 text-sm text-slate-600">Buổi này đã sinh lại nên không bấm Sinh bài buổi này nữa.</p>
-        )}
-        {isNext && !hasExercises && (
-          <p className="mt-3 text-sm text-slate-600">Sinh lại chỉ mở sau khi buổi này đã có bài tập.</p>
+        {hasSession && !hasExercises && (
+          <p className="mt-3 text-sm text-slate-600">Tạo lại chỉ mở sau khi buổi này đã có bài tập.</p>
         )}
         <button
           type="button"
@@ -267,12 +257,15 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
           onClick={() => {
             if (!canRegenerate) return;
             run('regenerate', () => regenerateCourseAi(classId, brief, changes, sessionId)).then((ok) => {
-              if (ok) setNotice('Đã sinh lại buổi kế tiếp. Không sinh mới buổi này nữa.');
+              if (ok) {
+                setNotice('Đã tạo lại bài cho buổi đã chọn.');
+                onView('draft');
+              }
             });
           }}
           className={`${quietButtonClass} mt-3`}
         >
-          {busy === 'regenerate' ? 'Đang sinh lại...' : 'Sinh lại buổi này'}
+          {busy === 'regenerate' ? 'Đang tạo lại...' : 'Tạo lại buổi này'}
         </button>
         {showingPreview && (
           <p className="mt-3 text-sm font-semibold text-amber-800">
@@ -285,14 +278,27 @@ export default function CourseAiPanel({ classId, sessions = [], onOpenHistory })
         {error && <p className="mt-3 text-sm font-semibold text-red-700">{error}</p>}
         {notice && <p className="mt-3 text-sm font-semibold text-emerald-700">{notice}</p>}
       </section>
+      )}
 
-      {!editor && (
+      {view === 'draft' && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-black text-balance text-slate-900">Bản nháp bài tập</h2>
+          <button type="button" onClick={() => onView('form')} className={quietButtonClass}>
+            Quay lại soạn bài
+          </button>
+        </div>
+      )}
+
+      {view === 'draft' && error && <p className="text-sm font-semibold text-red-700">{error}</p>}
+      {view === 'draft' && notice && <p className="text-sm font-semibold text-emerald-700">{notice}</p>}
+
+      {view === 'draft' && !editor && (
         <p className="rounded-3xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-600">
-          Chưa có bộ bài. Viết mô tả khóa, ghi lịch sử tập, rồi bấm Sinh bài.
+          Chưa có bản nháp. Quay lại, nhập mô tả, chọn buổi học rồi bấm Sinh bài buổi này.
         </p>
       )}
 
-      {editor && (
+      {view === 'draft' && editor && (
         <section className="space-y-4">
           <label className="block rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 text-sm font-bold text-slate-700">
             Tóm tắt

@@ -6,8 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AnhDuySport.Api.Services;
 
-// Chat AI mở khi gói đang hiệu lực được đăng ký kèm lớp, hoặc hội viên đang ghi danh một lớp còn mở.
-// Hội viên chỉ mua gói để dùng cơ sở vật chất, chưa có lớp, không dùng AI.
+// Gợi ý tập AI mở cho mọi hội viên có gói (Đồng, Bạc, Vàng) đang hiệu lực, không cần đăng ký lớp.
 // Đồng: 5 lượt tạo lại, 50.000 token. Bạc: 10 lượt, 100.000 token. Vàng: 25 lượt, 250.000 token.
 public static class AiMembershipQuota
 {
@@ -26,21 +25,46 @@ public static class AiMembershipQuota
         || membership.Payment?.ClassId is not null
         || membership.PlanName.Contains("kèm lớp", StringComparison.OrdinalIgnoreCase);
 
-    // Có lớp đang học cũng đủ, kể cả gói mua riêng trước khi ghi danh.
-    public static Task<bool> OpensAiAsync(AppDbContext db, Membership membership)
+    // Mọi hội viên có gói đang hiệu lực đều dùng được AI, không cần có lớp.
+    public static Task<bool> OpensAiAsync(AppDbContext db, Membership membership) => Task.FromResult(true);
+
+    public const string AiBenefitPrefix = "Gợi ý tập cá nhân bằng AI:";
+    public const string DiscountBenefitMarker = "phí gói khi nâng hạng";
+
+    // Dòng quyền lợi AI luôn sinh từ hạn mức thật, để chữ hiển thị và hệ thống không lệch nhau.
+    public static string AiBenefitText(int regenerations, int tokens) =>
+        $"{AiBenefitPrefix} {regenerations.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} lượt tạo lại và {tokens.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} token mỗi kỳ hội viên";
+
+    public static string DiscountBenefitText(decimal percent) =>
+        $"Giảm {percent:0.##}% {DiscountBenefitMarker} cùng lúc đăng ký khóa học";
+
+    // Thay (hoặc thêm) dòng AI và dòng giảm giá trong danh sách quyền lợi theo số liệu hệ thống.
+    public static List<string> SyncBenefits(IEnumerable<string> benefits, bool aiEligible, int regenerations, int tokens, decimal discountPercent)
     {
-        if (BundledWithClass(membership))
+        var result = benefits.ToList();
+        Replace(result, item => item.StartsWith(AiBenefitPrefix, StringComparison.OrdinalIgnoreCase),
+            aiEligible ? AiBenefitText(regenerations, tokens) : null);
+        Replace(result, item => item.StartsWith("Giảm", StringComparison.OrdinalIgnoreCase)
+                && item.Contains(DiscountBenefitMarker, StringComparison.OrdinalIgnoreCase),
+            discountPercent > 0 ? DiscountBenefitText(discountPercent) : null);
+        return result;
+    }
+
+    private static void Replace(List<string> list, Func<string, bool> match, string? text)
+    {
+        var index = list.FindIndex(item => match(item));
+        if (index < 0)
         {
-            return Task.FromResult(true);
+            if (text is not null) list.Add(text);
+            return;
         }
 
-        return (
-            from enrollment in db.ClassEnrollments.AsNoTracking()
-            join trainingClass in db.Classes.AsNoTracking() on enrollment.ClassId equals trainingClass.ClassId
-            where enrollment.UserId == membership.UserId
-                && enrollment.Status == "enrolled"
-                && trainingClass.Status != "cancelled"
-            select enrollment.ClassEnrollmentId).AnyAsync();
+        for (var i = list.Count - 1; i > index; i--)
+        {
+            if (match(list[i])) list.RemoveAt(i);
+        }
+
+        if (text is null) list.RemoveAt(index); else list[index] = text;
     }
 
     public static (int Regenerations, int Tokens) LimitsOf(string packageCode) => packageCode switch
@@ -66,10 +90,10 @@ public static class AiMembershipQuota
             .OrderByDescending(item => item.Package != null ? item.Package.Fee : 0)
             .FirstOrDefaultAsync();
         var package = membership?.Package;
-        if (membership is null || package is null || !IsEligible(package.PackageCode) || !await OpensAiAsync(db, membership))
+        if (membership is null || package is null || !IsEligible(package.PackageCode))
         {
             throw new InvalidOperationException(
-                "Gợi ý tập AI chỉ mở khi gói hội viên đang hiệu lực được đăng ký kèm lớp.");
+                "Gợi ý tập AI mở cho hội viên có gói đang hiệu lực. Hãy đăng ký hoặc gia hạn gói hội viên.");
         }
 
         var tokensUsed = await db.AiTokenUsages

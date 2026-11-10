@@ -65,9 +65,30 @@ public class SessionsController(SessionFlowService sessions, CurrentActor actor)
     [Authorize(Roles = "ADMIN")]
     [HttpPost("{sessionId}/cancel")]
     [EndpointSummary("Quản trị hủy một buổi học")]
-    [EndpointDescription("Bắt buộc có lý do, lưu vào ghi chú của buổi. Chỉ buổi hôm nay chưa kết thúc hoặc buổi sắp tới. Tự thêm một buổi bù cùng thứ, cùng giờ vào tuần sau; nếu tuần đó lớp, huấn luyện viên hoặc phòng đã kín thì dời sang tuần cùng thứ còn trống. Học viên của lớp nhận thông báo.")]
+    [EndpointDescription("Bắt buộc có lý do, lưu vào ghi chú của buổi. Chỉ buổi hôm nay chưa kết thúc hoặc buổi sắp tới. Quản trị tự chọn ngày và khung giờ buổi bù (makeupDate, makeupTimeSlotId); hệ thống không tự nhét buổi bù vào cuối khóa. Bỏ trống thì hủy trước và chọn buổi bù sau bằng POST /{sessionId}/makeup. Học viên của lớp nhận thông báo.")]
     public async Task<ActionResult<CancelSessionResult>> CancelSession(string sessionId, CancelSessionRequest request) =>
         Ok(await sessions.CancelSessionAsync(sessionId, request));
+
+    [Authorize(Roles = "ADMIN")]
+    [HttpPost("{sessionId}/makeup")]
+    [EndpointSummary("Quản trị xếp buổi bù cho một buổi đã hủy")]
+    [EndpointDescription("Chọn ngày và khung giờ buổi bù cho buổi đã hủy chưa có buổi bù. Kiểm tra trùng lịch lớp, HLV, phòng và học viên.")]
+    public async Task<ActionResult<SessionDto>> ScheduleMakeup(string sessionId, SessionSlotRequest request) =>
+        Ok(await sessions.ScheduleMakeupAsync(sessionId, request));
+
+    [Authorize(Roles = "ADMIN")]
+    [HttpPost("{sessionId}/reschedule")]
+    [EndpointSummary("Quản trị đổi lịch một buổi học")]
+    [EndpointDescription("Dời buổi (chưa điểm danh, từ hôm nay trở đi) sang ngày và khung giờ khác, giữ nguyên số buổi. Kiểm tra trùng lịch lớp, HLV, phòng và học viên. Học viên và HLV nhận thông báo.")]
+    public async Task<ActionResult<SessionDto>> RescheduleSession(string sessionId, SessionSlotRequest request) =>
+        Ok(await sessions.RescheduleSessionAsync(sessionId, request));
+
+    [Authorize(Roles = "ADMIN")]
+    [HttpGet("{sessionId}/slots")]
+    [EndpointSummary("Xem khung giờ trống của một ngày để đổi lịch hoặc xếp buổi bù")]
+    [EndpointDescription("Trả các khung giờ đúng loại lớp; isBusy = true khi trùng lớp, HLV, phòng hoặc học viên (busyReason).")]
+    public async Task<ActionResult<IReadOnlyList<SessionOptionDto>>> AccessSlots(string sessionId, [FromQuery] DateOnly date) =>
+        Ok(await sessions.AccessSlotOptionsAsync(sessionId, date));
 
     [AllowAnonymous]
     [HttpGet("~/api/time-slots")]
