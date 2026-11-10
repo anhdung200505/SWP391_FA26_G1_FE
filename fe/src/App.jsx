@@ -111,6 +111,14 @@ export default function App() {
                 path="/hoc-vien/giao-an-ai"
                 element={<Protected allowedRoles={['MEMBER']}><AiWorkoutPage /></Protected>}
               />
+              <Route
+                path="/hoc-vien/lo-trinh-tap"
+                element={<Protected allowedRoles={['MEMBER']}><AiWorkoutPage mode="routine" /></Protected>}
+              />
+              <Route
+                path="/hoc-vien/lo-trinh-tap/dieu-chinh"
+                element={<Protected allowedRoles={['MEMBER']}><AiWorkoutPage mode="adjust" /></Protected>}
+              />
             </Route>
 
             <Route path="/hoc-vien/hoc-1-1" element={<Navigate to="/dang-ky-khoa-hoc?type=private" replace />} />
@@ -124,7 +132,7 @@ export default function App() {
               }
             />
 
-            <Route path="/hlv/lich-su-tap" element={<Navigate to="/hlv/lop-hoc?tab=history" replace />} />
+            <Route path="/hlv/lich-su-tap" element={<Navigate to="/hlv/lop-hoc?tab=ai" replace />} />
 
             {/* Route LỄ TÂN DASHBOARD */}
             <Route 

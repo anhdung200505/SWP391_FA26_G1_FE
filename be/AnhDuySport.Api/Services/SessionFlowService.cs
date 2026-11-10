@@ -311,18 +311,247 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
             throw new RegistrationException("Buổi học đã có điểm danh, không thể hủy.");
         }
 
-        var makeupDate = await FindMakeupDateAsync(session);
+        if ((request.MakeupDate is null) != (request.MakeupTimeSlotId is null))
+        {
+            throw new RegistrationException("Chọn đủ ngày và khung giờ buổi bù, hoặc bỏ trống cả hai để chọn sau.");
+        }
+
+        ClassSession? makeup = null;
+        TimeSlot? slot = null;
+        if (request.MakeupDate is DateOnly makeupDate && request.MakeupTimeSlotId is int slotId)
+        {
+            slot = await ResolveSlotAsync(slotId);
+            if (makeupDate == session.SessionDate && slot.TimeSlotId == session.TimeSlotId)
+            {
+                throw new RegistrationException("Buổi bù phải khác thời điểm của buổi bị hủy.");
+            }
+
+            await EnsureSlotFreeAsync(session, makeupDate, slot, session.SessionId, isMakeup: true);
+        }
+
+        var cancelledWhen = When(session);
+        session.Status = "cancelled";
+        session.Note = reason;
+        var makeupWhen = "chưa xếp, quản lý sẽ chọn ngày bù và báo lại";
+        if (slot is not null && request.MakeupDate is DateOnly date)
+        {
+            makeup = await BuildMakeupAsync(session, date, slot);
+            db.ClassSessions.Add(makeup);
+            makeupWhen = $"Buổi {makeup.SessionNo} ngày {date:dd/MM/yyyy} {slot.StartTime:HH\\:mm}-{slot.EndTime:HH\\:mm}";
+        }
+
+        await NotifyMembersAsync(
+            session,
+            $"Hủy buổi học lớp {session.Class!.ClassName}",
+            TextFormat.WithNote($"{cancelledWhen} bị hủy.\nBuổi bù: {makeupWhen}.", reason));
+        NotifyCoaches(session, $"Hủy buổi học lớp {session.Class.ClassName}", $"{cancelledWhen} bị hủy.\nBuổi bù: {makeupWhen}.\nLý do: {TextFormat.Sentence(reason)}");
+        AddLog("Hủy buổi học", session, $"{reason}. Buổi bù: {makeupWhen}");
+        await SaveAsync();
+        await EmailCancelledAsync(session, cancelledWhen, makeupWhen, reason);
+        return new CancelSessionResult(
+            await SelectSessionAsync(session.SessionId.ToString()),
+            makeup is null ? null : await SelectSessionAsync(makeup.SessionId.ToString()));
+    }
+
+    // Xếp buổi bù cho buổi đã hủy mà chưa có buổi bù.
+    public async Task<SessionDto> ScheduleMakeupAsync(string sessionId, SessionSlotRequest request)
+    {
+        var session = await LoadSessionAsync(ParseId(sessionId), tracking: true);
+        if (session.Status != "cancelled")
+        {
+            throw new RegistrationException("Chỉ xếp buổi bù cho buổi đã hủy.");
+        }
+
+        var marker = $"Buổi bù cho buổi ngày {session.SessionDate:dd/MM/yyyy}";
+        if (await db.ClassSessions.AnyAsync(item => item.ClassId == session.ClassId
+                && item.Status != "cancelled"
+                && item.Note != null
+                && item.Note.StartsWith(marker)))
+        {
+            throw new RegistrationException("Buổi này đã có buổi bù.");
+        }
+
+        var slot = await ResolveSlotAsync(request.TimeSlotId);
+        await EnsureSlotFreeAsync(session, request.Date, slot, session.SessionId, isMakeup: true);
+        var makeup = await BuildMakeupAsync(session, request.Date, slot);
+        db.ClassSessions.Add(makeup);
+        var makeupWhen = $"Buổi {makeup.SessionNo} ngày {request.Date:dd/MM/yyyy} {slot.StartTime:HH\\:mm}-{slot.EndTime:HH\\:mm}";
+        await NotifyMembersAsync(session, $"Buổi bù lớp {session.Class!.ClassName}", $"{When(session)} đã được bù: {makeupWhen}.");
+        NotifyCoaches(session, $"Buổi bù lớp {session.Class.ClassName}", $"{When(session)} đã được bù: {makeupWhen}.");
+        AddLog("Xếp buổi bù", session, makeupWhen);
+        await SaveAsync();
+        await EmailMembersScheduleAsync(session, $"{When(session)} đã được bù: {makeupWhen}.");
+        return await SelectSessionAsync(makeup.SessionId.ToString());
+    }
+
+    // Đổi lịch: dời chính buổi này sang ngày/khung giờ khác, giữ nguyên số buổi.
+    public async Task<SessionDto> RescheduleSessionAsync(string sessionId, SessionSlotRequest request)
+    {
+        var session = await LoadSessionAsync(ParseId(sessionId), tracking: true);
+        EnsureEditable(session);
+        if (await db.ClassAttendances.AnyAsync(row => row.SessionId == session.SessionId))
+        {
+            throw new RegistrationException("Buổi học đã có điểm danh, không thể đổi lịch.");
+        }
+
+        var slot = await ResolveSlotAsync(request.TimeSlotId);
+        if (session.SessionDate == request.Date && session.TimeSlotId == slot.TimeSlotId)
+        {
+            throw new RegistrationException("Thời điểm mới trùng thời điểm hiện tại.");
+        }
+
+        await EnsureSlotFreeAsync(session, request.Date, slot, session.SessionId, isMakeup: false);
+        var oldWhen = When(session);
+        var reason = NormalizeNote(request.Reason);
+        session.SessionDate = request.Date;
+        session.TimeSlotId = slot.TimeSlotId;
+        session.StartTime = slot.StartTime;
+        session.EndTime = slot.EndTime;
+        if (session.Class!.EndDate is DateOnly end && end < request.Date)
+        {
+            session.Class.EndDate = request.Date;
+        }
+
+        var newWhen = When(session);
+        var summary = TextFormat.WithNote($"{oldWhen} được đổi sang {newWhen}.", reason);
+        session.Note = Shorten(summary, 500);
+        await NotifyMembersAsync(session, $"Đổi lịch học lớp {session.Class.ClassName}", summary);
+        NotifyCoaches(session, $"Đổi lịch học lớp {session.Class.ClassName}", summary);
+        AddLog("Đổi lịch buổi học", session, $"{oldWhen} → {newWhen}");
+        await SaveAsync();
+        await EmailMembersScheduleAsync(session, summary);
+        return await SelectSessionAsync(sessionId);
+    }
+
+    // Các khung giờ đúng loại lớp trong một ngày, kèm lý do bận để quản trị chọn.
+    public async Task<IReadOnlyList<SessionOptionDto>> AccessSlotOptionsAsync(string sessionId, DateOnly date)
+    {
+        var session = await LoadSessionAsync(ParseId(sessionId), tracking: false);
+        var slots = await db.TimeSlots.AsNoTracking()
+            .Where(slot => slot.IsActive && slot.Kind == session.Class!.ClassType)
+            .OrderBy(slot => slot.StartTime)
+            .ToListAsync();
+        var result = new List<SessionOptionDto>();
+        foreach (var slot in slots)
+        {
+            var busy = await FindSlotConflictAsync(session, date, slot, session.SessionId, isMakeup: session.Status == "cancelled");
+            result.Add(new SessionOptionDto(
+                slot.TimeSlotId.ToString(),
+                $"{slot.StartTime:HH\\:mm}–{slot.EndTime:HH\\:mm}",
+                null,
+                session.TimeSlotId == slot.TimeSlotId && session.SessionDate == date,
+                busy is not null,
+                busy));
+        }
+
+        return result;
+    }
+
+    private async Task<TimeSlot> ResolveSlotAsync(int timeSlotId)
+    {
+        return await db.TimeSlots.AsNoTracking().FirstOrDefaultAsync(item => item.TimeSlotId == timeSlotId && item.IsActive)
+            ?? throw new RegistrationException("Khung giờ không hợp lệ.");
+    }
+
+    private async Task EnsureSlotFreeAsync(ClassSession session, DateOnly date, TimeSlot slot, int ignoreSessionId, bool isMakeup)
+    {
+        var conflict = await FindSlotConflictAsync(session, date, slot, ignoreSessionId, isMakeup);
+        if (conflict is not null)
+        {
+            throw new RegistrationException(conflict);
+        }
+    }
+
+    // Null khi thời điểm mới còn trống: đúng loại khung giờ, lớp, HLV, phòng và học viên đều không bị trùng.
+    private async Task<string?> FindSlotConflictAsync(ClassSession session, DateOnly date, TimeSlot slot, int ignoreSessionId, bool isMakeup)
+    {
+        var now = DateTime.Now;
+        if (date < DateOnly.FromDateTime(now) || (date == DateOnly.FromDateTime(now) && slot.StartTime <= TimeOnly.FromDateTime(now)))
+        {
+            return "Không chọn được thời điểm đã qua.";
+        }
+
+        var trainingClass = session.Class ?? await db.Classes.AsNoTracking().FirstAsync(item => item.ClassId == session.ClassId);
+        if (slot.Kind != trainingClass.ClassType)
+        {
+            return "Khung giờ không đúng loại lớp.";
+        }
+
+        var sameDay = await db.ClassSessions.AsNoTracking()
+            .Where(item => item.SessionDate == date && item.SessionId != ignoreSessionId)
+            .Select(item => new SlotBusy(item.ClassId, item.CoachUserId, item.RoomId, item.TimeSlotId, item.Status, item.StartTime, item.EndTime, item.Class!.ClassType))
+            .ToListAsync();
+        if (sameDay.Any(item => item.ClassId == session.ClassId && item.TimeSlotId == slot.TimeSlotId))
+        {
+            return "Lớp đã có buổi ở khung giờ này.";
+        }
+
+        var overlapping = sameDay
+            .Where(item => item.Status != "cancelled" && item.Start < slot.EndTime && item.End > slot.StartTime)
+            .ToList();
+        if (overlapping.Any(item => item.ClassId == session.ClassId))
+        {
+            return "Lớp đã có buổi học trong khoảng giờ này.";
+        }
+
+        if (overlapping.Any(item => item.CoachUserId == session.CoachUserId))
+        {
+            return "Huấn luyện viên đã có buổi khác trong khoảng giờ này.";
+        }
+
+        var roomHits = overlapping.Where(item => item.RoomId == session.RoomId).ToList();
+        var roomLimit = session.Room?.PrivateConcurrency
+            ?? (await db.Rooms.AsNoTracking().Where(room => room.RoomId == session.RoomId).Select(room => (int?)room.PrivateConcurrency).FirstOrDefaultAsync())
+            ?? 1;
+        var roomBlocked = trainingClass.ClassType == "group"
+            ? roomHits.Count > 0
+            : roomHits.Any(item => item.ClassType == "group") || roomHits.Count(item => item.ClassType == "private") >= roomLimit;
+        if (roomBlocked)
+        {
+            return "Phòng đã có lớp khác trong khoảng giờ này.";
+        }
+
+        var memberIds = await db.ClassEnrollments.AsNoTracking()
+            .Where(enrollment => enrollment.ClassId == session.ClassId && enrollment.Status == "enrolled")
+            .Select(enrollment => enrollment.UserId)
+            .ToListAsync();
+        if (memberIds.Count > 0)
+        {
+            var otherClassIds = overlapping.Select(item => item.ClassId).Distinct().ToList();
+            var clashing = await db.ClassEnrollments.AsNoTracking()
+                .Where(enrollment => enrollment.Status == "enrolled"
+                    && memberIds.Contains(enrollment.UserId)
+                    && otherClassIds.Contains(enrollment.ClassId))
+                .Select(enrollment => enrollment.UserId)
+                .Distinct()
+                .CountAsync();
+            if (clashing > 0)
+            {
+                return $"{clashing} học viên của lớp đã có buổi khác trong khoảng giờ này.";
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<ClassSession> BuildMakeupAsync(ClassSession session, DateOnly date, TimeSlot slot)
+    {
         var nextNo = (await db.ClassSessions
             .Where(item => item.ClassId == session.ClassId)
             .MaxAsync(item => (int?)item.SessionNo) ?? 0) + 1;
-        var makeup = new ClassSession
+        if (session.Class!.EndDate is DateOnly end && end < date)
+        {
+            session.Class.EndDate = date;
+        }
+
+        return new ClassSession
         {
             ClassId = session.ClassId,
             SessionNo = nextNo,
-            SessionDate = makeupDate,
-            TimeSlotId = session.TimeSlotId,
-            StartTime = session.StartTime,
-            EndTime = session.EndTime,
+            SessionDate = date,
+            TimeSlotId = slot.TimeSlotId,
+            StartTime = slot.StartTime,
+            EndTime = slot.EndTime,
             CoachUserId = session.CoachUserId,
             RoomId = session.RoomId,
             Status = "scheduled",
@@ -334,87 +563,9 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
                 500),
             CreatedAt = DateTime.Now,
         };
-        if (session.Class!.EndDate is DateOnly end && end < makeupDate)
-        {
-            session.Class.EndDate = makeupDate;
-        }
-
-        session.Status = "cancelled";
-        session.Note = reason;
-        db.ClassSessions.Add(makeup);
-        var makeupWhen = $"Buổi {nextNo} ngày {makeupDate:dd/MM/yyyy} {session.StartTime:HH\\:mm}-{session.EndTime:HH\\:mm}";
-        await NotifyMembersAsync(
-            session,
-            $"Hủy buổi học lớp {session.Class.ClassName}",
-            TextFormat.WithNote($"{When(session)} bị hủy.\nBuổi bù: {makeupWhen}.", reason));
-        NotifyCoaches(session, $"Hủy buổi học lớp {session.Class.ClassName}", $"{When(session)} bị hủy.\nBuổi bù: {makeupWhen}.\nLý do: {TextFormat.Sentence(reason)}");
-        AddLog("Hủy buổi học", session, $"{reason}. Buổi bù: {makeupWhen}");
-        var cancelledWhen = When(session);
-        await SaveAsync();
-        await EmailCancelledAsync(session, cancelledWhen, makeupWhen, reason);
-        return new CancelSessionResult(
-            await SelectSessionAsync(session.SessionId.ToString()),
-            await SelectSessionAsync(makeup.SessionId.ToString()));
     }
 
-    // Cùng thứ, cùng giờ. Ưu tiên đúng tuần sau; nếu lớp đã có buổi đó hoặc HLV/phòng trùng thì tuần cùng thứ kế tiếp.
-    private async Task<DateOnly> FindMakeupDateAsync(ClassSession session)
-    {
-        const int maxWeeks = 26;
-        var from = session.SessionDate.AddDays(7);
-        var until = session.SessionDate.AddDays(7 * maxWeeks);
-        var classType = session.Class!.ClassType;
-        var roomLimit = session.Room?.PrivateConcurrency ?? 1;
-
-        var occupied = (await db.ClassSessions.AsNoTracking()
-            .Where(item => item.ClassId == session.ClassId
-                && item.TimeSlotId == session.TimeSlotId
-                && item.SessionDate >= from
-                && item.SessionDate <= until)
-            .Select(item => item.SessionDate)
-            .ToListAsync()).ToHashSet();
-
-        var overlaps = await db.ClassSessions.AsNoTracking()
-            .Where(item => item.Status != "cancelled"
-                && item.SessionDate >= from
-                && item.SessionDate <= until
-                && item.StartTime < session.EndTime
-                && item.EndTime > session.StartTime
-                && (item.CoachUserId == session.CoachUserId || item.RoomId == session.RoomId))
-            .Select(item => new MakeupOverlap(item.SessionDate, item.CoachUserId, item.RoomId, item.Class!.ClassType))
-            .ToListAsync();
-
-        for (var week = 1; week <= maxWeeks; week++)
-        {
-            var date = session.SessionDate.AddDays(7 * week);
-            if (occupied.Contains(date))
-            {
-                continue;
-            }
-
-            var sameDay = overlaps.Where(item => item.Date == date).ToList();
-            if (sameDay.Any(item => item.CoachUserId == session.CoachUserId))
-            {
-                continue;
-            }
-
-            var roomHits = sameDay.Where(item => item.RoomId == session.RoomId).ToList();
-            var roomBlocked = classType == "group"
-                ? roomHits.Count > 0
-                : roomHits.Any(item => item.ClassType == "group")
-                    || roomHits.Count(item => item.ClassType == "private") >= roomLimit;
-            if (roomBlocked)
-            {
-                continue;
-            }
-
-            return date;
-        }
-
-        throw new RegistrationException("Không xếp được buổi bù cùng thứ trong 26 tuần tới vì lịch lớp, huấn luyện viên hoặc phòng đã kín.");
-    }
-
-    private sealed record MakeupOverlap(DateOnly Date, int CoachUserId, int RoomId, string ClassType);
+    private sealed record SlotBusy(int ClassId, int CoachUserId, int RoomId, int TimeSlotId, string Status, TimeOnly Start, TimeOnly End, string ClassType);
 
     private async Task<ClassSession> LoadSessionAsync(int id, bool tracking)
     {
