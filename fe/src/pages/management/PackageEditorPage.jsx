@@ -19,10 +19,16 @@ const BENEFIT_PRESETS = [
   'Dùng hồ bơi cả giờ cao điểm',
   'Một buổi tập riêng với huấn luyện viên mỗi tháng',
   'Gồm mọi quyền lợi của Hạng Đồng',
-  'Gợi ý tập cá nhân bằng AI: 5 lượt tạo lại và 50.000 token mỗi kỳ hội viên',
-  'Gợi ý tập cá nhân bằng AI: 10 lượt tạo lại và 100.000 token mỗi kỳ hội viên',
-  'Gợi ý tập cá nhân bằng AI: 25 lượt tạo lại và 250.000 token mỗi kỳ hội viên',
 ];
+
+// Hai dòng này do hệ thống tự sinh từ ô "Mức giảm" và "Hạn mức AI", không sửa tay để khỏi lệch với thực tế.
+const isAutoBenefit = (text) => {
+  const value = String(text || '').trim().toLowerCase();
+  return (
+    value.startsWith('gợi ý tập cá nhân bằng ai:') ||
+    (value.startsWith('giảm') && value.includes('phí gói khi nâng hạng'))
+  );
+};
 
 export default function PackageEditorPage({ mode }) {
   const { packageId } = useParams();
@@ -44,6 +50,8 @@ export default function PackageEditorPage({ mode }) {
   const [validityMonths, setValidityMonths] = useState('1');
   const [upgradeDiscountPercent, setUpgradeDiscountPercent] = useState('0');
   const [benefits, setBenefits] = useState(['']);
+  const [aiRegeneration, setAiRegeneration] = useState('0');
+  const [aiTokens, setAiTokens] = useState('0');
 
   // Thêm quyền lợi
   const [benefitChoice, setBenefitChoice] = useState('');
@@ -78,11 +86,13 @@ export default function PackageEditorPage({ mode }) {
         String(existing.upgradeDiscountPercent ?? 0)
       );
 
-      setBenefits(
-        Array.isArray(existing.benefits) && existing.benefits.length
-          ? existing.benefits
-          : ['']
-      );
+      setAiRegeneration(String(existing.aiRegenerationLimit ?? 0));
+      setAiTokens(String(existing.aiTokenLimit ?? 0));
+
+      const manual = Array.isArray(existing.benefits)
+        ? existing.benefits.filter((item) => !isAutoBenefit(item))
+        : [];
+      setBenefits(manual.length ? manual : ['']);
     }
   }, [existing, formPackageId]);
 
@@ -154,7 +164,18 @@ export default function PackageEditorPage({ mode }) {
   const monthsNumber = Number(validityMonths);
   const discountNumber = Number(upgradeDiscountPercent);
 
+  const aiEligible = Boolean(existing?.aiEligible);
+  const regenerationNumber = Number(aiRegeneration);
+  const tokenNumber = Number(aiTokens);
+
   const formInvalid =
+    (aiEligible &&
+      (aiRegeneration === '' ||
+        aiTokens === '' ||
+        !Number.isInteger(regenerationNumber) ||
+        !Number.isInteger(tokenNumber) ||
+        regenerationNumber < 0 ||
+        tokenNumber < 0)) ||
     !fee ||
     !Number.isFinite(feeNumber) ||
     feeNumber <= 0 ||
@@ -165,7 +186,7 @@ export default function PackageEditorPage({ mode }) {
     !Number.isFinite(discountNumber) ||
     discountNumber < 0 ||
     discountNumber > 100 ||
-    cleanedBenefits.length === 0;
+    (cleanedBenefits.length === 0 && !aiEligible && !(discountNumber > 0));
 
   // Thêm quyền lợi mẫu
   const addPresetBenefit = (value) => {
@@ -227,6 +248,9 @@ export default function PackageEditorPage({ mode }) {
       validityMonths: monthsNumber,
       upgradeDiscountPercent: discountNumber,
       benefits: cleanedBenefits,
+      ...(aiEligible
+        ? { aiRegenerationLimit: regenerationNumber, aiTokenLimit: tokenNumber }
+        : {}),
     };
 
     try {
@@ -420,6 +444,42 @@ export default function PackageEditorPage({ mode }) {
               )}
           </section>
 
+          {/* HẠN MỨC AI: số liệu thật hệ thống áp dụng cho hội viên */}
+          {aiEligible && (
+            <section className="mt-6 rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
+              <h2 className="font-black text-gray-900">Hạn mức AI của gói</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Hai con số này là hạn mức hệ thống thật sự áp dụng cho hội viên
+                (lượt tạo lại và token mỗi kỳ). Dòng quyền lợi AI hiển thị cho
+                khách sẽ tự cập nhật theo.
+              </p>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-bold text-gray-700">
+                  Lượt tạo lại / kỳ
+                  <input
+                    inputMode="numeric"
+                    value={aiRegeneration}
+                    onChange={(event) =>
+                      setAiRegeneration(event.target.value.replace(/\D/g, '').slice(0, 4))
+                    }
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 font-semibold outline-none ring-[#e31b23] focus:ring-2"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-gray-700">
+                  Token AI / kỳ
+                  <input
+                    inputMode="numeric"
+                    value={aiTokens}
+                    onChange={(event) =>
+                      setAiTokens(event.target.value.replace(/\D/g, '').slice(0, 9))
+                    }
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 font-semibold outline-none ring-[#e31b23] focus:ring-2"
+                  />
+                </label>
+              </div>
+            </section>
+          )}
+
           {/* QUYỀN LỢI */}
           <fieldset className="mt-6">
 
@@ -429,7 +489,8 @@ export default function PackageEditorPage({ mode }) {
 
             <p className="mt-1 text-sm text-gray-600">
               Chọn quyền lợi mẫu để thêm nhanh, hoặc chọn
-              “Khác” để tự nhập nội dung.
+              “Khác” để tự nhập nội dung. Dòng AI và dòng giảm giá khi nâng hạng
+              được hệ thống tự sinh từ ô hạn mức và mức giảm ở trên.
             </p>
 
             {/* DANH SÁCH QUYỀN LỢI ĐANG CÓ */}

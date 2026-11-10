@@ -23,6 +23,18 @@ public class RoomManagementController(RoomManagementFlowService rooms) : Control
     public async Task<ActionResult<RoomUsageDto>> Usage(string roomId) =>
         Ok(await rooms.RoomUsageAsync(roomId));
 
+    [HttpPost]
+    [EndpointSummary("Quản trị thêm phòng mới")]
+    [EndpointDescription("Tên, loại, sức chứa, số buổi 1-1 cùng lúc và các môn dùng được (lớp nhóm / 1-1). Mã phòng do hệ thống tự cấp.")]
+    public async Task<ActionResult<RoomAdminDto>> Create(SaveRoomRequest request) =>
+        Ok(await rooms.CreateAsync(request));
+
+    [HttpPut("{roomId}")]
+    [EndpointSummary("Quản trị sửa thông tin phòng")]
+    [EndpointDescription("Không giảm sức chứa dưới sĩ số lớp nhóm còn buổi sắp tới, và không gỡ môn đang có buổi sắp tới trong phòng.")]
+    public async Task<ActionResult<RoomAdminDto>> Update(string roomId, SaveRoomRequest request) =>
+        Ok(await rooms.UpdateAsync(roomId, request));
+
     [HttpPut("{roomId}/status")]
     [EndpointSummary("Quản trị ngưng dùng hoặc mở lại phòng")]
     [EndpointDescription("isActive = false: phòng không còn hiện khi tạo lớp, đổi phòng buổi học, xếp lịch 1-1; lớp và buổi đã có giữ nguyên phòng. Trả 409 kèm danh sách lớp nếu phòng còn buổi sắp tới, cần đổi phòng cho các buổi đó trước. isActive = true luôn được.")]

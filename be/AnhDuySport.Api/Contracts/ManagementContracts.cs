@@ -42,7 +42,10 @@ public sealed record PackageDto(
     int ValidityMonths,
     IReadOnlyList<string> Benefits,
     DateTimeOffset UpdatedAt,
-    decimal UpgradeDiscountPercent);
+    decimal UpgradeDiscountPercent,
+    int AiRegenerationLimit = 0,
+    int AiTokenLimit = 0,
+    bool AiEligible = false);
 
 public sealed record DashboardDto(
     int TotalAccounts,
@@ -92,6 +95,9 @@ public sealed class UpdatePackageSettingRequest
     public decimal Fee { get; set; }
     public int ValidityMonths { get; set; }
     public decimal UpgradeDiscountPercent { get; set; }
+    // Null = giữ nguyên hạn mức AI hiện tại của gói.
+    public int? AiRegenerationLimit { get; set; }
+    public int? AiTokenLimit { get; set; }
     public List<string> Benefits { get; set; } = [];
 }
 
@@ -123,11 +129,24 @@ public sealed record AiTokenUsageRowDto(
     int RegenerationLimit,
     IReadOnlyList<AiTokenMonthDto> Months);
 
+// Token Gemini của huấn luyện viên khi soạn bài tập từng buổi.
+public sealed record AiCoachTokenRowDto(
+    string CoachUserId,
+    string CoachName,
+    int TokensUsed,
+    int Generations,
+    int Regenerations,
+    DateTime? LastUsedAt,
+    IReadOnlyList<AiTokenMonthDto> Months);
+
 public sealed record AiTokenUsageReportDto(
     int TotalTokensUsed,
     IReadOnlyList<AiPackageQuotaDto> Packages,
     IReadOnlyList<AiTokenUsageRowDto> Members,
-    IReadOnlyList<AiTokenMonthDto> Months);
+    IReadOnlyList<AiTokenMonthDto> Months,
+    IReadOnlyList<AiCoachTokenRowDto>? Coaches = null,
+    int CoachTotalTokensUsed = 0,
+    IReadOnlyList<AiTokenMonthDto>? CoachMonths = null);
 
 public sealed record UpdateAiPackageQuotaResponse(
     AiPackageQuotaDto Package,

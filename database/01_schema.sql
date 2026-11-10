@@ -939,9 +939,9 @@ CREATE TABLE ai_workout_recommendation (
     CONSTRAINT FK_ai_workout_recommendation_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_ai_workout_recommendation_body FOREIGN KEY (body_metric_id) REFERENCES member_body_metric (body_metric_id),
     CONSTRAINT FK_ai_workout_recommendation_plan FOREIGN KEY (training_plan_id) REFERENCES training_plan (training_plan_id),
-    CONSTRAINT CK_ai_workout_recommendation_sessions CHECK (sessions_per_week >= 2 AND sessions_per_week <= 6),
+    CONSTRAINT CK_ai_workout_recommendation_sessions CHECK (sessions_per_week >= 1 AND sessions_per_week <= 7),
     CONSTRAINT CK_ai_workout_recommendation_minutes CHECK (session_minutes >= 20 AND session_minutes <= 90),
-    CONSTRAINT CK_ai_workout_recommendation_weeks CHECK (duration_weeks >= 2 AND duration_weeks <= 12),
+    CONSTRAINT CK_ai_workout_recommendation_weeks CHECK (duration_weeks >= 1 AND duration_weeks <= 12),
     CONSTRAINT CK_ai_workout_recommendation_revision CHECK (revision >= 1),
     CONSTRAINT CK_ai_workout_recommendation_status CHECK (status IN (N'proposed', N'saved', N'archived'))
 );

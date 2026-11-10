@@ -49,6 +49,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CoachCourseExamQuestion> CoachCourseExamQuestions => Set<CoachCourseExamQuestion>();
     public DbSet<CoachCourseRubricItem> CoachCourseRubricItems => Set<CoachCourseRubricItem>();
     public DbSet<AiTokenUsage> AiTokenUsages => Set<AiTokenUsage>();
+    public DbSet<CoachAiTokenUsage> CoachAiTokenUsages => Set<CoachAiTokenUsage>();
     public DbSet<SportCourseMaterial> SportCourseMaterials => Set<SportCourseMaterial>();
     public DbSet<SportCourseUnit> SportCourseUnits => Set<SportCourseUnit>();
     public DbSet<ClassIntakeNote> ClassIntakeNotes => Set<ClassIntakeNote>();
