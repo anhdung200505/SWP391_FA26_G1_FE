@@ -232,6 +232,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     await CourseMaterialSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await RoomSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
     await CoachAiSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
+    await MembershipPackageSchema.EnsureAsync(startup.GetRequiredService<AppDbContext>());
 
     await startup.GetRequiredService<AuthService>().EnsureBootstrapAdminPasswordAsync();
 }
