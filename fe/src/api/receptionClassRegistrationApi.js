@@ -1,23 +1,30 @@
 import { readSession, clearSession } from '../auth/session';
 import { notifyDataChanged } from './dataChanged';
 
+// Backend URL lấy từ .env.production.
+// Nếu biến môi trường trống, sử dụng Vite proxy khi chạy local.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+
 async function request(path, options = {}) {
   const { headers, ...rest } = options;
   const token = readSession()?.token || localStorage.getItem('token');
 
   let response;
+
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${API_BASE_URL}/api${path}`, {
       ...rest,
       headers: {
         'Content-Type': 'application/json',
-        'accept': 'application/json',
+        accept: 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(headers || {}),
       },
     });
   } catch (err) {
-    throw new Error('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại đường truyền mạng.');
+    throw new Error(
+      'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại đường truyền mạng.',
+    );
   }
 
   if (response.status === 401) {
@@ -27,22 +34,30 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     let message = 'Thao tác thất bại.';
+
     try {
       const body = await response.json();
       if (body.message) message = body.message;
     } catch {
       message = 'Máy chủ phản hồi lỗi không xác định.';
     }
+
     throw new Error(message);
   }
 
   notifyDataChanged(rest.method);
+
   if (response.status === 204) return null;
+
   return response.json();
 }
 
+// ==========================================
+// 1. ĐĂNG KÝ TÀI KHOẢN GUEST
+// ==========================================
+
 /**
- * 1. Đăng ký tài khoản nhanh cho Guest chưa có trong hệ thống
+ * Đăng ký tài khoản nhanh cho Guest chưa có trong hệ thống.
  * POST /api/auth/register
  */
 export function registerGuestAccount(payload) {
@@ -52,54 +67,103 @@ export function registerGuestAccount(payload) {
   });
 }
 
+// ==========================================
+// 2. TRA CỨU HỌC VIÊN
+// ==========================================
+
 /**
- * 2. Tra cứu học viên theo Email hoặc SĐT (10 số)
- * GET /api/reception/members/lookup?keyword=...
+ * Lấy danh sách lớp bị chặn của học viên.
+ * GET /api/reception/members/{memberUserId}/blocked-classes
  */
 export function getMemberBlockedClasses(memberUserId) {
   return request(`/reception/members/${memberUserId}/blocked-classes`);
 }
 
+/**
+ * Tra cứu học viên theo Email hoặc SĐT (10 số).
+ * GET /api/reception/members/lookup?keyword=...
+ */
 export function lookupMember(keyword) {
-  return request(`/reception/members/lookup?keyword=${encodeURIComponent(keyword)}`, {
-    method: 'GET',
-  });
+  return request(
+    `/reception/members/lookup?keyword=${encodeURIComponent(keyword)}`,
+    {
+      method: 'GET',
+    },
+  );
 }
 
+// ==========================================
+// 3. LỄ TÂN ĐĂNG KÝ LỚP CHO HỌC VIÊN
+// ==========================================
+
 /**
- * 3. Lễ tân đăng ký lớp giùm học viên (Tạo hóa đơn pending giữ chỗ 10 phút)
+ * Lễ tân đăng ký lớp giùm học viên.
+ * Tạo hóa đơn pending giữ chỗ 10 phút.
+ *
  * POST /api/reception/members/{memberUserId}/class-registrations
  */
 export function createClassRegistrationForMember(memberUserId, payload) {
-  return request(`/reception/members/${memberUserId}/class-registrations`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+  return request(
+    `/reception/members/${memberUserId}/class-registrations`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
+// ==========================================
+// 4. XÁC NHẬN THANH TOÁN ĐĂNG KÝ
+// ==========================================
+
 /**
- * 4. Lễ tân xác nhận đã thu học phí tại quầy
+ * Lễ tân xác nhận đã thu học phí tại quầy.
  * POST /api/reception/class-registrations/{paymentId}/confirm-payment
  */
 export function confirmRegistrationPayment(paymentId, paymentMethod) {
-  return request(`/reception/class-registrations/${paymentId}/confirm-payment`, {
-    method: 'POST',
-    body: JSON.stringify({ paymentMethod }),
-  });
+  return request(
+    `/reception/class-registrations/${paymentId}/confirm-payment`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ paymentMethod }),
+    },
+  );
 }
 
+/**
+ * Lấy trạng thái đăng ký.
+ * GET /api/reception/class-registrations/{paymentId}
+ */
 export function getReceptionRegistrationStatus(paymentId) {
   return request(`/reception/class-registrations/${paymentId}`);
 }
 
+/**
+ * Hủy đăng ký lớp.
+ * POST /api/reception/class-registrations/{paymentId}/cancel
+ */
 export function cancelReceptionRegistration(paymentId) {
-  return request(`/reception/class-registrations/${paymentId}/cancel`, {
-    method: 'POST',
-  });
+  return request(
+    `/reception/class-registrations/${paymentId}/cancel`,
+    {
+      method: 'POST',
+    },
+  );
 }
+
+// ==========================================
+// 5. CHECK-IN / CHECK-OUT HỌC VIÊN
+// ==========================================
 
 // Check-in vào trung tâm (không gắn lớp, cần gói hội viên còn hạn).
 // Trả { outcome: checked_in | already_inside | duplicate, checkIn, message }.
+
+// Tìm học viên trước khi check-in (tên không dấu, mã, email, SĐT), tối đa 10.
+// Mỗi dòng: { id, fullName, phone, email, status, membershipName, membershipEndDate, insideCheckInId, insideSince }.
+export function searchCheckInMembers(q) {
+  return request(`/reception/check-in/members?q=${encodeURIComponent(q)}`);
+}
+
 export function checkInMember(keyword) {
   return request('/reception/check-ins', {
     method: 'POST',
@@ -107,31 +171,72 @@ export function checkInMember(keyword) {
   });
 }
 
+/**
+ * Check-out học viên.
+ * POST /api/reception/check-ins/{checkInId}/check-out
+ */
 export function checkOutMember(checkInId) {
-  return request(`/reception/check-ins/${checkInId}/check-out`, { method: 'POST' });
-}
-
-// Lễ tân chỉ hoàn tác lượt trong ngày, quản trị mọi lúc. reason bắt buộc.
-export function voidCheckIn(checkInId, reason) {
-  return request(`/reception/check-ins/${checkInId}/void`, {
-    method: 'POST',
-    body: JSON.stringify({ reason }),
-  });
-}
-
-// params: date (yyyy-MM-dd, mặc định hôm nay), q, status ('' | 'inside' | 'voided'). Trả { date, summary, items }.
-export function getCenterCheckIns(params = {}) {
-  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value)).toString();
-  return request(`/reception/check-ins${query ? `?${query}` : ''}`);
+  return request(
+    `/reception/check-ins/${checkInId}/check-out`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 /**
- * 5. Lễ tân xem danh sách học viên đã đăng ký
+ * Lễ tân chỉ hoàn tác lượt trong ngày, quản trị mọi lúc.
+ * reason bắt buộc.
+ *
+ * POST /api/reception/check-ins/{checkInId}/void
+ */
+export function voidCheckIn(checkInId, reason) {
+  return request(
+    `/reception/check-ins/${checkInId}/void`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    },
+  );
+}
+
+/**
+ * Lấy danh sách check-in của trung tâm.
+ *
+ * params:
+ * - date: yyyy-MM-dd, mặc định hôm nay
+ * - q
+ * - status: '' | 'inside' | 'voided'
+ *
+ * Trả { date, summary, items }.
+ *
+ * GET /api/reception/check-ins
+ */
+export function getCenterCheckIns(params = {}) {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value),
+  ).toString();
+
+  return request(
+    `/reception/check-ins${query ? `?${query}` : ''}`,
+  );
+}
+
+// ==========================================
+// 6. DANH SÁCH ĐĂNG KÝ CỦA HỌC VIÊN
+// ==========================================
+
+/**
+ * Lễ tân xem danh sách học viên đã đăng ký.
  * GET /api/reception/registrations
  */
 export function getReceptionRegistrations(params = {}) {
   const query = new URLSearchParams(params).toString();
-  return request(`/reception/registrations${query ? `?${query}` : ''}`, {
-    method: 'GET',
-  });
+
+  return request(
+    `/reception/registrations${query ? `?${query}` : ''}`,
+    {
+      method: 'GET',
+    },
+  );
 }

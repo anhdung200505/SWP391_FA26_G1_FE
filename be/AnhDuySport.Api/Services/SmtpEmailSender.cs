@@ -238,9 +238,9 @@ public class SmtpEmailSender(IConfiguration configuration, IHostEnvironment envi
         var label = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(linkLabel) ? "Xem chi tiết" : linkLabel.Trim());
         return $"""
             <p style="margin:20px 0 0;">
-              <a href="{href}" style="display:inline-block;background:#e31b23;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px;">{label}</a>
+              <a href="{href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#e31b23;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px;">{label}</a>
             </p>
-            <p style="margin:10px 0 0;font-size:12px;line-height:1.6;color:#6b7280;">Nếu nút không bấm được, mở đường dẫn: <a href="{href}" style="color:#e31b23;">{href}</a></p>
+            <p style="margin:10px 0 0;font-size:12px;line-height:1.6;color:#6b7280;">Nếu nút không bấm được, mở đường dẫn: <a href="{href}" target="_blank" rel="noopener noreferrer" style="color:#e31b23;">{href}</a></p>
             """;
     }
 

@@ -14,6 +14,80 @@ public class CenterCheckInFlowService(AppDbContext db, CurrentActor actor, Recep
 {
     private const int DuplicateWindowMinutes = 10;
 
+    private const int SearchLimit = 10;
+
+    // Tìm học viên trước khi check-in: theo tên (không phân biệt dấu, hoa thường), mã học viên, email hoặc số điện thoại.
+    // Chỉ trả học viên (MEMBER), tối đa 10, kèm gói còn hạn và lượt đang ở trong để màn hình chọn Check-in hay Check-out.
+    public async Task<IReadOnlyList<CenterCheckInMemberDto>> SearchMembersAsync(string? keyword)
+    {
+        var term = keyword?.Trim() ?? "";
+        if (term.Length == 0)
+        {
+            throw new RegistrationException("Nhập tên, mã học viên, email hoặc số điện thoại để tìm.");
+        }
+
+        var folded = Fold(term);
+        var digits = AccountPhone.Digits(term);
+        var phoneLike = digits.Length >= 3 && term.All(ch => char.IsDigit(ch) || ch is ' ' or '+' or '.' or '-');
+        var members = await db.UserAccounts.AsNoTracking()
+            .Where(user => user.Role!.RoleCode == "MEMBER")
+            .Select(user => new { user.UserId, user.FullName, user.Phone, user.Email, user.Status })
+            .ToListAsync();
+        // Gõ đúng mã học viên là tra cứu chính xác: chỉ trả người đó, không lẫn với số điện thoại có chứa dãy số này.
+        var byId = members.Where(user => user.UserId.ToString() == term).ToList();
+        var found = (byId.Count > 0
+                ? byId
+                : members.Where(user => Fold(user.FullName).Contains(folded)
+                    || (user.Email?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (phoneLike && AccountPhone.Digits(user.Phone).Contains(digits))))
+            .OrderBy(user => user.FullName, StringComparer.CurrentCultureIgnoreCase)
+            .Take(SearchLimit)
+            .ToList();
+        if (found.Count == 0)
+        {
+            return [];
+        }
+
+        var now = DateTime.Now;
+        var today = DateOnly.FromDateTime(now);
+        var ids = found.Select(user => user.UserId).ToList();
+        var memberships = (await db.Memberships.AsNoTracking()
+                .Where(item => ids.Contains(item.UserId) && item.Status == "active" && item.StartDate <= today && item.EndDate >= today)
+                .ToListAsync())
+            .GroupBy(item => item.UserId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(item => item.EndDate).First());
+        var inside = (await db.CenterCheckIns.AsNoTracking()
+                .Where(item => ids.Contains(item.UserId) && item.Status == "valid" && item.CheckedOutAt == null
+                    && item.CheckedInAt >= now.Date && item.CheckedInAt < now.Date.AddDays(1))
+                .ToListAsync())
+            .GroupBy(item => item.UserId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(item => item.CheckedInAt).First());
+
+        return found.Select(user =>
+        {
+            var membership = memberships.GetValueOrDefault(user.UserId);
+            var current = inside.GetValueOrDefault(user.UserId);
+            return new CenterCheckInMemberDto(
+                user.UserId.ToString(),
+                user.FullName,
+                user.Phone ?? "",
+                user.Email ?? "",
+                user.Status,
+                membership?.PlanName,
+                membership?.EndDate,
+                current?.CheckInId.ToString(),
+                current?.CheckedInAt);
+        }).ToList();
+    }
+
+    // Bỏ dấu và chữ hoa để "hung" tìm ra "Hùng".
+    private static string Fold(string value) =>
+        new string(value.Normalize(System.Text.NormalizationForm.FormD)
+                .Where(ch => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                .ToArray())
+            .Replace('đ', 'd').Replace('Đ', 'D')
+            .ToLowerInvariant();
+
     public async Task<CenterCheckInResultDto> CheckInAsync(string? keyword)
     {
         var member = await reception.FindMemberByKeywordAsync(keyword);

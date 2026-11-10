@@ -16,6 +16,7 @@ public class AuthService(
     PasswordHasher passwords,
     IConfiguration configuration,
     SmtpEmailSender emailSender,
+    EmailNotificationService emailNotifications,
     IHttpClientFactory httpClientFactory)
 {
     public async Task EnsureBootstrapAdminPasswordAsync()
@@ -102,6 +103,8 @@ public class AuthService(
                 return new GoogleLoginResult(null, new GoogleAccountChoice(user.Email ?? email, user.FullName));
             }
         }
+
+        await EnsureMemberWelcomeAsync(user);
 
         return new GoogleLoginResult(await IssueAsync(user), null);
     }
@@ -250,6 +253,8 @@ public class AuthService(
         {
             throw new UnauthorizedAccessException("Chỉ học viên đăng nhập được ở đây.");
         }
+
+        await EnsureMemberWelcomeAsync(user);
 
         return await IssueAsync(user);
     }
@@ -639,6 +644,7 @@ public class AuthService(
             throw new InvalidOperationException("Email này đã được dùng.");
         }
 
+        await EnsureMemberWelcomeAsync(user);
         return await IssueAsync(user);
     }
 
@@ -872,6 +878,69 @@ public class AuthService(
         }
 
         return user;
+    }
+
+    // Gửi một lần sau khi tạo học viên (OTP hoặc Google). Thư gửi ngay, giống OTP, để không mất khi server khởi động lại.
+    private async Task EnsureMemberWelcomeAsync(UserAccount user)
+    {
+        const string title = "Cảm ơn bạn đã đăng ký";
+        const string sentMark = "\u2060";
+        var note = await db.Notifications.FirstOrDefaultAsync(item => item.UserId == user.UserId && item.Title == title);
+        if (note?.Content.EndsWith(sentMark) == true)
+        {
+            return;
+        }
+
+        var createdRecently = user.CreatedAt >= DateTime.Now.AddHours(-24);
+        if (note is null && !createdRecently)
+        {
+            return;
+        }
+
+        var sent = !NotificationEmail.CanDeliver(user.Email);
+        if (!sent)
+        {
+            try
+            {
+                await emailNotifications.SendMemberRegisteredAsync(user);
+                sent = true;
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine($"Không gửi được thư cảm ơn học viên {user.UserId}: {exception.Message}");
+            }
+        }
+
+        var content = $"Cảm ơn {user.FullName}. AnhDuy Sport đã tạo tài khoản học viên của bạn. Hãy hoàn tất hồ sơ và chọn khóa học để bắt đầu tập.";
+        if (sent)
+        {
+            content += sentMark;
+        }
+
+        if (note is null)
+        {
+            db.Notifications.Add(new AccountNotification
+            {
+                UserId = user.UserId,
+                Title = title,
+                Content = content,
+                IsRead = false,
+                CreatedAt = DateTime.Now,
+            });
+        }
+        else if (sent)
+        {
+            note.Content = content;
+        }
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Không lưu được thông báo chào học viên {user.UserId}: {exception.Message}");
+        }
     }
 
     private static string ReadJsonString(JsonElement root, string name) =>

@@ -32,6 +32,8 @@ export default function CourseMaterialPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  // Các buổi đang mở (theo vị trí). Mặc định thu gọn hết để trang không dài.
+  const [openUnits, setOpenUnits] = useState(() => new Set());
 
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -80,6 +82,7 @@ export default function CourseMaterialPage() {
 
     setSportId(nextId);
     setDraft(found ? pick(found) : emptyDraft());
+    setOpenUnits(new Set());
 
     setIsEditing(false);
     setNotice('');
@@ -112,9 +115,23 @@ export default function CourseMaterialPage() {
       ...current,
       units: [...current.units, emptyUnit()],
     }));
+    // Mở sẵn buổi vừa thêm để nhập ngay.
+    setOpenUnits((current) => new Set(current).add(draft.units.length));
 
     setNotice('');
   };
+
+  const toggleUnit = (index) => {
+    setOpenUnits((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  const expandAll = () => setOpenUnits(new Set(draft.units.map((_, index) => index)));
+  const collapseAll = () => setOpenUnits(new Set());
 
   // Xóa buổi học
   const removeUnit = (index) => {
@@ -130,6 +147,7 @@ export default function CourseMaterialPage() {
         (_, unitIndex) => unitIndex !== index
       ),
     }));
+    setOpenUnits(new Set());
 
     setNotice('');
   };
@@ -250,13 +268,13 @@ export default function CourseMaterialPage() {
               GIÁO TRÌNH MÔN HỌC
             </h1>
 
-            <p className="mt-4 max-w-[570px] text-sm font-medium leading-6 text-gray-200 sm:text-base">
+            <p className="mt-4 max-w-[570px] text-sm font-medium leading-6 text-slate-200 sm:text-base">
               Quản lý nội dung đào tạo, chương trình giảng dạy và lộ trình
               học tập theo từng buổi. Chuẩn hóa giáo trình cho các môn thể thao
               tại AnhDuy Sport.
             </p>
 
-            <p className="mt-2 text-[11px] font-extrabold tracking-[0.16em] text-gray-500">
+            <p className="mt-2 text-[11px] font-extrabold tracking-[0.16em] text-slate-500">
               SPORTS CURRICULUM &amp; TRAINING PROGRAM
             </p>
           </div>
@@ -266,10 +284,10 @@ export default function CourseMaterialPage() {
             LOADING
         ====================================== */}
         {loading && (
-          <div className="rounded-3xl border border-gray-200 bg-white p-12 text-center shadow-sm">
+          <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
             <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
 
-            <p className="mt-4 text-sm font-medium text-gray-500">
+            <p className="mt-4 text-sm font-medium text-slate-500">
               Đang tải dữ liệu giáo trình...
             </p>
           </div>
@@ -300,16 +318,19 @@ export default function CourseMaterialPage() {
             EMPTY STATE
         ====================================== */}
         {!loading && materials.length === 0 && !error && (
-          <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center shadow-sm">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-3xl">
-              📚
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-8 w-8" aria-hidden="true">
+                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21V5.5Z" />
+                <path d="M4 18a2 2 0 0 1 2-2h14" />
+              </svg>
             </div>
 
-            <h2 className="mt-5 text-lg font-black text-gray-900">
+            <h2 className="mt-5 text-lg font-black text-slate-900">
               Chưa có dữ liệu giáo trình
             </h2>
 
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500">
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
               Hiện tại hệ thống chưa trả về môn học nào.
               Vui lòng kiểm tra dữ liệu hoặc API giáo trình.
             </p>
@@ -322,7 +343,7 @@ export default function CourseMaterialPage() {
         {!loading && materials.length > 0 && (
           <>
             {/* CHỌN MÔN HỌC */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                 <div>
@@ -340,12 +361,12 @@ export default function CourseMaterialPage() {
                       </svg>
                     </span>
 
-                    <h2 className="text-lg font-black text-gray-900">
+                    <h2 className="text-lg font-black text-slate-900">
                       Chọn môn học
                     </h2>
                   </div>
 
-                  <p className="mt-2 text-sm text-gray-500">
+                  <p className="mt-2 text-sm text-slate-500">
                     Chọn môn để xem nội dung giáo trình.
                   </p>
                 </div>
@@ -370,14 +391,14 @@ export default function CourseMaterialPage() {
               </div>
 
               {selectedMaterial && (
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
 
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                       {selectedMaterial.sportName}
                     </span>
 
-                    <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
+                    <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
                       {draft.units.length} buổi học
                     </span>
                   </div>
@@ -400,7 +421,7 @@ export default function CourseMaterialPage() {
             {/* =====================================
                 THÔNG TIN GIÁO TRÌNH
             ====================================== */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
@@ -419,11 +440,11 @@ export default function CourseMaterialPage() {
                   </span>
 
                   <div>
-                    <h2 className="text-lg font-black text-gray-900">
+                    <h2 className="text-lg font-black text-slate-900">
                       Thông tin giáo trình
                     </h2>
 
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       Thông tin tài liệu và hướng dẫn chung cho khóa học.
                     </p>
                   </div>
@@ -454,7 +475,7 @@ export default function CourseMaterialPage() {
 
                 {/* TÊN TÀI LIỆU */}
                 <div>
-                  <p className="mb-2 text-sm font-bold text-gray-700">
+                  <p className="mb-2 text-sm font-bold text-slate-700">
                     Tên tài liệu
                   </p>
 
@@ -468,9 +489,9 @@ export default function CourseMaterialPage() {
                       placeholder="Ví dụ: Giáo trình bóng đá cơ bản"
                     />
                   ) : (
-                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-800">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-800">
                       {draft.sourceName || (
-                        <span className="italic text-gray-400">
+                        <span className="italic text-slate-400">
                           Chưa có tên tài liệu
                         </span>
                       )}
@@ -480,7 +501,7 @@ export default function CourseMaterialPage() {
 
                 {/* ĐƯỜNG DẪN */}
                 <div>
-                  <p className="mb-2 text-sm font-bold text-gray-700">
+                  <p className="mb-2 text-sm font-bold text-slate-700">
                     Đường dẫn tài liệu
                   </p>
 
@@ -494,7 +515,7 @@ export default function CourseMaterialPage() {
                       placeholder="https://..."
                     />
                   ) : (
-                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
                       {draft.sourceUrl ? (
                         <a
                           href={draft.sourceUrl}
@@ -505,7 +526,7 @@ export default function CourseMaterialPage() {
                           {draft.sourceUrl}
                         </a>
                       ) : (
-                        <span className="italic text-gray-400">
+                        <span className="italic text-slate-400">
                           Chưa có đường dẫn tài liệu
                         </span>
                       )}
@@ -515,7 +536,7 @@ export default function CourseMaterialPage() {
 
                 {/* GHI CHÚ */}
                 <div>
-                  <p className="mb-2 text-sm font-bold text-gray-700">
+                  <p className="mb-2 text-sm font-bold text-slate-700">
                     Ghi chú chung
                   </p>
 
@@ -530,9 +551,9 @@ export default function CourseMaterialPage() {
                       placeholder="Nhập ghi chú hoặc định hướng giảng dạy chung..."
                     />
                   ) : (
-                    <div className="min-h-[80px] whitespace-pre-wrap rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-700">
+                    <div className="min-h-[80px] whitespace-pre-wrap rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
                       {draft.note || (
-                        <span className="italic text-gray-400">
+                        <span className="italic text-slate-400">
                           Không có ghi chú chung.
                         </span>
                       )}
@@ -545,7 +566,7 @@ export default function CourseMaterialPage() {
             {/* =====================================
                 NỘI DUNG TỪNG BUỔI
             ====================================== */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
@@ -564,33 +585,47 @@ export default function CourseMaterialPage() {
                   </span>
 
                   <div>
-                    <h2 className="text-lg font-black text-gray-900">
+                    <h2 className="text-lg font-black text-slate-900">
                       Nội dung từng buổi học
                     </h2>
 
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       Lộ trình đào tạo theo thứ tự từ đầu khóa đến cuối khóa.
                     </p>
                   </div>
                 </div>
 
-                <span className="w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-                  {draft.units.length} BUỔI HỌC
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                    {draft.units.length} BUỔI HỌC
+                  </span>
+                  {draft.units.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={openUnits.size === draft.units.length ? collapseAll : expandAll}
+                      className="inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-3.5 text-xs font-bold text-slate-700 transition-colors hover:border-[#ed1c24] hover:text-[#ed1c24] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ed1c24]"
+                    >
+                      {openUnits.size === draft.units.length ? 'Thu gọn tất cả' : 'Mở tất cả'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* DANH SÁCH BUỔI */}
               <div className="mt-6 space-y-4">
 
                 {draft.units.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-5 py-10 text-center">
-                    <div className="text-3xl">📝</div>
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
+                    </svg>
 
-                    <p className="mt-3 font-bold text-gray-800">
+                    <p className="mt-3 font-bold text-slate-800">
                       Chưa có nội dung buổi học
                     </p>
 
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       {isEditing
                         ? 'Bấm “Thêm buổi học” để xây dựng giáo trình.'
                         : 'Môn học này hiện chưa có nội dung giáo trình.'}
@@ -598,58 +633,60 @@ export default function CourseMaterialPage() {
                   </div>
                 )}
 
-                {draft.units.map((unit, index) => (
+                {draft.units.map((unit, index) => {
+                  const open = openUnits.has(index);
+                  const panelId = `unit-panel-${index}`;
+                  const preview = (unit.work || '').replace(/\s+/g, ' ').trim();
+
+                  return (
                   <div
                     key={index}
-                    className="overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:border-gray-300"
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-slate-300"
                   >
-
-                    {/* UNIT HEADER */}
-                    <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/80 px-4 py-3 sm:px-5">
-
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#111827] text-sm font-black text-white">
+                    {/* TIÊU ĐỀ BUỔI: bấm để mở/thu gọn */}
+                    <div className="flex items-stretch">
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        aria-controls={panelId}
+                        onClick={() => toggleUnit(index)}
+                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 sm:px-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ed1c24]"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#111827] text-sm font-black text-white">
                           {String(index + 1).padStart(2, '0')}
                         </span>
-
-                        <div>
-                          <p className="text-sm font-black text-gray-900">
-                            Buổi học {index + 1}
-                          </p>
-
-                          <p className="text-xs text-gray-500">
-                            Nội dung đào tạo
-                          </p>
-                        </div>
-                      </div>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-black text-slate-900">
+                            {unit.label || 'Chưa đặt tên buổi học'}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-slate-500">
+                            {open ? `Buổi học ${index + 1}` : preview || 'Chưa có nội dung thực hành'}
+                          </span>
+                        </span>
+                        <svg className={`size-5 shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                      </button>
 
                       {isEditing && (
                         <button
                           type="button"
                           onClick={() => removeUnit(index)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                          className="inline-flex cursor-pointer items-center gap-1.5 border-l border-slate-100 px-4 text-xs font-bold text-red-600 transition-colors hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ed1c24]"
+                          aria-label={`Xóa buổi ${index + 1}`}
                         >
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            className="h-4 w-4"
-                          >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden="true">
                             <path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6" />
                           </svg>
-
-                          Xóa buổi
+                          <span className="hidden sm:inline">Xóa buổi</span>
                         </button>
                       )}
                     </div>
 
-                    {/* UNIT CONTENT */}
-                    <div className="space-y-5 p-4 sm:p-5">
+                    {open && (
+                      <div id={panelId} className="space-y-5 border-t border-slate-100 p-4 sm:p-5">
 
                       {/* TÊN BUỔI */}
                       <div>
-                        <p className="mb-2 text-sm font-bold text-gray-700">
+                        <p className="mb-2 text-sm font-bold text-slate-700">
                           Tên buổi học
                         </p>
 
@@ -663,9 +700,9 @@ export default function CourseMaterialPage() {
                             placeholder="Ví dụ: Làm quen với kỹ thuật cơ bản"
                           />
                         ) : (
-                          <p className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-900">
+                          <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900">
                             {unit.label || (
-                              <span className="italic font-normal text-gray-400">
+                              <span className="italic font-normal text-slate-400">
                                 Chưa có tên buổi học
                               </span>
                             )}
@@ -675,7 +712,7 @@ export default function CourseMaterialPage() {
 
                       {/* NỘI DUNG THỰC HÀNH */}
                       <div>
-                        <p className="mb-2 text-sm font-bold text-gray-700">
+                        <p className="mb-2 text-sm font-bold text-slate-700">
                           Nội dung thực hành
                         </p>
 
@@ -690,9 +727,9 @@ export default function CourseMaterialPage() {
                             placeholder="Mô tả các hoạt động và kỹ năng học viên sẽ thực hiện trong buổi..."
                           />
                         ) : (
-                          <div className="min-h-[65px] whitespace-pre-wrap rounded-xl bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-700">
+                          <div className="min-h-[65px] whitespace-pre-wrap rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
                             {unit.work || (
-                              <span className="italic text-gray-400">
+                              <span className="italic text-slate-400">
                                 Chưa có nội dung thực hành.
                               </span>
                             )}
@@ -703,11 +740,11 @@ export default function CourseMaterialPage() {
                       {/* ÔN TẬP */}
                       <div>
                         <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-bold text-gray-700">
+                          <p className="text-sm font-bold text-slate-700">
                             Ôn tập và đánh giá
                           </p>
 
-                          <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
                             TÙY CHỌN
                           </span>
                         </div>
@@ -723,18 +760,20 @@ export default function CourseMaterialPage() {
                             placeholder="Nhập nội dung ôn tập hoặc tiêu chí đánh giá nếu có..."
                           />
                         ) : (
-                          <div className="min-h-[55px] whitespace-pre-wrap rounded-xl bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-700">
+                          <div className="min-h-[55px] whitespace-pre-wrap rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
                             {unit.review || (
-                              <span className="italic text-gray-400">
+                              <span className="italic text-slate-400">
                                 Không có nội dung ôn tập.
                               </span>
                             )}
                           </div>
                         )}
                       </div>
-                    </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* THÊM BUỔI */}
@@ -777,16 +816,16 @@ export default function CourseMaterialPage() {
                 KHÔNG STICKY
             ====================================== */}
             {isEditing && (
-              <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                   <div>
-                    <p className="text-base font-black text-gray-900">
+                    <p className="text-base font-black text-slate-900">
                       Hoàn tất chỉnh sửa giáo trình?
                     </p>
 
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       Kiểm tra nội dung trước khi lưu thay đổi.
                     </p>
                   </div>
@@ -797,7 +836,7 @@ export default function CourseMaterialPage() {
                       type="button"
                       disabled={saving}
                       onClick={cancelEditing}
-                      className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Hủy chỉnh sửa
                     </button>

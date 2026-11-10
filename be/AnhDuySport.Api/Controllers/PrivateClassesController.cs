@@ -17,6 +17,18 @@ public class PrivateClassesController(PrivateClassFlowService privateClasses, Cu
     public async Task<ActionResult<IReadOnlyList<PrivateCourseDto>>> AccessCourses([FromQuery] string? sportId) =>
         Ok(await privateClasses.AccessCoursesAsync(sportId));
 
+    [HttpGet("coaches")]
+    [EndpointSummary("Xem HLV dạy môn của gói học 1-1")]
+    [EndpointDescription("Gửi courseId của gói 1-1, trả các HLV đang hoạt động dạy môn đó. Học viên chọn HLV trước rồi mới xem lịch rảnh của HLV.")]
+    public async Task<ActionResult<IReadOnlyList<PrivateCoachDto>>> AccessCoaches([FromQuery] string courseId) =>
+        Ok(await privateClasses.AccessCoachesAsync(courseId));
+
+    [HttpPost("coach-schedule")]
+    [EndpointSummary("Xem ô nào trong lịch tuần HLV đã bận")]
+    [EndpointDescription("Gửi gói, HLV và ngày bắt đầu (từ hôm nay + 3 ngày). Trả busyCells gồm các ô thứ 2-7 x khung giờ 1-1 mà HLV hoặc chính học viên đã bận. Mỗi ô xét theo trường hợp dài nhất: học một buổi mỗi tuần cho tới đủ số buổi của gói, nên bận ở bất kỳ tuần nào trong khoảng đó thì ô bị xám. Ô không có trong danh sách là còn trống.")]
+    public async Task<ActionResult<PrivateCoachScheduleDto>> CoachSchedule([FromBody] PrivateCoachScheduleRequest request) =>
+        Ok(await privateClasses.CoachScheduleAsync(actor.UserId, request));
+
     [HttpPost("availability")]
     [EndpointSummary("Xem HLV rảnh cho lịch học 1-1 đã chọn")]
     [EndpointDescription("Gửi gói, ngày bắt đầu (sau hôm nay) và lịch hằng tuần (thứ 2-7, khung giờ private). Trả số buổi, ngày đầu/cuối, còn phòng 1-1 trống cho cả gói không, và các HLV dạy môn kèm isBusy/busyReason (trùng buổi nào). Lịch của chính học viên trùng thì trả 400.")]
