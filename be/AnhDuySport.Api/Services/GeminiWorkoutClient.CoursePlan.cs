@@ -94,6 +94,15 @@ public partial class GeminiWorkoutClient
         throw new InvalidOperationException(lastMessage ?? "Google Gemini không trả bài tập.");
     }
 
+    // Buổi dài M phút thì các bài phải chiếm ít nhất 4/5 thời gian đó (khoảng 15 phút một bài).
+    private static int MinExercises(int sessionMinutes) =>
+        sessionMinutes <= 0 ? 2 : Math.Max(2, (int)Math.Ceiling(sessionMinutes * 0.8 / 15));
+
+    private static string DurationRule(int sessionMinutes) =>
+        sessionMinutes <= 0
+            ? ""
+            : $"Buổi học dài {sessionMinutes} phút. Tổng thời lượng (phút) của tất cả bài tập phải từ {(int)Math.Ceiling(sessionMinutes * 0.8)} đến {sessionMinutes} phút, gồm khởi động, bài chính và thả lỏng; mỗi bài nên 10 đến 25 phút.";
+
     private static string BuildCoursePrompt(CoursePlanGenerationRequest request)
     {
         var sessions = string.Join(
@@ -111,17 +120,17 @@ public partial class GeminiWorkoutClient
                 Bạn là huấn luyện viên bộ môn {request.SportName}. Chỉ trả về JSON, không markdown.
                 Soạn bài tập cho đúng một buổi của lớp "{request.ClassName}", khóa "{request.CourseName}". Không soạn buổi khác và không soạn bài thi.
                 {request.CourseMaterial}
-                Chỉ dùng khối RAFT ở trên. Không thêm kỹ thuật ngoài khối đó và nhận xét huấn luyện viên.
-                Đánh giá buổi vừa học xong, dùng để soạn buổi kế tiếp: {request.TrainingHistory}
-                Mô tả coach nhập thêm: {request.Brief}
+                Chỉ dùng khối RAFT ở trên. Không thêm kỹ thuật ngoài khối đó.
+                Mô tả coach nhập cho buổi này: {request.Brief}
                 Bài đang có của buổi này, nếu coach yêu cầu sửa: {current}
                 {change}
                 Buổi cần soạn, giữ đúng sessionId:
                 {sessions}
                 JSON gồm summary (1 đến 3 câu) và sessions.
                 sessions có đúng một phần tử, đúng sessionId ở trên.
-                Phần tử đó gồm sessionId và exercises (2 đến 4 bài).
-                Mỗi bài tập gồm title, dosage (số lần, hiệp hoặc thời lượng) và instructions.
+                Phần tử đó gồm sessionId và exercises ({MinExercises(request.SessionMinutes)} đến {MinExercises(request.SessionMinutes) + 3} bài).
+                Mỗi bài tập gồm title, dosage và instructions. dosage PHẢI có thời lượng của bài bằng số phút, ví dụ "3 hiệp x 12 lần, 15 phút" hoặc "20 phút".
+                {DurationRule(request.SessionMinutes)}
                 Viết tiếng Việt, bài phù hợp môn {request.SportName}, không kê đơn thuốc.
                 """;
         }
@@ -150,6 +159,12 @@ public partial class GeminiWorkoutClient
     private static GeneratedCoursePlan ParseCoursePlan(string raw, IReadOnlyList<CoursePlanSessionPrompt> expected, bool singleSession)
     {
         using var document = JsonDocument.Parse(raw);
+        var tokens = ReadTotalTokens(document.RootElement);
+        if (tokens <= 0)
+        {
+            tokens = Math.Max(1, raw.Length / 4);
+        }
+
         if (!document.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
         {
             throw new InvalidOperationException("Google Gemini không trả nội dung bài tập.");
@@ -210,7 +225,7 @@ public partial class GeminiWorkoutClient
             var exercises = new List<GeneratedCourseExercise>();
             foreach (var exercise in exercisesElement.EnumerateArray())
             {
-                if (exercises.Count == 5)
+                if (exercises.Count == 14)
                 {
                     break;
                 }
@@ -242,12 +257,12 @@ public partial class GeminiWorkoutClient
 
         if (singleSession)
         {
-            return new GeneratedCoursePlan(summary, ordered, [], []);
+            return new GeneratedCoursePlan(summary, ordered, [], [], tokens);
         }
 
         var exam = ReadExam(root);
         var rubric = ReadRubric(root);
-        return new GeneratedCoursePlan(summary, ordered, exam, rubric);
+        return new GeneratedCoursePlan(summary, ordered, exam, rubric, tokens);
     }
 
     private static List<GeneratedExamQuestion> ReadExam(JsonElement root)
@@ -367,7 +382,8 @@ public sealed record CoursePlanGenerationRequest(
     string? CurrentPlan,
     string? Changes,
     string CourseMaterial,
-    bool SingleSession = false);
+    bool SingleSession = false,
+    int SessionMinutes = 0);
 
 public sealed record CoursePlanSessionPrompt(string SessionId, string Label);
 
@@ -375,7 +391,8 @@ public sealed record GeneratedCoursePlan(
     string Summary,
     IReadOnlyList<GeneratedCourseSession> Sessions,
     IReadOnlyList<GeneratedExamQuestion> Exam,
-    IReadOnlyList<GeneratedRubricItem> Rubric);
+    IReadOnlyList<GeneratedRubricItem> Rubric,
+    int TotalTokens = 0);
 
 public sealed record GeneratedCourseSession(string SessionId, IReadOnlyList<GeneratedCourseExercise> Exercises);
 

@@ -227,7 +227,23 @@ public class PrivateClassFlowService(
             return item.RequestId;
         });
 
-        return (await LoadDtosAsync([created])).Single();
+        // Không còn bước chờ quản lý duyệt: lịch hợp lệ được giữ chỗ ngay, học viên thanh toán trong thời hạn giữ chỗ.
+        try
+        {
+            return await ApproveCoreAsync(created.ToString(), automatic: true);
+        }
+        catch
+        {
+            var stuck = await db.PrivateClassRequests.Include(item => item.Slots).FirstOrDefaultAsync(item => item.RequestId == created && item.Status == "pending");
+            if (stuck is not null)
+            {
+                db.PrivateClassRequestSlots.RemoveRange(stuck.Slots);
+                db.PrivateClassRequests.Remove(stuck);
+                await db.SaveChangesAsync();
+            }
+
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<PrivateRequestDto>> AccessMineAsync(int memberUserId)
@@ -389,7 +405,9 @@ public class PrivateClassFlowService(
         };
     }
 
-    public async Task<PrivateRequestDto> ApproveAsync(string requestId)
+    public Task<PrivateRequestDto> ApproveAsync(string requestId) => ApproveCoreAsync(requestId, automatic: false);
+
+    private async Task<PrivateRequestDto> ApproveCoreAsync(string requestId, bool automatic)
     {
         var id = ParseRequestId(requestId);
         await SweepAsync();
@@ -448,15 +466,15 @@ public class PrivateClassFlowService(
             var summary = ScheduleSummary(schedule, made.StartDate!.Value, plan.Planned.Count);
             request.Status = "approved";
             request.ClassId = made.ClassId;
-            request.DecidedByUserId = actor.UserId == 0 ? null : actor.UserId;
+            request.DecidedByUserId = automatic || actor.UserId == 0 ? null : actor.UserId;
             request.DecidedAt = now;
             request.ApprovalExpiresAt = now.AddHours(ApprovalHours);
 
             db.Notifications.Add(new AccountNotification
             {
                 UserId = member.UserId,
-                Title = "Yêu cầu học 1-1 đã được duyệt",
-                Content = $"Yêu cầu học 1-1 \"{course.CourseName}\" với HLV {coach.FullName} đã được duyệt. {summary} Hãy thanh toán trước {request.ApprovalExpiresAt:HH:mm dd/MM/yyyy}.",
+                Title = automatic ? "Đã giữ lịch học 1-1" : "Yêu cầu học 1-1 đã được duyệt",
+                Content = $"Lịch học 1-1 \"{course.CourseName}\" với HLV {coach.FullName} {(automatic ? "đã được giữ cho bạn" : "đã được duyệt")}. {summary} Hãy thanh toán trước {request.ApprovalExpiresAt:HH:mm dd/MM/yyyy}.",
                 CreatedAt = now,
             });
             db.Notifications.Add(new AccountNotification
@@ -469,7 +487,7 @@ public class PrivateClassFlowService(
             db.ActivityLogs.Add(new ActivityLog
             {
                 ActorUserId = actor.UserId == 0 ? null : actor.UserId,
-                Action = Shorten($"Duyệt yêu cầu học 1-1 của {member.FullName}", 100),
+                Action = Shorten(automatic ? $"Giữ lịch học 1-1 của {member.FullName}" : $"Duyệt yêu cầu học 1-1 của {member.FullName}", 100),
                 EntityName = "class",
                 EntityId = made.ClassId,
                 Detail = $"Duyệt yêu cầu học 1-1 của {member.FullName}: lớp {made.ClassName}, HLV {coach.FullName}, phòng {room.RoomName}, {plan.Planned.Count} buổi.",

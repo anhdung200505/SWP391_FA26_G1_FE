@@ -20,6 +20,7 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
         await EnsureSessionActionAsync(owned.ClassId, context.Sessions[0].SessionId, regenerating: false);
         await SaveBriefAsync(owned, brief);
         var generated = await CallGeminiAsync(context, brief, currentPlan: null, changes: null);
+        RecordTokens(owned, context.Sessions[0].SessionId, "generate", generated.TotalTokens);
         var merged = await MergeSessionAsync(owned.ClassId, generated);
         await StoreSlotAsync(owned, "preview", merged.Summary, changeNote: null, merged.Sessions, merged.Exam, merged.Rubric);
         return await LoadWorkspaceAsync(classId);
@@ -41,6 +42,7 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
         await SaveBriefAsync(owned, brief);
         var generated = await CallGeminiAsync(context, brief, current, changes);
         generated = MarkRegenerated(generated);
+        RecordTokens(owned, context.Sessions[0].SessionId, "regenerate", generated.TotalTokens);
         var merged = await MergeSessionAsync(owned.ClassId, generated);
         await StoreSlotAsync(owned, "preview", merged.Summary, changes, merged.Sessions, merged.Exam, merged.Rubric);
         return await LoadWorkspaceAsync(classId);
@@ -95,6 +97,34 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
             .Select(item => new GeneratedRubricItem(item.Criterion, item.MaxScore, item.Guidance))
             .ToList();
         await StoreSlotAsync(owned, "published", draft.Summary, draft.ChangeNote, sessions, exam, rubric);
+
+        // Bài đã phát hành cũng thành bài tập của buổi trong tab Bài tập của coach.
+        foreach (var session in sessions)
+        {
+            if (!int.TryParse(session.SessionId, out var sessionKey))
+            {
+                continue;
+            }
+
+            var classSession = await db.ClassSessions.AsNoTracking().FirstOrDefaultAsync(item => item.SessionId == sessionKey && item.ClassId == owned.ClassId);
+            if (classSession is null)
+            {
+                continue;
+            }
+
+            var title = Shorten($"Bài AI {CoachCourseFlowService.SessionLabel(classSession)}", 200);
+            var description = string.Join("\n", session.Exercises.Select(item => $"- {item.Title} ({item.Dosage}): {item.Instructions}"));
+            var assignment = await db.ClassAssignments.FirstOrDefaultAsync(item => item.SessionId == sessionKey && item.Title.StartsWith("Bài AI"));
+            if (assignment is null)
+            {
+                assignment = new ClassAssignment { SessionId = sessionKey };
+                db.ClassAssignments.Add(assignment);
+            }
+
+            assignment.Title = title;
+            assignment.Description = description;
+            assignment.DueAt = classSession.SessionDate.ToDateTime(classSession.EndTime);
+        }
 
         var now = DateTime.Now;
         var memberIds = await db.ClassEnrollments
@@ -250,39 +280,15 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
         }
 
         var session = sessions[index];
-        var next = SessionWindow.NextUp(sessions, DateTime.Now);
-        if (next is null || next.SessionId != session.SessionId)
+        var now = DateTime.Now;
+        if (session.SessionDate < DateOnly.FromDateTime(now)
+            || (session.SessionDate == DateOnly.FromDateTime(now) && session.EndTime <= TimeOnly.FromDateTime(now)))
         {
-            throw new RegistrationException("Chỉ sinh bài cho buổi kế tiếp. Buổi đã qua và các buổi xa hơn không được tạo.");
+            throw new RegistrationException("Buổi đã kết thúc, chỉ soạn bài cho buổi hôm nay hoặc sắp tới.");
         }
 
-        var finished = SessionWindow.LatestFinished(sessions, DateTime.Now);
-        var histories = finished is null
-            ? []
-            : await (
-                from history in db.CoachTrainingHistories.AsNoTracking()
-                join user in db.UserAccounts.AsNoTracking() on history.MemberUserId equals user.UserId
-                where history.ClassId == owned.ClassId
-                    && history.CoachUserId == actor.UserId
-                    && history.SessionId == finished.SessionId
-                orderby history.RecordedAt descending
-                select new { user.FullName, history.RecordedAt, history.Content })
-                .Take(40)
-                .ToListAsync();
-        if (finished is not null && histories.Count == 0)
-        {
-            throw new RegistrationException("Hãy ghi đánh giá buổi vừa học xong trước khi sinh bài buổi kế tiếp.");
-        }
-
-        var historyText = finished is null
-            ? "Chưa có buổi nào vừa học xong."
-            : $"Đánh giá {CoachCourseFlowService.SessionLabel(finished)}:\n" + string.Join(
-                "\n",
-                histories.Select(row => $"- {row.FullName} ({row.RecordedAt:dd/MM/yyyy}): {row.Content}"));
-        if (historyText.Length > 7000)
-        {
-            historyText = historyText[..7000];
-        }
+        // Không còn đánh giá từng học viên: AI chỉ dựa trên giáo trình môn, mô tả coach nhập và buổi được chọn.
+        const string historyText = "";
 
         var unitNumber = session.SessionNo is int number && number > 0 ? number : index + 1;
         var raft = await materials.RaftForClassSessionAsync(item.Course!.SportId, unitNumber);
@@ -294,7 +300,22 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
             historyText,
             [new CoursePlanSessionPrompt(session.SessionId.ToString(), label)],
             $" Bài này chỉ cho {label}.",
-            raft);
+            raft,
+            (int)(session.EndTime.ToTimeSpan() - session.StartTime.ToTimeSpan()).TotalMinutes);
+    }
+
+    // Ghi token Gemini của coach để quản lý theo dõi; được lưu cùng lần StoreSlotAsync kế tiếp.
+    private void RecordTokens(OwnedClass owned, string sessionIdText, string action, int tokens)
+    {
+        db.CoachAiTokenUsages.Add(new CoachAiTokenUsage
+        {
+            CoachUserId = actor.UserId,
+            ClassId = owned.ClassId,
+            SessionId = int.TryParse(sessionIdText, out var sessionId) ? sessionId : null,
+            Action = action,
+            TotalTokens = Math.Max(1, tokens),
+            CreatedAt = DateTime.Now,
+        });
     }
 
     private async Task<GeneratedCoursePlan> MergeSessionAsync(int classId, GeneratedCoursePlan generated)
@@ -375,10 +396,6 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
             throw new RegistrationException("Hãy sinh bài buổi này trước khi sinh lại.");
         }
 
-        if (!regenerating && flags.Any(item => item))
-        {
-            throw new RegistrationException("Buổi này đã sinh lại bài tập nên không sinh mới nữa.");
-        }
     }
 
     private static GeneratedCoursePlan MarkRegenerated(GeneratedCoursePlan generated)
@@ -396,17 +413,24 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
     {
         try
         {
-            var generated = await gemini.GenerateCoursePlanAsync(new CoursePlanGenerationRequest(
-                context.SportName,
-                context.CourseName,
-                context.ClassName,
-                brief,
-                context.History,
-                context.Sessions,
-                currentPlan,
-                changes,
-                context.CourseMaterial,
-                SingleSession: true));
+            var generated = await RequestAsync(context, brief, currentPlan, changes);
+            // Bài của buổi phải chiếm ít nhất 4/5 thời gian buổi học; thiếu thì cho AI soạn lại một lần.
+            var need = (int)Math.Ceiling(context.SessionMinutes * 0.8);
+            var have = MinutesOf(generated);
+            if (context.SessionMinutes > 0 && have < need)
+            {
+                var more = $"Bộ bài trước chỉ có {have} phút, buổi học dài {context.SessionMinutes} phút. Soạn lại để tổng thời lượng từ {need} đến {context.SessionMinutes} phút: thêm bài và ghi rõ số phút trong dosage.";
+                var retry = await RequestAsync(context, brief, DescribePlan(generated), string.IsNullOrWhiteSpace(changes) ? more : changes + " " + more);
+                retry = retry with { TotalTokens = retry.TotalTokens + generated.TotalTokens };
+                have = MinutesOf(retry);
+                if (have < need)
+                {
+                    throw new RegistrationException($"AI soạn bài mới được {have} phút trong khi buổi học dài {context.SessionMinutes} phút (cần ít nhất {need} phút). Hãy bấm tạo lại hoặc mô tả thêm nội dung buổi.");
+                }
+
+                generated = retry;
+            }
+
             var summary = generated.Summary + context.CoverageNote;
             if (summary.Length > 1000)
             {
@@ -420,6 +444,31 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
             throw new RegistrationException(exception.Message);
         }
     }
+
+    private Task<GeneratedCoursePlan> RequestAsync(ClassAiContext context, string brief, string? currentPlan, string? changes) =>
+        gemini.GenerateCoursePlanAsync(new CoursePlanGenerationRequest(
+            context.SportName,
+            context.CourseName,
+            context.ClassName,
+            brief,
+            context.History,
+            context.Sessions,
+            currentPlan,
+            changes,
+            context.CourseMaterial,
+            SingleSession: true,
+            SessionMinutes: context.SessionMinutes));
+
+    // Tổng số phút ghi trong dosage của các bài (số phút cuối cùng trong mỗi dosage).
+    private static int MinutesOf(GeneratedCoursePlan plan) =>
+        plan.Sessions.SelectMany(session => session.Exercises).Sum(exercise =>
+        {
+            var matches = System.Text.RegularExpressions.Regex.Matches(exercise.Dosage ?? "", @"(\d+)\s*phút", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return matches.Count == 0 ? 0 : int.Parse(matches[^1].Groups[1].Value);
+        });
+
+    private static string DescribePlan(GeneratedCoursePlan plan) =>
+        string.Join("\n", plan.Sessions.SelectMany(session => session.Exercises).Select(item => $"- {item.Title} | {item.Dosage} | {item.Instructions}"));
 
     private async Task StoreSlotAsync(
         OwnedClass owned,
@@ -557,9 +606,9 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
             }
 
             var exercises = session.Exercises ?? [];
-            if (exercises.Count is < 1 or > 5)
+            if (exercises.Count is < 1 or > 14)
             {
-                throw new RegistrationException("Mỗi buổi có từ 1 đến 5 bài tập.");
+                throw new RegistrationException("Mỗi buổi có từ 1 đến 14 bài tập.");
             }
 
             parsedSessions.Add(new GeneratedCourseSession(
@@ -681,5 +730,6 @@ public class CoachCourseAiFlowService(AppDbContext db, CoachClassAccess access, 
         string History,
         IReadOnlyList<CoursePlanSessionPrompt> Sessions,
         string CoverageNote,
-        string CourseMaterial);
+        string CourseMaterial,
+        int SessionMinutes);
 }

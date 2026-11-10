@@ -701,8 +701,10 @@ export default function GuestClassRegistrationPage({ membershipOnly = false }) {
                               {classList.map((item) => {
                                 const reason = blockedClasses.get(String(item.id));
                                 return (
-                                  <option key={item.id} value={item.id} disabled={Boolean(reason)}>
-                                    {item.name}{reason ? ` · ${reason}` : ''}
+                                  <option key={item.id} value={item.id} disabled={Boolean(reason)} className={reason ? 'text-red-600' : undefined}>
+                                    {item.name}
+                                    {scheduleLines(item).length > 0 ? ` · ${scheduleLines(item).join(', ')}` : ''}
+                                    {reason ? ` · ${reason}` : ''}
                                   </option>
                                 );
                               })}

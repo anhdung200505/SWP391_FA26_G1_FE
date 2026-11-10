@@ -42,6 +42,14 @@ export function weekContaining(isoDates) {
   return mondayOf(new Date(year, month - 1, day));
 }
 
+// Màu riêng cho từng buổi khi nhiều buổi rơi vào cùng một ô (trùng lịch).
+const CLASH_TONES = [
+  { border: 'border-l-[#e31b23]', text: 'text-[#b1131a]', bg: 'bg-red-50' },
+  { border: 'border-l-blue-600', text: 'text-blue-700', bg: 'bg-blue-50' },
+  { border: 'border-l-amber-500', text: 'text-amber-700', bg: 'bg-amber-50' },
+  { border: 'border-l-emerald-600', text: 'text-emerald-700', bg: 'bg-emerald-50' },
+];
+
 export default function WeekSlotTable({ weekStart, onWeekStart, sessions = [], renderCell }) {
   const [slots, setSlots] = useState([]);
 
@@ -185,18 +193,27 @@ export default function WeekSlotTable({ weekStart, onWeekStart, sessions = [], r
                       >
                         {items.length > 0 && (
                           <div className="space-y-2">
-                            {items.map((session) => (
-                              <div
-                                key={session.id}
-                                className={`rounded-xl border border-l-4 p-2.5 text-xs shadow-xs ${
-                                  session.status === 'cancelled'
-                                    ? 'border-slate-200 border-l-slate-300 bg-slate-50'
-                                    : 'border-slate-200 border-l-[#e31b23] bg-white'
-                                }`}
-                              >
-                                {renderCell(session)}
-                              </div>
-                            ))}
+                            {items.map((session, itemIndex) => {
+                              const clash = items.filter((item) => item.status !== 'cancelled').length > 1 && session.status !== 'cancelled';
+                              const tone = CLASH_TONES[itemIndex % CLASH_TONES.length];
+                              return (
+                                <div
+                                  key={session.id}
+                                  className={`rounded-xl border border-l-4 p-2.5 text-xs shadow-xs ${
+                                    session.status === 'cancelled'
+                                      ? 'border-slate-200 border-l-slate-300 bg-slate-50'
+                                      : clash
+                                        ? `border-slate-200 ${tone.border} ${tone.bg} ${tone.text}`
+                                        : 'border-slate-200 border-l-[#e31b23] bg-white'
+                                  }`}
+                                >
+                                  {clash && (
+                                    <p className="mb-1 text-[10px] font-black uppercase tracking-wide">Trùng lịch</p>
+                                  )}
+                                  {renderCell(session)}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </td>

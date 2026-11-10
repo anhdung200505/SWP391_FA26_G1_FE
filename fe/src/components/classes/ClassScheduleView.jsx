@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CancelSessionModal, EditSessionModal } from '../sessions/SessionSchedulePanel';
+import { CancelSessionModal, EditSessionModal, SessionSlotModal, hasMakeup } from '../sessions/SessionSchedulePanel';
 import AdminAttendanceModal from './AdminAttendanceModal';
 import { CLASS_STATUS, formatDate } from './classUtils';
 import { getSessions } from '../../api/managementApi';
@@ -41,6 +41,7 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState(null);
   const [cancelling, setCancelling] = useState(null);
+  const [slotting, setSlotting] = useState(null);
   const [attending, setAttending] = useState(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const weekClass = useRef('');
@@ -76,6 +77,7 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
   const handleSaved = (message) => {
     setEditing(null);
     setCancelling(null);
+    setSlotting(null);
     setAttending(null);
     setNotice(message);
     setReloadKey((key) => key + 1);
@@ -212,11 +214,21 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
                             Đổi
                           </button>
                           {isAdmin && (
+                            <button type="button" onClick={() => setSlotting({ session, mode: 'reschedule' })} className="text-xs font-semibold text-gray-700 underline">
+                              Đổi lịch
+                            </button>
+                          )}
+                          {isAdmin && (
                             <button type="button" onClick={() => setCancelling(session)} className="text-xs font-semibold text-[#e31b23] underline">
                               Hủy buổi
                             </button>
                           )}
                         </div>
+                      )}
+                      {isAdmin && cancelled && String(session.date).slice(0, 10) >= today && !hasMakeup(sessions, session) && (
+                        <button type="button" onClick={() => setSlotting({ session, mode: 'makeup' })} className="mt-2 block text-xs font-semibold text-sky-700 underline">
+                          Xếp buổi bù
+                        </button>
                       )}
                     </div>
                   );
@@ -232,6 +244,9 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
         <AdminAttendanceModal classId={classId} session={attending} onClose={() => setAttending(null)} onSaved={handleSaved} />
       )}
       {isAdmin && cancelling && <CancelSessionModal session={cancelling} onClose={() => setCancelling(null)} onSaved={handleSaved} />}
+      {isAdmin && slotting && (
+        <SessionSlotModal session={slotting.session} mode={slotting.mode} onClose={() => setSlotting(null)} onSaved={handleSaved} />
+      )}
     </>
   );
 }

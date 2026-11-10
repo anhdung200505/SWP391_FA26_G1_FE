@@ -82,6 +82,156 @@ public class RoomManagementFlowService(AppDbContext db, CurrentActor actor, ILog
             .ToList();
     }
 
+    public async Task<RoomAdminDto> CreateAsync(SaveRoomRequest request)
+    {
+        var (name, type, sports) = await ValidateAsync(request);
+        var centerId = await db.Centers.AsNoTracking().OrderBy(item => item.CenterId).Select(item => (int?)item.CenterId).FirstOrDefaultAsync()
+            ?? throw new InvalidOperationException("Chưa có cơ sở để thêm phòng.");
+        var next = await db.Rooms.CountAsync() + 1;
+        string code;
+        do
+        {
+            code = $"ROOM-{next++:D3}";
+        }
+        while (await db.Rooms.AnyAsync(item => item.RoomCode == code));
+
+        var room = new Models.Room
+        {
+            CenterId = centerId,
+            RoomCode = code,
+            RoomName = name,
+            RoomType = type,
+            Capacity = request.Capacity,
+            PrivateConcurrency = request.PrivateConcurrency,
+            IsActive = true,
+        };
+        db.Rooms.Add(room);
+        await db.SaveChangesAsync();
+        db.SportRooms.AddRange(sports.Select(item => new Models.SportRoom
+        {
+            RoomId = room.RoomId,
+            SportId = item.SportId,
+            AllowGroup = item.AllowGroup,
+            AllowPrivate = item.AllowPrivate,
+        }));
+        await db.SaveChangesAsync();
+        logger.LogInformation("Quản trị {ActorId} thêm phòng {RoomId} ({RoomName})", actor.UserId, room.RoomId, room.RoomName);
+        return (await ListAsync()).First(item => item.Id == room.RoomId.ToString());
+    }
+
+    public async Task<RoomAdminDto> UpdateAsync(string roomId, SaveRoomRequest request)
+    {
+        var id = int.TryParse(roomId, out var parsed) ? parsed : 0;
+        var room = await db.Rooms.FirstOrDefaultAsync(item => item.RoomId == id)
+            ?? throw new KeyNotFoundException("Không tìm thấy phòng.");
+        var (name, type, sports) = await ValidateAsync(request, id);
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var upcoming = await db.ClassSessions.AsNoTracking()
+            .Where(session => session.RoomId == id && session.SessionDate >= today && UpcomingStatuses.Contains(session.Status))
+            .Select(session => new
+            {
+                session.ClassId,
+                ClassName = session.Class!.ClassName,
+                session.Class.ClassType,
+                session.Class.Capacity,
+                SportId = session.Class.Course!.SportId,
+            })
+            .Distinct()
+            .ToListAsync();
+        var tooBig = upcoming.Where(item => item.ClassType == "group" && item.Capacity > request.Capacity).ToList();
+        if (tooBig.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Sức chứa mới ({request.Capacity}) nhỏ hơn sĩ số lớp {tooBig[0].ClassName} ({tooBig[0].Capacity}) còn buổi sắp tới trong phòng.");
+        }
+
+        var blocked = upcoming.FirstOrDefault(item => !sports.Any(sport =>
+            sport.SportId == item.SportId && (item.ClassType == "private" ? sport.AllowPrivate : sport.AllowGroup)));
+        if (blocked is not null)
+        {
+            throw new InvalidOperationException(
+                $"Lớp {blocked.ClassName} còn buổi sắp tới trong phòng nên phải giữ môn và loại lớp tương ứng.");
+        }
+
+        room.RoomName = name;
+        room.RoomType = type;
+        room.Capacity = request.Capacity;
+        room.PrivateConcurrency = request.PrivateConcurrency;
+        var links = await db.SportRooms.Where(item => item.RoomId == id).ToListAsync();
+        db.SportRooms.RemoveRange(links.Where(link => !sports.Any(item => item.SportId == link.SportId)));
+        foreach (var item in sports)
+        {
+            var link = links.FirstOrDefault(existing => existing.SportId == item.SportId);
+            if (link is null)
+            {
+                db.SportRooms.Add(new Models.SportRoom { RoomId = id, SportId = item.SportId, AllowGroup = item.AllowGroup, AllowPrivate = item.AllowPrivate });
+            }
+            else
+            {
+                link.AllowGroup = item.AllowGroup;
+                link.AllowPrivate = item.AllowPrivate;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        logger.LogInformation("Quản trị {ActorId} sửa phòng {RoomId} ({RoomName})", actor.UserId, room.RoomId, room.RoomName);
+        return (await ListAsync()).First(item => item.Id == roomId);
+    }
+
+    private sealed record ValidSport(int SportId, bool AllowGroup, bool AllowPrivate);
+
+    private async Task<(string Name, string? Type, List<ValidSport> Sports)> ValidateAsync(SaveRoomRequest request, int? ignoreRoomId = null)
+    {
+        var name = request.Name?.Trim() ?? "";
+        if (name.Length is < 1 or > 200)
+        {
+            throw new InvalidOperationException("Tên phòng là bắt buộc và không quá 200 ký tự.");
+        }
+
+        var type = string.IsNullOrWhiteSpace(request.Type) ? null : request.Type.Trim();
+        if (type is { Length: > 100 })
+        {
+            throw new InvalidOperationException("Loại phòng không quá 100 ký tự.");
+        }
+
+        if (request.Capacity is < 1 or > 1000)
+        {
+            throw new InvalidOperationException("Sức chứa từ 1 đến 1.000 người.");
+        }
+
+        if (request.PrivateConcurrency is < 1 or > 50)
+        {
+            throw new InvalidOperationException("Số buổi 1-1 cùng lúc từ 1 đến 50.");
+        }
+
+        if (await db.Rooms.AnyAsync(item => item.RoomName == name && item.RoomId != ignoreRoomId))
+        {
+            throw new InvalidOperationException("Đã có phòng trùng tên.");
+        }
+
+        var sports = new List<ValidSport>();
+        foreach (var item in request.Sports ?? [])
+        {
+            if (!int.TryParse(item.SportId, out var sportId) || !await db.Sports.AnyAsync(sport => sport.SportId == sportId))
+            {
+                throw new InvalidOperationException("Môn thể thao không hợp lệ.");
+            }
+
+            if (!item.AllowGroup && !item.AllowPrivate)
+            {
+                continue;
+            }
+
+            if (sports.All(existing => existing.SportId != sportId))
+            {
+                sports.Add(new ValidSport(sportId, item.AllowGroup, item.AllowPrivate));
+            }
+        }
+
+        return (name, type, sports);
+    }
+
     // Các lớp còn buổi sắp tới trong phòng (chỉ đọc), để hộp thoại ngưng dùng báo trước.
     public async Task<RoomUsageDto> RoomUsageAsync(string roomId)
     {
