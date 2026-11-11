@@ -28,7 +28,7 @@ function badgeKey(session, now) {
   return 'upcoming';
 }
 
-export default function ClassInfoPanel({ detail }) {
+export default function ClassInfoPanel({ detail, onAttend }) {
   const sessions = (detail.sessions || []).map((session) => ({
     ...session,
     id: session.sessionId,
@@ -104,7 +104,15 @@ export default function ClassInfoPanel({ detail }) {
               <SessionRoomLine session={session} fallback={detail.roomName || 'Chưa xếp phòng'} />
               {session.sessionNo ? <p className="text-xs text-slate-500 tabular-nums">Buổi {session.sessionNo}</p> : null}
               {session.coachChange && <SessionCoachLine session={session} />}
-              {badge && (
+              {badgeKey(session, now) === 'missed' && onAttend ? (
+                <button
+                  type="button"
+                  onClick={() => onAttend(session.sessionId)}
+                  className="mt-1 inline-block cursor-pointer rounded-full bg-[#e31b23] px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-[#c4131a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e31b23]"
+                >
+                  Điểm danh
+                </button>
+              ) : badge && (
                 <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
                   {badge.label}
                 </span>

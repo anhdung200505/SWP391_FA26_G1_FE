@@ -30,6 +30,13 @@ const isAutoBenefit = (text) => {
   );
 };
 
+const AI_BENEFIT_PREFIX = 'Gợi ý tập cá nhân bằng AI:';
+
+const formatVi = (value) => Number(value || 0).toLocaleString('vi-VN');
+
+const buildAiLine = (regenerations, tokens) =>
+  `${AI_BENEFIT_PREFIX} ${formatVi(regenerations)} lượt tạo lại và ${formatVi(tokens)} token mỗi kỳ hội viên`;
+
 export default function PackageEditorPage({ mode }) {
   const { packageId } = useParams();
   const navigate = useNavigate();
@@ -167,15 +174,16 @@ export default function PackageEditorPage({ mode }) {
   const aiEligible = Boolean(existing?.aiEligible);
   const regenerationNumber = Number(aiRegeneration);
   const tokenNumber = Number(aiTokens);
+  const aiLineInvalid =
+    aiRegeneration === '' ||
+    aiTokens === '' ||
+    !Number.isInteger(regenerationNumber) ||
+    !Number.isInteger(tokenNumber) ||
+    regenerationNumber < 0 ||
+    tokenNumber < 0;
 
   const formInvalid =
-    (aiEligible &&
-      (aiRegeneration === '' ||
-        aiTokens === '' ||
-        !Number.isInteger(regenerationNumber) ||
-        !Number.isInteger(tokenNumber) ||
-        regenerationNumber < 0 ||
-        tokenNumber < 0)) ||
+    (aiEligible && aiLineInvalid) ||
     !fee ||
     !Number.isFinite(feeNumber) ||
     feeNumber <= 0 ||
@@ -247,7 +255,10 @@ export default function PackageEditorPage({ mode }) {
       fee: feeNumber,
       validityMonths: monthsNumber,
       upgradeDiscountPercent: discountNumber,
-      benefits: cleanedBenefits,
+      // Dòng AI luôn đứng đầu; hệ thống đồng bộ lại hạn mức theo dòng này.
+      benefits: aiEligible
+        ? [buildAiLine(regenerationNumber, tokenNumber), ...cleanedBenefits]
+        : cleanedBenefits,
       ...(aiEligible
         ? { aiRegenerationLimit: regenerationNumber, aiTokenLimit: tokenNumber }
         : {}),
@@ -444,42 +455,6 @@ export default function PackageEditorPage({ mode }) {
               )}
           </section>
 
-          {/* HẠN MỨC AI: số liệu thật hệ thống áp dụng cho hội viên */}
-          {aiEligible && (
-            <section className="mt-6 rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
-              <h2 className="font-black text-gray-900">Hạn mức AI của gói</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Hai con số này là hạn mức hệ thống thật sự áp dụng cho hội viên
-                (lượt tạo lại và token mỗi kỳ). Dòng quyền lợi AI hiển thị cho
-                khách sẽ tự cập nhật theo.
-              </p>
-              <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-bold text-gray-700">
-                  Lượt tạo lại / kỳ
-                  <input
-                    inputMode="numeric"
-                    value={aiRegeneration}
-                    onChange={(event) =>
-                      setAiRegeneration(event.target.value.replace(/\D/g, '').slice(0, 4))
-                    }
-                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 font-semibold outline-none ring-[#e31b23] focus:ring-2"
-                  />
-                </label>
-                <label className="block text-sm font-bold text-gray-700">
-                  Token AI / kỳ
-                  <input
-                    inputMode="numeric"
-                    value={aiTokens}
-                    onChange={(event) =>
-                      setAiTokens(event.target.value.replace(/\D/g, '').slice(0, 9))
-                    }
-                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 font-semibold outline-none ring-[#e31b23] focus:ring-2"
-                  />
-                </label>
-              </div>
-            </section>
-          )}
-
           {/* QUYỀN LỢI */}
           <fieldset className="mt-6">
 
@@ -489,12 +464,53 @@ export default function PackageEditorPage({ mode }) {
 
             <p className="mt-1 text-sm text-gray-600">
               Chọn quyền lợi mẫu để thêm nhanh, hoặc chọn
-              “Khác” để tự nhập nội dung. Dòng AI và dòng giảm giá khi nâng hạng
-              được hệ thống tự sinh từ ô hạn mức và mức giảm ở trên.
+              “Khác” để tự nhập nội dung. Dòng AI token luôn đứng đầu; dòng giảm giá khi nâng hạng
+              được hệ thống tự sinh từ mức giảm ở trên.
             </p>
 
             {/* DANH SÁCH QUYỀN LỢI ĐANG CÓ */}
             <div className="mt-3 space-y-2">
+
+              {/* QUYỀN LỢI ĐẦU TIÊN: AI TOKEN */}
+              {aiEligible && (
+                <div className="flex items-start gap-2">
+                  <span className="mt-3 text-xs font-bold text-gray-400">1.</span>
+                  <div className="w-full">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2 text-sm font-medium text-gray-800">
+                      <span>Gợi ý tập cá nhân bằng AI:</span>
+                      <input
+                        inputMode="numeric"
+                        aria-label="Số lượt tạo lại"
+                        value={aiRegeneration}
+                        onChange={(event) =>
+                          setAiRegeneration(event.target.value.replace(/\D/g, '').slice(0, 4))
+                        }
+                        className="w-20 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-center font-bold outline-none ring-[#e31b23] focus:ring-2"
+                      />
+                      <span>lượt tạo lại và</span>
+                      <input
+                        inputMode="numeric"
+                        aria-label="Số token"
+                        value={aiTokens}
+                        onChange={(event) =>
+                          setAiTokens(event.target.value.replace(/\D/g, '').slice(0, 9))
+                        }
+                        className="w-32 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-center font-bold outline-none ring-[#e31b23] focus:ring-2"
+                      />
+                      <span>token mỗi kỳ hội viên</span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Chỉ sửa được hai con số: lượt tạo lại và token. Khi lưu,
+                      hệ thống áp dụng đúng hạn mức này cho hội viên.
+                    </p>
+                    {aiLineInvalid && (
+                      <p className="mt-1 text-xs font-semibold text-[#b1131a]">
+                        Hãy nhập số nguyên không âm cho cả hai ô.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {benefits.map((benefit, index) => (
                 <div
@@ -502,7 +518,7 @@ export default function PackageEditorPage({ mode }) {
                   className="flex items-start gap-2"
                 >
                   <span className="mt-3 text-xs font-bold text-gray-400">
-                    {index + 1}.
+                    {index + 1 + (aiEligible ? 1 : 0)}.
                   </span>
 
                   <input

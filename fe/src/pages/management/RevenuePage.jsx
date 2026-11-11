@@ -10,6 +10,7 @@ const TABS = [
     note: 'Học phí các lớp đã thanh toán. Phần lên cấp gói trong cùng đơn nằm ở tab Hội viên.',
     groupHeading: 'Theo khóa học',
     lineHeading: 'Từng khoản học phí',
+    scope: 'Chỉ gồm học phí khóa học đã thanh toán. Không gồm tiền gói hội viên (xem tab Hội viên).',
     titleColumn: 'Khóa học',
     subtitleColumn: 'Lớp',
     empty: 'Chưa có học phí nào được thanh toán.',
@@ -20,6 +21,7 @@ const TABS = [
     note: 'Tiền mua, gia hạn hoặc lên cấp gói. Gói tặng kèm lớp không tính vào doanh thu.',
     groupHeading: 'Theo gói',
     lineHeading: 'Từng khoản hội viên',
+    scope: 'Chỉ gồm tiền mua, gia hạn và lên cấp gói hội viên. Không gồm học phí khóa học và gói tặng kèm lớp.',
     titleColumn: 'Gói',
     subtitleColumn: 'Nguồn',
     empty: 'Chưa có khoản hội viên nào được thanh toán.',
@@ -332,10 +334,13 @@ function RevenueLines({ selected, lines }) {
           </div>
 
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 py-3 text-sm" aria-live="polite">
-            <p className="text-slate-600">
-              <span className="font-black tabular-nums text-slate-900">{filtered.length}</span> khoản
-              {filtering && <span className="tabular-nums"> trên tổng {lines.length}</span>}
-            </p>
+            <div>
+              <p className="text-slate-600">
+                <span className="font-black tabular-nums text-slate-900">{filtered.length}</span> khoản
+                {filtering && <span className="tabular-nums"> trên tổng {lines.length}</span>}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">{selected.scope}</p>
+            </div>
             <p className="text-slate-600">
               Tổng tiền: <span className="text-base font-black tabular-nums text-slate-900">{formatFee(total)}</span>
             </p>

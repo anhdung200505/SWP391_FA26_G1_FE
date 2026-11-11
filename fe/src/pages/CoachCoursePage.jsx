@@ -101,7 +101,7 @@ export default function CoachCoursePage() {
     <WorkspaceShell
       role="Huấn luyện viên"
       homeTo="/hlv/lop-hoc"
-      items={TABS.map((item) => ({ id: item.id, label: item.label }))}
+      items={TABS.filter((item) => item.id !== 'attendance').map((item) => ({ id: item.id, label: item.label }))}
       activeId={tab}
       onSelect={selectTab}
       breadcrumb={[
@@ -170,9 +170,15 @@ export default function CoachCoursePage() {
                 </div>
               )}
               {detailLoading && <div className="h-72 animate-pulse rounded-3xl bg-slate-200" aria-busy="true" aria-label="Đang tải lớp" />}
-              {detail && !detailLoading && tab === 'info' && <ClassInfoPanel key={classId} detail={detail} />}
+              {detail && !detailLoading && tab === 'info' && (
+                <ClassInfoPanel
+                  key={classId}
+                  detail={detail}
+                  onAttend={(sessionId) => setSearchParams({ tab: 'attendance', session: String(sessionId) }, { replace: true })}
+                />
+              )}
               {detail && !detailLoading && tab === 'attendance' && (
-                <AttendancePanel classId={classId} sessions={detail.sessions} />
+                <AttendancePanel classId={classId} sessions={detail.sessions} initialSessionId={searchParams.get('session') || ''} />
               )}
               {detail && !detailLoading && tab === 'evaluation' && <EvaluationPanel classId={classId} />}
               {detail && !detailLoading && tab === 'assignment' && (
