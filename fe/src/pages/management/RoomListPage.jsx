@@ -434,7 +434,8 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
   const [name, setName] = useState(room?.name || '');
   const [type, setType] = useState(room?.type || '');
   const [capacity, setCapacity] = useState(String(room?.capacity ?? 20));
-  const [concurrency, setConcurrency] = useState(String(room?.privateConcurrency ?? 1));
+  // Không còn nhập trên form: phòng mới lấy 1, phòng đang sửa giữ giá trị hiện có (luật xếp buổi 1-1 vẫn đọc cột này).
+  const privateConcurrency = room?.privateConcurrency ?? 1;
   const initial = room?.sports?.[0];
   const [sportId, setSportId] = useState(initial ? String(initial.sportId) : '');
   const [allowGroup, setAllowGroup] = useState(initial ? initial.allowGroup : true);
@@ -463,7 +464,7 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
         name: name.trim(),
         type: type.trim() || null,
         capacity: Number(capacity),
-        privateConcurrency: Number(concurrency),
+        privateConcurrency,
         sports: sportId ? [{ sportId, allowGroup, allowPrivate }] : [],
       });
     } catch (requestError) {
@@ -507,16 +508,10 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
           Loại phòng
           <input value={type} onChange={(event) => setType(event.target.value)} maxLength={100} placeholder="Ví dụ: Sân cầu lông, Phòng nhảy" className={`${controlClass} mt-1 w-full`} />
         </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-slate-700">
-            Sức chứa (người)
-            <input type="number" min="1" max="1000" value={capacity} onChange={(event) => setCapacity(event.target.value)} className={`${controlClass} mt-1 w-full`} />
-          </label>
-          <label className="block text-sm font-bold text-slate-700">
-            Số buổi 1-1 cùng lúc
-            <input type="number" min="1" max="50" value={concurrency} onChange={(event) => setConcurrency(event.target.value)} className={`${controlClass} mt-1 w-full`} />
-          </label>
-        </div>
+        <label className="block text-sm font-bold text-slate-700">
+          Sức chứa (người)
+          <input type="number" min="1" max="1000" value={capacity} onChange={(event) => setCapacity(event.target.value)} className={`${controlClass} mt-1 w-full`} />
+        </label>
         {error &&<p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="h-10 cursor-pointer rounded-xl bg-slate-100 px-5 text-sm font-bold text-slate-700 hover:bg-slate-200">
