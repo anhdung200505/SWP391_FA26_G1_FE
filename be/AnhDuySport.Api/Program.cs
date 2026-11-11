@@ -17,6 +17,13 @@ if (File.Exists(databaseConfigPath))
     builder.Configuration.AddJsonFile(databaseConfigPath, optional: false, reloadOnChange: true);
 }
 
+// Máy dev: config/database.local.json (không commit) trỏ LocalDB, đè lên database.json (Azure).
+// Chỉ đọc khi Development nên bản deploy (Production) luôn dùng Azure.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Configuration.AddJsonFile(ResolveConfig(builder, "database.local.json"), optional: true, reloadOnChange: true);
+}
+
 // Khóa payOS dùng chung cả nhóm: đọc ở mọi môi trường (user-secrets chỉ có trên máy đã đặt và chỉ khi Development).
 builder.Configuration.AddJsonFile(ResolveConfig(builder, "payos.json"), optional: true, reloadOnChange: true);
 

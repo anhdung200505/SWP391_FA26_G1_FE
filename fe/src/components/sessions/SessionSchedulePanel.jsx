@@ -4,6 +4,7 @@ import SessionRoomLine from '../schedule/SessionRoomLine';
 import {
   cancelSession,
   changeSessionCoach,
+  getMakeupPlan,
   getSessionSlots,
   rescheduleSession,
   scheduleSessionMakeup,
@@ -201,7 +202,7 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
           </h2>
           <p className="text-[11px] font-bold text-slate-400">
             {isAdmin
-              ? 'Đổi HLV, phòng hoặc hủy buổi chưa diễn ra. Hủy buổi hôm nay hoặc buổi sắp tới sẽ tự thêm buổi bù cùng thứ, cùng giờ. Học viên trong lớp nhận thông báo.'
+              ? 'Đổi HLV, phòng hoặc hủy buổi chưa diễn ra. Hủy buổi hôm nay hoặc buổi sắp tới thì xếp buổi bù vào cuối tuần cùng tháng. Học viên trong lớp nhận thông báo.'
               : 'Đổi HLV khi HLV phụ trách bận. Học viên trong lớp nhận thông báo.'}
           </p>
         </div>
@@ -353,11 +354,16 @@ export function hasMakeup(sessions, cancelled) {
   );
 }
 
-function ModalFrame({ title, badge, session, onClose, children }) {
+// Tiêu đề đứng yên, chỉ phần nội dung cuộn (thanh cuộn mảnh nằm trong khung bo góc). wide: hộp có nhiều lựa chọn (buổi bù).
+function ModalFrame({ title, badge, session, onClose, children, wide = false }) {
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start justify-between pb-4 border-b border-gray-100">
+      <div
+        className={`bg-white rounded-3xl w-full shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden ${
+          wide ? 'max-w-2xl' : 'max-w-lg'
+        }`}
+      >
+        <div className="flex shrink-0 items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100">
           <div>
             <span className="inline-block bg-[#e31b23] text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded -skew-x-12 mb-1">
               <span className="inline-block skew-x-12">{badge}</span>
@@ -372,7 +378,9 @@ function ModalFrame({ title, badge, session, onClose, children }) {
             ✕
           </button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5 [scrollbar-color:#cbd5e1_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -514,7 +522,9 @@ export function EditSessionModal({ session, isAdmin, onClose, onSaved }) {
   );
 }
 
-// Chọn ngày rồi chọn khung giờ còn trống (khung bận bị khóa kèm lý do).
+const WEEKDAY_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+// Chọn ngày rồi chọn khung giờ còn trống (khung bận bị khóa kèm lý do). Dùng cho đổi lịch một buổi.
 export function SlotPicker({ session, date, onDate, slotId, onSlot, minDate }) {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -593,28 +603,229 @@ export function SlotPicker({ session, date, onDate, slotId, onSlot, minDate }) {
   );
 }
 
+const weekdayShort = (day) => WEEKDAY_SHORT[new Date(`${day}T00:00:00`).getDay()];
+
+// Chọn buổi bù theo thứ tự: HLV dạy (mặc định HLV chính) → ngày thứ 7 / chủ nhật cùng tháng → khung giờ.
+// Số khung trống và khung giờ tính theo HLV đang chọn. value = { date, slotId, coachId }; onChange là setter của
+// useState (nhận hàm cập nhật) để tự điền buổi gợi ý. Đổi HLV thì bỏ ngày, giờ đã chọn và gợi ý lại cho HLV đó.
+export function MakeupPicker({ session, value, onChange }) {
+  const { date, slotId, coachId } = value;
+  // Kế hoạch / khung giờ đã tải cho HLV (và ngày) nào, để biết đang tải mà không phải đặt state trong effect.
+  const [planState, setPlanState] = useState({ key: null, data: null });
+  const [slotState, setSlotState] = useState({ key: '', list: [] });
+  const plan = planState.data;
+  const loadingPlan = planState.key !== coachId;
+  const slotsKey = `${date}|${coachId}`;
+  const loadingSlots = Boolean(date) && slotState.key !== slotsKey;
+  const slots = slotState.key === slotsKey ? slotState.list : [];
+
+  useEffect(() => {
+    let ignore = false;
+    getMakeupPlan(session.id, coachId)
+      .then((data) => {
+        if (ignore) return;
+        setPlanState({ key: coachId, data: data || { coaches: [], days: [] } });
+        onChange((current) => {
+          if (current.coachId !== coachId) return current;
+          const suggestion = data?.suggestion;
+          if (current.date) return current.coachId ? current : { ...current, coachId: String(data?.coachUserId || '') };
+          if (!suggestion) return { ...current, coachId: current.coachId || String(data?.coachUserId || '') };
+          return {
+            date: String(suggestion.date).slice(0, 10),
+            slotId: String(suggestion.timeSlotId),
+            coachId: String(suggestion.coachUserId),
+          };
+        });
+      })
+      .catch(() => {
+        if (!ignore) setPlanState({ key: coachId, data: { coaches: [], days: [] } });
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [session.id, coachId, onChange]);
+
+  useEffect(() => {
+    if (!date || !coachId) return undefined;
+
+    let ignore = false;
+    const key = `${date}|${coachId}`;
+    getSessionSlots(session.id, date, true, coachId)
+      .then((data) => {
+        if (!ignore) setSlotState({ key, list: Array.isArray(data) ? data : [] });
+      })
+      .catch(() => {
+        if (!ignore) setSlotState({ key, list: [] });
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [session.id, date, coachId]);
+
+  const suggestion = plan?.suggestion;
+  const suggestionDay = suggestion ? String(suggestion.date).slice(0, 10) : '';
+  const suggestionSlot = slots.find((slot) => date === suggestionDay && String(slot.id) === String(suggestion?.timeSlotId));
+  const usingSuggestion =
+    suggestion && date === suggestionDay && String(slotId) === String(suggestion.timeSlotId) && String(coachId) === String(suggestion.coachUserId);
+  const coachList = plan?.coaches || [];
+  const selectedCoach = coachList.find((coach) => String(coach.id) === String(coachId));
+
+  return (
+    <div className="space-y-3">
+      <label className="block space-y-1.5">
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">1. HLV dạy buổi bù</span>
+        <select
+          value={coachId}
+          onChange={(event) => onChange({ coachId: event.target.value, date: '', slotId: '' })}
+          className={`${inputClass} w-full`}
+        >
+          {coachList.length === 0 && <option value="">Đang tải HLV...</option>}
+          {coachList.map((coach) => (
+            <option key={coach.id} value={coach.id} disabled={coach.freeSlots === 0 && String(coach.id) !== String(coachId)}>
+              {coach.name}
+              {coach.isMain ? ' (HLV chính)' : ''}
+              {coach.freeSlots > 0 ? ` · còn ${coach.freeSlots} khung trong tháng` : ' · bận hết'}
+            </option>
+          ))}
+        </select>
+        {selectedCoach && !selectedCoach.isMain && (
+          <span className="block text-[11px] font-semibold text-amber-700">
+            Buổi bù sẽ là dạy thay: HLV {selectedCoach.name} thay HLV {plan?.mainCoachName}.
+          </span>
+        )}
+      </label>
+
+      {plan === null || loadingPlan ? (
+        <p className="text-xs font-semibold text-slate-400">Đang tìm lịch bù...</p>
+      ) : suggestion ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+          <span>
+            ★ Gợi ý: {weekdayShort(suggestionDay)} {formatDate(suggestionDay)}
+            {suggestionSlot ? ` · ${suggestionSlot.name}` : ''} · HLV {suggestion.coachName}
+            {suggestion.isMainCoach ? ' (HLV chính)' : ' (dạy thay)'}
+          </span>
+          {!usingSuggestion && (
+            <button
+              type="button"
+              onClick={() => onChange({ date: suggestionDay, slotId: String(suggestion.timeSlotId), coachId: String(suggestion.coachUserId) })}
+              className="font-bold text-amber-800 underline cursor-pointer"
+            >
+              Dùng gợi ý
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          {selectedCoach
+            ? `HLV ${selectedCoach.name} không còn khung cuối tuần nào trong tháng (lớp, phòng, học viên cũng phải rảnh). Chọn HLV khác.`
+            : 'Không còn khung cuối tuần nào trong tháng mà lớp, phòng, học viên và HLV đều rảnh.'}
+        </p>
+      )}
+
+      <div className="space-y-1.5">
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">2. Ngày bù (cuối tuần cùng tháng)</span>
+        <div className="flex flex-wrap gap-2">
+          {(plan?.days || []).map((dayInfo) => {
+            const day = String(dayInfo.date).slice(0, 10);
+            const full = dayInfo.freeSlots === 0;
+            return (
+              <button
+                key={day}
+                type="button"
+                disabled={full}
+                onClick={() => onChange((current) => ({ ...current, date: day, slotId: '' }))}
+                className={`rounded-xl border px-3 py-2 text-left text-xs font-bold tabular-nums transition-colors ${
+                  date === day
+                    ? 'border-[#e31b23] bg-red-50 text-[#e31b23]'
+                    : full
+                      ? 'cursor-not-allowed border-dashed border-slate-200 bg-slate-50 text-slate-400'
+                      : 'border-slate-200 bg-white text-slate-800 hover:border-[#e31b23]'
+                }`}
+              >
+                <span className="block">
+                  {weekdayShort(day)} · {formatDate(day)}
+                  {day === suggestionDay ? ' ★' : ''}
+                </span>
+                <span className={`block text-[10px] font-semibold ${full ? 'text-slate-400' : 'text-emerald-700'}`}>
+                  {full ? 'hết khung' : `còn ${dayInfo.freeSlots}/${dayInfo.totalSlots} khung`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {date && (
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">3. Khung giờ · {formatDate(date)}</span>
+          {loadingSlots ? (
+            <p className="text-xs font-semibold text-slate-400">Đang kiểm tra lịch trống...</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {slots.map((slot) => (
+                <button
+                  key={slot.id}
+                  type="button"
+                  disabled={slot.isBusy}
+                  title={slot.busyReason || ''}
+                  onClick={() => onChange((current) => ({ ...current, slotId: String(slot.id) }))}
+                  className={`rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors ${
+                    String(slotId) === String(slot.id)
+                      ? 'border-[#e31b23] bg-red-50 text-[#e31b23]'
+                      : slot.isBusy
+                        ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
+                        : 'border-slate-200 bg-white text-slate-800 hover:border-[#e31b23]'
+                  }`}
+                >
+                  <span className="block tabular-nums">
+                    {slot.name}
+                    {date === suggestionDay && String(slot.id) === String(suggestion?.timeSlotId) ? ' ★' : ''}
+                  </span>
+                  {slot.busyReason && (
+                    <span className={`mt-0.5 block text-[10px] font-semibold ${slot.isBusy ? 'text-red-500' : 'text-amber-700'}`}>
+                      {slot.busyReason}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="text-[11px] font-medium text-slate-500">
+        Buổi bù giữ số buổi của buổi bị hủy, chỉ xếp vào thứ 7 hoặc chủ nhật trong tháng (không xếp khung tối sau 18:00) để tháng đó đủ số
+        buổi và khóa học không bị kéo dài.
+      </p>
+    </div>
+  );
+}
+
 // mode = 'reschedule': dời chính buổi này. mode = 'makeup': xếp buổi bù cho buổi đã hủy.
 export function SessionSlotModal({ session, mode, onClose, onSaved }) {
   const [date, setDate] = useState('');
   const [slotId, setSlotId] = useState('');
+  const [makeup, setMakeup] = useState({ date: '', slotId: '', coachId: '' });
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const tomorrow = addDays(0);
+  const isMakeup = mode === 'makeup';
+  const ready = isMakeup ? makeup.date && makeup.slotId && makeup.coachId : date && slotId;
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!date || !slotId) {
-      setError('Chọn ngày và khung giờ.');
+    if (!ready) {
+      setError(isMakeup ? 'Chọn ngày, khung giờ và HLV dạy buổi bù.' : 'Chọn ngày và khung giờ.');
       return;
     }
 
     setSaving(true);
     setError('');
     try {
-      if (mode === 'makeup') {
-        await scheduleSessionMakeup(session.id, { date, timeSlotId: slotId });
-        onSaved(`Đã xếp buổi bù cho ${session.className} vào ${formatDate(date)}.`);
+      if (isMakeup) {
+        await scheduleSessionMakeup(session.id, { date: makeup.date, timeSlotId: makeup.slotId, coachUserId: makeup.coachId });
+        onSaved(`Đã xếp buổi bù cho ${session.className} vào ${formatDate(makeup.date)}.`);
       } else {
         await rescheduleSession(session.id, { date, timeSlotId: slotId, reason });
         onSaved(`Đã đổi lịch ${session.className}, buổi ${session.sessionNo} sang ${formatDate(date)}.`);
@@ -631,10 +842,15 @@ export function SessionSlotModal({ session, mode, onClose, onSaved }) {
       badge={mode === 'makeup' ? 'Buổi bù' : 'Đổi lịch'}
       session={session}
       onClose={onClose}
+      wide={isMakeup}
     >
       <form onSubmit={submit} className="space-y-4">
-        <SlotPicker session={session} date={date} onDate={setDate} slotId={slotId} onSlot={setSlotId} minDate={tomorrow} />
-        {mode !== 'makeup' && (
+        {isMakeup ? (
+          <MakeupPicker session={session} value={makeup} onChange={setMakeup} />
+        ) : (
+          <SlotPicker session={session} date={date} onDate={setDate} slotId={slotId} onSlot={setSlotId} minDate={tomorrow} />
+        )}
+        {!isMakeup && (
           <label className="block space-y-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Lý do đổi lịch (không bắt buộc)</span>
             <textarea
@@ -651,8 +867,8 @@ export function SessionSlotModal({ session, mode, onClose, onSaved }) {
           <button type="button" onClick={onClose} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer">
             Đóng
           </button>
-          <button type="submit" disabled={saving || !slotId} className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-60">
-            {saving ? 'Đang lưu...' : mode === 'makeup' ? 'Xếp buổi bù' : 'Đổi lịch'}
+          <button type="submit" disabled={saving || !ready} className="bg-[#e31b23] hover:bg-[#c4131a] text-white font-bold text-xs px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-60">
+            {saving ? 'Đang lưu...' : isMakeup ? 'Xếp buổi bù' : 'Đổi lịch'}
           </button>
         </div>
       </form>
@@ -664,9 +880,7 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [pickMakeup, setPickMakeup] = useState(true);
-  const [makeupDate, setMakeupDate] = useState('');
-  const [makeupSlot, setMakeupSlot] = useState('');
+  const [makeup, setMakeup] = useState({ date: '', slotId: '', coachId: '' });
 
   const submit = async (event) => {
     event.preventDefault();
@@ -675,25 +889,21 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
       return;
     }
 
-    if (pickMakeup && (!makeupDate || !makeupSlot)) {
-      setError('Chọn ngày và khung giờ buổi bù, hoặc chọn "Xếp buổi bù sau".');
+    if (!makeup.date || !makeup.slotId || !makeup.coachId) {
+      setError('Hủy buổi phải chọn luôn ngày, khung giờ và HLV dạy buổi bù.');
       return;
     }
 
     setSaving(true);
     setError('');
     try {
-      const result = await cancelSession(
-        session.id,
-        reason.trim(),
-        pickMakeup ? { date: makeupDate, timeSlotId: makeupSlot } : null,
-      );
-      const makeupDate = result?.makeupSession?.date ? formatDate(String(result.makeupSession.date).slice(0, 10)) : '';
-      onSaved(
-        makeupDate
-          ? `Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}). Buổi bù: ${makeupDate}.`
-          : `Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}).`,
-      );
+      const result = await cancelSession(session.id, reason.trim(), {
+        date: makeup.date,
+        timeSlotId: makeup.slotId,
+        coachUserId: makeup.coachId,
+      });
+      const makeupDate = result?.makeupSession?.date ? formatDate(String(result.makeupSession.date).slice(0, 10)) : formatDate(makeup.date);
+      onSaved(`Đã hủy ${session.className}, buổi ${session.sessionNo} (${formatDate(session.date)}). Buổi bù: ${makeupDate}.`);
     } catch (err) {
       setError(err.message || 'Hủy buổi học thất bại.');
       setSaving(false);
@@ -701,11 +911,11 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
   };
 
   return (
-    <ModalFrame title="Hủy buổi học" badge="Xác nhận" session={session} onClose={onClose}>
+    <ModalFrame title="Hủy buổi học" badge="Xác nhận" session={session} onClose={onClose} wide>
       <form onSubmit={submit} className="space-y-4">
         <div className="text-xs text-slate-600 bg-red-50/50 border border-red-100 p-3.5 rounded-xl">
-          Buổi học sẽ chuyển sang <strong className="text-[#e31b23]">Đã hủy</strong>. Bạn tự chọn ngày và giờ buổi bù bên dưới,
-          hệ thống không tự thêm vào cuối khóa.{' '}
+          Buổi học sẽ chuyển sang <strong className="text-[#e31b23]">Đã hủy</strong>. Chọn buổi bù vào thứ 7 hoặc chủ nhật trong cùng tháng,
+          buổi bù giữ số buổi cũ nên khóa học không bị kéo dài.{' '}
           {session.enrolledCount} học viên trong lớp sẽ nhận thông báo kèm lý do và ngày bù.
         </div>
         <label className="block space-y-1.5">
@@ -721,15 +931,8 @@ export function CancelSessionModal({ session, onClose, onSaved }) {
         </label>
 
         <div className="space-y-3 rounded-xl border border-slate-200 p-3.5">
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-            <input type="checkbox" checked={pickMakeup} onChange={(event) => setPickMakeup(event.target.checked)} />
-            Chọn buổi bù ngay
-          </label>
-          {pickMakeup ? (
-            <SlotPicker session={session} date={makeupDate} onDate={setMakeupDate} slotId={makeupSlot} onSlot={setMakeupSlot} minDate={addDays(0)} />
-          ) : (
-            <p className="text-[11px] font-semibold text-slate-500">Buổi bù sẽ được xếp sau bằng nút "Xếp buổi bù" trên buổi đã hủy.</p>
-          )}
+          <span className="block text-xs font-black uppercase text-slate-700">Buổi bù (bắt buộc)</span>
+          <MakeupPicker session={session} value={makeup} onChange={setMakeup} />
         </div>
 
         {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">⚠️ {error}</div>}

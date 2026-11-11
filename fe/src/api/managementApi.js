@@ -327,7 +327,7 @@ export function saveAdminAttendance(classId, sessionId, marks) {
   );
 }
 
-// makeup = { date: 'yyyy-MM-dd', timeSlotId } do quản trị chọn; bỏ trống thì hủy trước, xếp buổi bù sau.
+// Hủy buổi bắt buộc kèm buổi bù: makeup = { date: 'yyyy-MM-dd', timeSlotId, coachUserId } (coachUserId trống = HLV chính).
 export function cancelSession(sessionId, reason, makeup) {
   return request(`/sessions/${sessionId}/cancel`, {
     method: 'POST',
@@ -335,6 +335,7 @@ export function cancelSession(sessionId, reason, makeup) {
       reason,
       makeupDate: makeup?.date || null,
       makeupTimeSlotId: makeup?.timeSlotId ? Number(makeup.timeSlotId) : null,
+      makeupCoachUserId: makeup?.coachUserId || null,
     }),
   });
 }
@@ -346,15 +347,23 @@ export function rescheduleSession(sessionId, { date, timeSlotId, reason }) {
   });
 }
 
-export function scheduleSessionMakeup(sessionId, { date, timeSlotId }) {
+export function scheduleSessionMakeup(sessionId, { date, timeSlotId, coachUserId }) {
   return request(`/sessions/${sessionId}/makeup`, {
     method: 'POST',
-    body: JSON.stringify({ date, timeSlotId: Number(timeSlotId) }),
+    body: JSON.stringify({ date, timeSlotId: Number(timeSlotId), coachUserId: coachUserId || null }),
   });
 }
 
-export function getSessionSlots(sessionId, date) {
-  return request(`/sessions/${sessionId}/slots?date=${encodeURIComponent(date)}`);
+// makeup = true khi chọn buổi bù (áp luật cuối tuần cùng tháng); coachUserId: HLV muốn dạy buổi bù (trống = HLV chính).
+export function getSessionSlots(sessionId, date, makeup = false, coachUserId = '') {
+  const query = toQuery({ date, makeup: makeup ? 'true' : undefined, coachUserId: coachUserId || undefined });
+  return request(`/sessions/${sessionId}/slots${query}`);
+}
+
+// Kế hoạch buổi bù cho HLV đang chọn (trống = HLV chính): coaches (kèm số khung trống), days (ngày cuối tuần cùng tháng
+// kèm số khung trống của HLV đó) và suggestion (buổi gợi ý).
+export function getMakeupPlan(sessionId, coachUserId = '') {
+  return request(`/sessions/${sessionId}/makeup-plan${toQuery({ coachUserId })}`);
 }
 
 // ==========================================

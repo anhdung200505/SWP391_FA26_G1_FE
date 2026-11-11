@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace AnhDuySport.Api.Contracts;
 
-// Buổi học kèm thông tin lớp, dùng cho lịch học. Weekday: 2..7 = thứ 2..thứ 7.
+// Buổi học kèm thông tin lớp, dùng cho lịch học. Weekday: 2..7 = thứ 2..thứ 7, 8 = chủ nhật (chỉ có ở buổi bù).
 // Status: scheduled, held, cancelled, completed. Note: ghi chú của buổi (lý do đổi HLV, phòng hoặc hủy).
 public sealed record SessionDto(
     string Id,
@@ -54,19 +54,40 @@ public sealed record ChangeSessionCoachRequest(
     [Required] string CoachUserId,
     [StringLength(500)] string? Note = null);
 
-// MakeupDate + MakeupTimeSlotId: ngày và khung giờ buổi bù do quản trị chọn. Bỏ trống = hủy trước, chọn buổi bù sau.
+// Hủy buổi bắt buộc xếp buổi bù luôn: MakeupDate + MakeupTimeSlotId (cuối tuần cùng tháng).
+// MakeupCoachUserId: HLV dạy buổi bù, bỏ trống = HLV chính của lớp; HLV khác thì buổi bù là dạy thay.
 public sealed record CancelSessionRequest(
     [Required, StringLength(500, MinimumLength = 1)] string Reason,
     DateOnly? MakeupDate = null,
-    int? MakeupTimeSlotId = null);
+    int? MakeupTimeSlotId = null,
+    string? MakeupCoachUserId = null);
 
 // Chọn thời điểm mới: dùng cho đổi lịch một buổi và cho buổi bù của buổi đã hủy.
+// CoachUserId chỉ dùng khi xếp buổi bù (bỏ trống = HLV chính của lớp).
 public sealed record SessionSlotRequest(
     DateOnly Date,
     int TimeSlotId,
-    [StringLength(500)] string? Reason = null);
+    [StringLength(500)] string? Reason = null,
+    string? CoachUserId = null);
 
-// Quản trị hủy buổi hôm nay hoặc buổi sắp tới: buổi gốc chuyển cancelled, MakeupSession là buổi bù (null nếu chưa chọn thời điểm).
+// Kế hoạch buổi bù cho HLV đang chọn (CoachUserId, mặc định HLV chính): các ngày cuối tuần được chọn kèm số khung
+// còn trống (lớp, phòng, học viên và HLV đó đều rảnh; khung tối sau 18:00 không tính) và buổi gợi ý.
+// Coaches: HLV dạy được môn, kèm số khung trống của từng người trong cả khoảng ngày bù.
+public sealed record MakeupDayDto(DateOnly Date, string WeekdayName, int FreeSlots, int TotalSlots);
+
+public sealed record MakeupSuggestionDto(DateOnly Date, string TimeSlotId, string CoachUserId, string CoachName, bool IsMainCoach);
+
+public sealed record MakeupCoachDto(string Id, string Name, bool IsMain, int FreeSlots);
+
+public sealed record MakeupPlanDto(
+    string MainCoachUserId,
+    string MainCoachName,
+    string CoachUserId,
+    IReadOnlyList<MakeupCoachDto> Coaches,
+    IReadOnlyList<MakeupDayDto> Days,
+    MakeupSuggestionDto? Suggestion);
+
+// Quản trị hủy buổi hôm nay hoặc buổi sắp tới: buổi gốc chuyển cancelled, MakeupSession là buổi bù.
 public sealed record CancelSessionResult(SessionDto Session, SessionDto? MakeupSession);
 
 // Lựa chọn HLV hoặc phòng cho một buổi. IsBusy = true: trùng giờ với buổi khác hoặc phòng không đủ sức chứa (BusyReason).

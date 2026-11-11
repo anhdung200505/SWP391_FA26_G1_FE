@@ -65,14 +65,14 @@ public class SessionsController(SessionFlowService sessions, CurrentActor actor)
     [Authorize(Roles = "ADMIN")]
     [HttpPost("{sessionId}/cancel")]
     [EndpointSummary("Quản trị hủy một buổi học")]
-    [EndpointDescription("Bắt buộc có lý do, lưu vào ghi chú của buổi. Chỉ buổi hôm nay chưa kết thúc hoặc buổi sắp tới. Quản trị tự chọn ngày và khung giờ buổi bù (makeupDate, makeupTimeSlotId); hệ thống không tự nhét buổi bù vào cuối khóa. Bỏ trống thì hủy trước và chọn buổi bù sau bằng POST /{sessionId}/makeup. Học viên của lớp nhận thông báo.")]
+    [EndpointDescription("Bắt buộc có lý do, lưu vào ghi chú của buổi. Chỉ buổi hôm nay chưa kết thúc hoặc buổi sắp tới. Bắt buộc chọn luôn buổi bù (makeupDate, makeupTimeSlotId): chỉ thứ 7 hoặc chủ nhật cùng tháng với buổi bị hủy (xem GET /{sessionId}/makeup-plan), buổi bù giữ số buổi của buổi bị hủy nên khóa học không bị kéo dài. makeupCoachUserId: HLV dạy buổi bù, bỏ trống = HLV chính; HLV khác thì buổi bù là dạy thay. Học viên của lớp và HLV liên quan nhận thông báo.")]
     public async Task<ActionResult<CancelSessionResult>> CancelSession(string sessionId, CancelSessionRequest request) =>
         Ok(await sessions.CancelSessionAsync(sessionId, request));
 
     [Authorize(Roles = "ADMIN")]
     [HttpPost("{sessionId}/makeup")]
     [EndpointSummary("Quản trị xếp buổi bù cho một buổi đã hủy")]
-    [EndpointDescription("Chọn ngày và khung giờ buổi bù cho buổi đã hủy chưa có buổi bù. Kiểm tra trùng lịch lớp, HLV, phòng và học viên.")]
+    [EndpointDescription("Chọn ngày và khung giờ buổi bù cho buổi đã hủy chưa có buổi bù. Dùng cho buổi đã hủy trước đây mà chưa có buổi bù. Ngày bù phải là thứ 7 hoặc chủ nhật cùng tháng với buổi bị hủy (GET /{sessionId}/makeup-plan). coachUserId: HLV dạy buổi bù, bỏ trống = HLV chính. Kiểm tra trùng lịch lớp, HLV, phòng và học viên.")]
     public async Task<ActionResult<SessionDto>> ScheduleMakeup(string sessionId, SessionSlotRequest request) =>
         Ok(await sessions.ScheduleMakeupAsync(sessionId, request));
 
@@ -86,9 +86,16 @@ public class SessionsController(SessionFlowService sessions, CurrentActor actor)
     [Authorize(Roles = "ADMIN")]
     [HttpGet("{sessionId}/slots")]
     [EndpointSummary("Xem khung giờ trống của một ngày để đổi lịch hoặc xếp buổi bù")]
-    [EndpointDescription("Trả các khung giờ đúng loại lớp; isBusy = true khi trùng lớp, HLV, phòng hoặc học viên (busyReason).")]
-    public async Task<ActionResult<IReadOnlyList<SessionOptionDto>>> AccessSlots(string sessionId, [FromQuery] DateOnly date) =>
-        Ok(await sessions.AccessSlotOptionsAsync(sessionId, date));
+    [EndpointDescription("Trả các khung giờ đúng loại lớp; isBusy = true khi trùng lớp, HLV, phòng hoặc học viên (busyReason ghi rõ HLV, phòng, lớp). makeup = true khi chọn buổi bù trong lúc hủy buổi: áp luật cuối tuần cùng tháng, bỏ khung tối sau 18:00, và kiểm tra theo HLV dạy bù (coachUserId, mặc định HLV chính).")]
+    public async Task<ActionResult<IReadOnlyList<SessionOptionDto>>> AccessSlots(string sessionId, [FromQuery] DateOnly date, [FromQuery] bool? makeup, [FromQuery] string? coachUserId) =>
+        Ok(await sessions.AccessSlotOptionsAsync(sessionId, date, makeup, coachUserId));
+
+    [Authorize(Roles = "ADMIN")]
+    [HttpGet("{sessionId}/makeup-plan")]
+    [EndpointSummary("Xem kế hoạch buổi bù: ngày được chọn, số khung trống và buổi gợi ý")]
+    [EndpointDescription("Chọn HLV trước (coachUserId, mặc định HLV chính). Trả các HLV dạy được môn kèm số khung trống trong khoảng ngày bù, và với HLV đang chọn: các ngày thứ 7, chủ nhật cùng tháng với buổi bị hủy (tháng đã hết cuối tuần thì cuối tuần gần nhất sau đó) kèm số khung còn trống (bỏ khung tối sau 18:00). suggestion: ngày sớm nhất, ưu tiên đúng khung giờ buổi bị hủy; chưa chọn HLV mà HLV chính bận hết thì gợi ý HLV dạy thay.")]
+    public async Task<ActionResult<MakeupPlanDto>> AccessMakeupPlan(string sessionId, [FromQuery] string? coachUserId) =>
+        Ok(await sessions.AccessMakeupPlanAsync(sessionId, coachUserId));
 
     [AllowAnonymous]
     [HttpGet("~/api/time-slots")]

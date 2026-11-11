@@ -13,6 +13,10 @@ public static class ClassSessionPlanner
 
     public static string WeekdayName(int weekday) => weekday is >= 2 and <= 7 ? $"Thứ {weekday}" : "";
 
+    // Tên thứ của một ngày, có cả chủ nhật (buổi bù có thể rơi vào chủ nhật dù lịch tuần không có).
+    public static string DayName(DateOnly date) =>
+        date.DayOfWeek == DayOfWeek.Sunday ? "Chủ nhật" : WeekdayName((int)date.DayOfWeek + 1);
+
     public static string SessionTitle(int? sessionNo) => sessionNo is int no ? $"Buổi {no}" : "Buổi học";
 
     // Mỗi ngày trong [start, end] trùng thứ của lịch tuần thành một buổi, đánh số theo ngày rồi giờ.
