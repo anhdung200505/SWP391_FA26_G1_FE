@@ -12,7 +12,7 @@ const BADGES = {
   pending: { label: 'Chưa điểm danh', className: 'border-slate-200 bg-slate-100 text-slate-500' },
   today: { label: 'Hôm nay', className: 'border-amber-200 bg-amber-50 text-amber-700' },
   upcoming: { label: 'Chưa điểm danh', className: 'border-slate-200 bg-slate-100 text-slate-500' },
-  beforeJoin: { label: 'Trước khi đăng ký', className: 'border-slate-200 bg-slate-100 text-slate-500' },
+  beforeJoin: { label: 'Chưa vào lớp', className: 'border-slate-200 bg-slate-100 text-slate-500' },
 };
 
 const pad = (value) => String(value).padStart(2, '0');
