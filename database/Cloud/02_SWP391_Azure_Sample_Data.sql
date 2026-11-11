@@ -1,31 +1,16 @@
 /*
-    AnhDuy Sport - Azure SQL Database sample data (gộp 6 script dữ liệu)
-
-    FILE 2/2: Nạp dữ liệu mẫu theo đúng thứ tự phụ thuộc:
-      1) 02_seed.sql
-      2) 03_seed_extra_coaches.sql
-      3) 04_seed_extra_members.sql
-      4) 06_rename_class_names.sql
-      5) 07_seed_private_courses.sql
-
-    Migration 05_membership_email_change.sql đã được tích hợp vào FILE 1/2 (schema).
-
-    CÁCH CHẠY:
-    1. Chỉ chạy sau khi FILE 1/2 đã chạy thành công.
-    2. Trong SSMS, chọn database SWP391_DB ở dropdown database.
-    3. Mở file này và Execute một lần.
-
-    LƯU Ý:
-    - Đây là dữ liệu mẫu; chạy lại có thể tạo trùng dữ liệu ở một số phần.
-    - Không chạy đồng thời với file schema hoặc file seed khác.
-    - File không dùng USE; database đích được chọn trong SSMS.
+    SportFlow / AnhDuy Sport - Azure SQL Server
+    FILE 02 - SAMPLE DATA
+    Target database: SWP391_DB
+    Run after 01_SWP391_Azure_Tables.sql.
+    Combines original seed, extra coaches, extra members, class-name updates,
+    and private-course samples. Original sample records and values are retained.
 */
+SET NOCOUNT ON;
+GO
 
 
-/* ============================================================
-   SOURCE: 02_seed(1).sql
-   ============================================================ */
-
+/* ===================== BEGIN 02_seed(2).sql ===================== */
 /*
     AnhDuy Sport - Dữ liệu mẫu (schema V2)
 
@@ -37,7 +22,10 @@
     Buổi đã qua là completed (có điểm danh), buổi từ hôm nay trở đi là scheduled.
 
     Chạy sau 01_schema.sql:
+      sqlcmd -S "(localdb)\MSSQLLocalDB" -E -b -I -f 65001 -d AnhDuySport -i database\02_seed.sql
 */
+
+-- Chon database SWP391_DB trong dropdown cua SSMS truoc khi Execute.
 GO
 
 SET QUOTED_IDENTIFIER ON;
@@ -410,11 +398,10 @@ CROSS JOIN center AS c
 WHERE u.email = N'admin@anhduysport.vn';
 GO
 
+/* ===================== END 02_seed(2).sql ===================== */
 
-/* ============================================================
-   SOURCE: 03_seed_extra_coaches(1).sql
-   ============================================================ */
 
+/* ===================== BEGIN 03_seed_extra_coaches(2).sql ===================== */
 /*
     AnhDuy Sport - Thêm HLV để test đổi huấn luyện viên
 
@@ -423,6 +410,7 @@ GO
     Mật khẩu dùng chung hash với HLV seed. Chạy lại không tạo trùng (kiểm tra email, số điện thoại).
 
     Chạy sau 02_seed.sql (setup.ps1 đã gọi sẵn):
+      sqlcmd -S "(localdb)\MSSQLLocalDB" -E -b -I -f 65001 -d AnhDuySport -i database\03_seed_extra_coaches.sql
 */
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
@@ -463,11 +451,10 @@ SELECT sp.sport_name, COUNT(DISTINCT cs.coach_user_id) AS coaches
 FROM sport sp LEFT JOIN coach_sport cs ON cs.sport_id = sp.sport_id
 GROUP BY sp.sport_id, sp.sport_name ORDER BY sp.sport_id;
 
+/* ===================== END 03_seed_extra_coaches(2).sql ===================== */
+GO
 
-/* ============================================================
-   SOURCE: 04_seed_extra_members(1).sql
-   ============================================================ */
-
+/* ===================== BEGIN 04_seed_extra_members(2).sql ===================== */
 /*
     AnhDuy Sport - Thêm học viên mẫu và ghi danh vào các lớp đang học
 
@@ -478,22 +465,23 @@ GROUP BY sp.sport_id, sp.sport_name ORDER BY sp.sport_id;
     Mật khẩu dùng chung hash với tài khoản seed. Chạy lại không tạo trùng (chỉ bù cho lớp còn thiếu).
 
     Chạy sau 02_seed.sql (setup.ps1 đã gọi sẵn):
+      sqlcmd -S "(localdb)\MSSQLLocalDB" -E -b -I -f 65001 -d AnhDuySport -i database\04_seed_extra_members.sql
 */
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
 SET XACT_ABORT ON;
 
-DECLARE @today DATE = CAST(GETDATE() AS DATE);
-DECLARE @hash NVARCHAR(255) = (SELECT TOP 1 password_hash FROM [user] WHERE email = N'khang.nguyen@gmail.com');
+DECLARE @memberSeedToday DATE = CAST(GETDATE() AS DATE);
+DECLARE @memberSeedHash NVARCHAR(255) = (SELECT TOP 1 password_hash FROM [user] WHERE email = N'khang.nguyen@gmail.com');
 DECLARE @memberRole INT = (SELECT role_id FROM role WHERE role_code = N'MEMBER');
-DECLARE @centerId INT = (SELECT TOP 1 center_id FROM [user] WHERE email = N'khang.nguyen@gmail.com');
+DECLARE @memberSeedCenterId INT = (SELECT TOP 1 center_id FROM [user] WHERE email = N'khang.nguyen@gmail.com');
 
 BEGIN TRANSACTION;
 
 /* ===================== 60 học viên ===================== */
 
-DECLARE @new TABLE (full_name NVARCHAR(200), gender NVARCHAR(20), email NVARCHAR(200), phone NVARCHAR(20));
-INSERT INTO @new VALUES
+DECLARE @newMembers TABLE (full_name NVARCHAR(200), gender NVARCHAR(20), email NVARCHAR(200), phone NVARCHAR(20));
+INSERT INTO @newMembers VALUES
     (N'Phạm Gia Bảo', N'Nam', N'bao.pham01@gmail.com', N'0913000001'),
     (N'Đỗ Bảo Ngọc', N'Nữ', N'ngoc.do02@gmail.com', N'0913000002'),
     (N'Lê Hoàng Long', N'Nam', N'long.le03@gmail.com', N'0913000003'),
@@ -556,13 +544,13 @@ INSERT INTO @new VALUES
     (N'Hồ Tú Uyên', N'Nữ', N'uyen.ho60@gmail.com', N'0913000060');
 
 INSERT INTO [user] (role_id, center_id, full_name, email, phone, password_hash, gender, status)
-SELECT @memberRole, @centerId, n.full_name, n.email, n.phone, @hash, n.gender, N'active'
-FROM @new n
+SELECT @memberRole, @memberSeedCenterId, n.full_name, n.email, n.phone, @memberSeedHash, n.gender, N'active'
+FROM @newMembers n
 WHERE NOT EXISTS (SELECT 1 FROM [user] u WHERE u.email = n.email OR u.phone = n.phone);
 
 CREATE TABLE #pool (user_id INT NOT NULL PRIMARY KEY);
 INSERT INTO #pool (user_id)
-SELECT u.user_id FROM [user] u INNER JOIN @new n ON n.email = u.email;
+SELECT u.user_id FROM [user] u INNER JOIN @newMembers n ON n.email = u.email;
 
 /* ===================== Ghi danh vào lớp đang học ===================== */
 
@@ -677,7 +665,7 @@ INSERT INTO membership (user_id, payment_id, plan_name, start_date, end_date, st
 SELECT g.user_id, NULL, g.package_name + N' (tặng kèm lớp)',
        DATEADD(MONTH, g.k, g.first_paid),
        DATEADD(DAY, -1, DATEADD(MONTH, g.k + 1, g.first_paid)),
-       CASE WHEN DATEADD(MONTH, g.k, g.first_paid) <= @today THEN N'active' ELSE N'scheduled' END,
+       CASE WHEN DATEADD(MONTH, g.k, g.first_paid) <= @memberSeedToday THEN N'active' ELSE N'scheduled' END,
        g.membership_package_id, 1
 FROM gift g;
 
@@ -707,11 +695,10 @@ SELECT cl.class_id, cl.class_name, cl.status, cl.capacity,
 FROM class cl
 ORDER BY cl.class_id;
 
+/* ===================== END 04_seed_extra_members(2).sql ===================== */
 
-/* ============================================================
-   SOURCE: 06_rename_class_names(1).sql
-   ============================================================ */
 
+/* ===================== BEGIN 06_rename_class_names(2).sql ===================== */
 /*
     AnhDuy Sport - Doi ten lop (class.class_name)
     Bo phan "Sang/Chieu thu N" trong ten lop: thu va gio da co trong class_schedule.
@@ -719,7 +706,11 @@ ORDER BY cl.class_id;
 
     Chay sau 01..05 (setup.ps1 da goi san). Chay lai nhieu lan van an toan (chi doi dong con ten cu).
     Khong anh huong bang khac: cac bang khac tham chieu lop bang class_id, khong theo ten.
+
+    sqlcmd -S "(localdb)\MSSQLLocalDB" -E -b -I -f 65001 -d AnhDuySport -i database\06_rename_class_names.sql
 */
+
+-- Chon database SWP391_DB trong dropdown cua SSMS truoc khi Execute.
 GO
 
 SET QUOTED_IDENTIFIER ON;
@@ -746,11 +737,10 @@ GO
 SELECT class_id, class_name FROM class ORDER BY class_id;
 GO
 
+/* ===================== END 06_rename_class_names(2).sql ===================== */
 
-/* ============================================================
-   SOURCE: 07_seed_private_courses(1).sql
-   ============================================================ */
 
+/* ===================== BEGIN 07_seed_private_courses(2).sql ===================== */
 /*
     AnhDuy Sport - Gói học 1-1 mẫu
 
@@ -759,6 +749,7 @@ GO
     Chạy lại nhiều lần không tạo trùng (theo course_code).
 
     Chạy sau 06 (setup.ps1 đã gọi sẵn):
+      sqlcmd -S "(localdb)\MSSQLLocalDB" -E -b -I -f 65001 -d AnhDuySport -i database\07_seed_private_courses.sql
 */
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
@@ -779,3 +770,5 @@ FROM sport AS s
 WHERE NOT EXISTS (SELECT 1 FROM course AS c WHERE c.course_code = N'PRV-' + UPPER(s.sport_code) + N'-8');
 
 SELECT course_code, course_name, price, session_count, session_minutes FROM course WHERE format = N'private' ORDER BY sport_id;
+
+/* ===================== END 07_seed_private_courses(2).sql ===================== */

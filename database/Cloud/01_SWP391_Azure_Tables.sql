@@ -1,19 +1,13 @@
 /*
-    AnhDuy Sport - Azure SQL Database schema (gộp hoàn chỉnh)
-
-    FILE 1/2: Tạo toàn bộ bảng, khóa, trigger, view và index.
-    Đã tích hợp thay đổi từ migration 05_membership_email_change.sql.
-
-    CÁCH CHẠY:
-    1. Trong SSMS, kết nối Azure SQL Server.
-    2. Chọn đúng database SWP391_DB ở dropdown database (không chọn master).
-    3. Mở file này và Execute một lần.
-
-    LƯU Ý:
-    - Không chạy file này trên database đã có bảng, vì CREATE TABLE sẽ báo trùng.
-    - File KHÔNG tạo/xóa database và KHÔNG dùng lệnh USE; Azure SQL không hỗ trợ USE.
-    - Không cần tạo database AnhDuySport. Database đích là SWP391_DB.
+    SportFlow / AnhDuy Sport - Azure SQL Server
+    FILE 01 - TABLES / SCHEMA
+    Target database: SWP391_DB
+    Creates schema only; does not drop/recreate the database.
+    Run once on an empty database. Do not rerun if tables already exist.
 */
+-- Chon database SWP391_DB trong dropdown cua SSMS truoc khi Execute.
+GO
+
 SET QUOTED_IDENTIFIER ON;
 GO
 
@@ -123,6 +117,7 @@ CREATE TABLE room (
     room_type           NVARCHAR(100)  NULL,
     capacity            INT            NOT NULL,
     private_concurrency INT            NOT NULL CONSTRAINT DF_room_private_concurrency DEFAULT (1),
+    is_active           BIT            NOT NULL CONSTRAINT DF_room_is_active DEFAULT (1),
     area_m2             DECIMAL(10,2)  NULL,
     description         NVARCHAR(MAX)  NULL,
     image_path          NVARCHAR(500)  NULL,
@@ -900,9 +895,9 @@ CREATE TABLE ai_workout_recommendation (
     CONSTRAINT FK_ai_workout_recommendation_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_ai_workout_recommendation_body FOREIGN KEY (body_metric_id) REFERENCES member_body_metric (body_metric_id),
     CONSTRAINT FK_ai_workout_recommendation_plan FOREIGN KEY (training_plan_id) REFERENCES training_plan (training_plan_id),
-    CONSTRAINT CK_ai_workout_recommendation_sessions CHECK (sessions_per_week >= 2 AND sessions_per_week <= 6),
+    CONSTRAINT CK_ai_workout_recommendation_sessions CHECK (sessions_per_week >= 1 AND sessions_per_week <= 7),
     CONSTRAINT CK_ai_workout_recommendation_minutes CHECK (session_minutes >= 20 AND session_minutes <= 90),
-    CONSTRAINT CK_ai_workout_recommendation_weeks CHECK (duration_weeks >= 2 AND duration_weeks <= 12),
+    CONSTRAINT CK_ai_workout_recommendation_weeks CHECK (duration_weeks >= 1 AND duration_weeks <= 12),
     CONSTRAINT CK_ai_workout_recommendation_revision CHECK (revision >= 1),
     CONSTRAINT CK_ai_workout_recommendation_status CHECK (status IN (N'proposed', N'saved', N'archived'))
 );
@@ -1054,21 +1049,46 @@ CREATE TABLE class_intake_note (
 );
 GO
 
-/* ===================== Đổi email bằng OTP ===================== */
 
-CREATE TABLE email_change (
-    user_id     INT           NOT NULL,
-    new_email   NVARCHAR(200) NOT NULL,
-    otp_hash    NVARCHAR(64)  NOT NULL,
-    attempts    INT           NOT NULL CONSTRAINT DF_email_change_attempts DEFAULT (0),
-    created_at  DATETIME2(0)  NOT NULL,
-    expires_at  DATETIME2(0)  NOT NULL,
-    CONSTRAINT PK_email_change PRIMARY KEY (user_id),
-    CONSTRAINT FK_email_change_user FOREIGN KEY (user_id) REFERENCES [user] (user_id) ON DELETE CASCADE
-);
+/* ===================== Schema additions from 05_membership_email_change.sql ===================== */
+/*
+    AnhDuy Sport - Bổ sung cho luồng "User Information Edit & Membership Renewal"
+
+    Chạy sau 01_schema.sql (setup.ps1 tự chạy file này). Chạy lại nhiều lần không lỗi.
+      1. Bảng email_change: đổi email đang chờ xác thực OTP (cùng cách làm với password_reset).
+      2. Gói hội viên bao nhiêu tháng cũng được (1 tháng = 30 ngày), không còn chỉ 1 tháng.
+      3. Mỗi học viên chỉ giữ 1 đơn gói chờ thanh toán.
+*/
+-- Chon database SWP391_DB trong dropdown cua SSMS truoc khi Execute.
 GO
 
-CREATE UNIQUE INDEX UX_membership_one_pending
-    ON membership (user_id)
-    WHERE status = N'pending';
+-- 1. Đổi email đang chờ xác thực OTP. OTP gửi tới new_email, chỉ lưu hash.
+-- ON DELETE CASCADE: học viên tự xóa tài khoản thì yêu cầu đổi email cũng mất theo.
+IF OBJECT_ID(N'dbo.email_change', N'U') IS NULL
+BEGIN
+    CREATE TABLE email_change (
+        user_id     INT           NOT NULL,
+        new_email   NVARCHAR(200) NOT NULL,
+        otp_hash    NVARCHAR(64)  NOT NULL,
+        attempts    INT           NOT NULL CONSTRAINT DF_email_change_attempts DEFAULT (0),
+        created_at  DATETIME2(0)  NOT NULL,
+        expires_at  DATETIME2(0)  NOT NULL,
+        CONSTRAINT PK_email_change PRIMARY KEY (user_id),
+        CONSTRAINT FK_email_change_user FOREIGN KEY (user_id) REFERENCES [user] (user_id) ON DELETE CASCADE
+    );
+END
+GO
+
+-- 2. Gói bao nhiêu tháng cũng được; chặn trên 1200 tháng chỉ để không tràn ngày.
+IF OBJECT_ID(N'dbo.CK_membership_package_months', N'C') IS NOT NULL
+    ALTER TABLE membership_package DROP CONSTRAINT CK_membership_package_months;
+GO
+
+ALTER TABLE membership_package ADD CONSTRAINT CK_membership_package_months
+    CHECK (validity_months >= 1 AND validity_months <= 1200);
+GO
+
+-- 3. Mỗi học viên chỉ giữ 1 đơn gói chờ thanh toán (hai yêu cầu chọn gói cùng lúc không tạo được 2 đơn).
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_membership_one_pending' AND object_id = OBJECT_ID(N'dbo.membership'))
+    CREATE UNIQUE INDEX UX_membership_one_pending ON membership (user_id) WHERE status = N'pending';
 GO
