@@ -157,6 +157,7 @@ export default function CourseForm({ sport, course, rooms, coaches, onClose, onS
 }
 
 function MissingLinksPanel({ sport, rooms, coaches, needCoach, needRoom, format, onSportChanged, onReload }) {
+  // Ô tick khởi tạo từ quyền đã gán của môn; ô đã tick bị khóa vì chỉ được thêm, không gỡ.
   const [pickedRooms, setPickedRooms] = useState({});
   const [pickedCoaches, setPickedCoaches] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -174,15 +175,35 @@ function MissingLinksPanel({ sport, rooms, coaches, needCoach, needRoom, format,
     }
   };
 
+  const existingFlags = (roomId) => {
+    const link = sport.rooms.find((item) => item.roomId === roomId);
+    return { group: Boolean(link?.allowGroup), private: Boolean(link?.allowPrivate) };
+  };
+  // Giá trị hiển thị: quyền đã có OR quyền vừa tick.
+  const shownRooms = Object.fromEntries(
+    rooms.map((room) => {
+      const existing = existingFlags(room.id);
+      const extra = pickedRooms[room.id] || { group: false, private: false };
+      return [room.id, { group: existing.group || extra.group, private: existing.private || extra.private }];
+    }),
+  );
+  const lockedRooms = Object.fromEntries(rooms.map((room) => [room.id, existingFlags(room.id)]));
+  // Chỉ gửi phòng có thêm ô tick mới, kèm OR của quyền cũ và mới (BE ghi đè cờ của liên kết có sẵn).
+  const roomRequests = () =>
+    pickedRoomRequests(shownRooms).filter((request) => {
+      const existing = existingFlags(request.roomId);
+      return (request.allowGroup && !existing.group) || (request.allowPrivate && !existing.private);
+    });
+
   const assignRooms = () =>
     run(async () => {
-      let updated = null;
-      for (const request of pickedRoomRequests(pickedRooms)) {
-        updated = await addCatalogSportRoom(sport.id, request);
-      }
-      if (updated) {
-        onSportChanged(updated);
-        setPickedRooms({});
+      for (const request of roomRequests()) {
+        onSportChanged(await addCatalogSportRoom(sport.id, request));
+        setPickedRooms((current) => {
+          const next = { ...current };
+          delete next[request.roomId];
+          return next;
+        });
       }
     });
 
@@ -222,8 +243,8 @@ function MissingLinksPanel({ sport, rooms, coaches, needCoach, needRoom, format,
       {needRoom && (
         <div className="space-y-2">
           <p className="text-xs font-bold text-slate-700">Phòng đang hoạt động</p>
-          <RoomPicker rooms={rooms} value={pickedRooms} onChange={setPickedRooms} />
-          <button type="button" onClick={assignRooms} disabled={busy || pickedRoomRequests(pickedRooms).length === 0} className={`h-9 cursor-pointer rounded-xl bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50 ${focusRing}`}>
+          <RoomPicker rooms={rooms} value={shownRooms} locked={lockedRooms} onChange={(next) => setPickedRooms(next)} />
+          <button type="button" onClick={assignRooms} disabled={busy || roomRequests().length === 0} className={`h-9 cursor-pointer rounded-xl bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50 ${focusRing}`}>
             Gán phòng cho môn
           </button>
         </div>

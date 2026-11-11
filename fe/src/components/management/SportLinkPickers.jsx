@@ -1,6 +1,6 @@
 // Danh sách phòng đang hoạt động, mỗi phòng có hai ô tick Lớp nhóm / 1-1.
 // value: { [roomId]: { group, private } }
-export function RoomPicker({ rooms, value, onChange }) {
+export function RoomPicker({ rooms, value, onChange, locked = {} }) {
   const toggle = (roomId, kind) => {
     const existing = value[roomId] || { group: false, private: false };
     onChange({ ...value, [roomId]: { ...existing, [kind]: !existing[kind] } });
@@ -15,10 +15,10 @@ export function RoomPicker({ rooms, value, onChange }) {
             <span className="font-semibold text-slate-800">{room.name}</span>
             <span className="flex gap-4 text-xs font-bold text-slate-600">
               <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={current.group} onChange={() => toggle(room.id, 'group')} /> Lớp nhóm
+                <input type="checkbox" checked={current.group} disabled={Boolean(locked[room.id]?.group)} onChange={() => toggle(room.id, 'group')} /> Lớp nhóm
               </label>
               <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={current.private} onChange={() => toggle(room.id, 'private')} /> 1-1
+                <input type="checkbox" checked={current.private} disabled={Boolean(locked[room.id]?.private)} onChange={() => toggle(room.id, 'private')} /> 1-1
               </label>
             </span>
           </li>

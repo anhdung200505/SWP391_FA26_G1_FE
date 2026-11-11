@@ -33,6 +33,7 @@ export default function SportCatalogPage() {
   const [sportForm, setSportForm] = useState(false);
   // { sport, course } (course = null khi thêm mới)
   const [courseForm, setCourseForm] = useState(null);
+  const [togglingId, setTogglingId] = useState(null);
 
   const applyAll = useCallback(([sportData, roomData, coachData]) => {
     setSports(Array.isArray(sportData) ? sportData : []);
@@ -92,12 +93,14 @@ export default function SportCatalogPage() {
       const list = current[sport.id] || [];
       return { ...current, [sport.id]: course ? list.map((item) => (item.id === saved.id ? saved : item)) : [...list, saved] };
     });
-    if (!course) replaceSport({ ...sport, courseCount: sport.courseCount + 1 });
+    if (!course) setSports((current) => current.map((item) => (item.id === sport.id ? { ...item, courseCount: item.courseCount + 1 } : item)));
     setCourseForm(null);
     setNotice(course ? `Đã cập nhật khóa ${saved.name}.` : `Đã thêm khóa ${saved.name} (${saved.code}).`);
   };
 
   const toggleCourse = async (sport, course) => {
+    if (togglingId) return;
+    setTogglingId(course.id);
     setNotice('');
     setError('');
     try {
@@ -109,6 +112,8 @@ export default function SportCatalogPage() {
       setNotice(saved.isActive ? `Đã mở lại khóa ${saved.name}.` : `Đã ngưng khóa ${saved.name}.`);
     } catch (requestError) {
       setError(requestError.message || 'Không đổi được trạng thái khóa học.');
+    } finally {
+      setTogglingId(null);
     }
   };
 
