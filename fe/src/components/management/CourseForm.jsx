@@ -28,7 +28,8 @@ export default function CourseForm({ sport, course, rooms, coaches, onClose, onS
   const [error, setError] = useState('');
 
   const activeRoomIds = new Set(rooms.map((room) => room.id));
-  const hasCoach = sport.coaches.length > 0;
+  const activeCoachIds = new Set(coaches.map((coach) => coach.id));
+  const hasCoach = sport.coaches.some((coach) => activeCoachIds.has(coach.id));
   const hasRoom = sport.rooms.some((link) => activeRoomIds.has(link.roomId) && (format === 'group' ? link.allowGroup : link.allowPrivate));
   const ready = editing || (hasCoach && hasRoom);
 
@@ -39,8 +40,8 @@ export default function CourseForm({ sport, course, rooms, coaches, onClose, onS
       setError('Nhập mã và tên khóa học.');
       return;
     }
-    if (!/^\d+$/.test(price.trim())) {
-      setError('Học phí phải là số nguyên không âm.');
+    if (!/^\d+(\.\d{1,2})?$/.test(price.trim())) {
+      setError('Học phí phải là số không âm, tối đa 2 chữ số thập phân (dùng dấu chấm).');
       return;
     }
     if (isPrivate && (!(Number(sessionMinutes) > 0) || !(Number(sessionCount) > 0))) {
@@ -140,6 +141,9 @@ export default function CourseForm({ sport, course, rooms, coaches, onClose, onS
               <input type="number" min="1" step="1" value={sessionMinutes} onChange={(event) => setSessionMinutes(event.target.value)} className={`${controlClass} mt-1 w-full`} />
             </label>
           </div>
+        )}
+        {editing && format === 'private' && (
+          <p className="-mt-2 text-xs text-slate-500">Đổi số buổi hoặc số phút áp dụng cho cả yêu cầu 1-1 đang chờ.</p>
         )}
 
         {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}

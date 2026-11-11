@@ -30,6 +30,7 @@ export default function SportCatalogPage() {
   const [notice, setNotice] = useState('');
   const [openId, setOpenId] = useState(null);
   const [coursesBySport, setCoursesBySport] = useState({});
+  const [courseLoadFailed, setCourseLoadFailed] = useState({});
   const [sportForm, setSportForm] = useState(false);
   // { sport, course } (course = null khi thêm mới)
   const [courseForm, setCourseForm] = useState(null);
@@ -39,6 +40,7 @@ export default function SportCatalogPage() {
     setSports(Array.isArray(sportData) ? sportData : []);
     setRooms((Array.isArray(roomData) ? roomData : []).filter((room) => room.isActive === true));
     setCoaches(Array.isArray(coachData) ? coachData : []);
+    setError('');
   }, []);
 
   useEffect(() => {
@@ -60,11 +62,13 @@ export default function SportCatalogPage() {
   }, [applyAll]);
 
   const loadCourses = async (sportId) => {
+    setCourseLoadFailed((current) => ({ ...current, [sportId]: false }));
     try {
       const data = await getCatalogCourses(sportId);
       setCoursesBySport((current) => ({ ...current, [sportId]: Array.isArray(data) ? data : [] }));
-    } catch (requestError) {
-      setError(requestError.message || 'Không tải được khóa học.');
+      setError('');
+    } catch {
+      setCourseLoadFailed((current) => ({ ...current, [sportId]: true }));
     }
   };
 
@@ -83,6 +87,7 @@ export default function SportCatalogPage() {
     const saved = await createCatalogSport(payload);
     setSports((current) => [...current, saved]);
     setSportForm(false);
+    setError('');
     setNotice(`Đã thêm môn ${saved.name} (${saved.code}).`);
   };
 
@@ -95,6 +100,7 @@ export default function SportCatalogPage() {
     });
     if (!course) setSports((current) => current.map((item) => (item.id === sport.id ? { ...item, courseCount: item.courseCount + 1 } : item)));
     setCourseForm(null);
+    setError('');
     setNotice(course ? `Đã cập nhật khóa ${saved.name}.` : `Đã thêm khóa ${saved.name} (${saved.code}).`);
   };
 
@@ -109,6 +115,7 @@ export default function SportCatalogPage() {
         ...current,
         [sport.id]: (current[sport.id] || []).map((item) => (item.id === saved.id ? saved : item)),
       }));
+      setError('');
       setNotice(saved.isActive ? `Đã mở lại khóa ${saved.name}.` : `Đã ngưng khóa ${saved.name}.`);
     } catch (requestError) {
       setError(requestError.message || 'Không đổi được trạng thái khóa học.');
@@ -169,6 +176,8 @@ export default function SportCatalogPage() {
               sport={sport}
               open={openId === sport.id}
               courses={coursesBySport[sport.id]}
+              loadFailed={courseLoadFailed[sport.id] === true}
+              onRetry={() => loadCourses(sport.id)}
               onToggle={() => toggleSport(sport.id)}
               onAddCourse={() => setCourseForm({ sport, course: null })}
               onEditCourse={(course) => setCourseForm({ sport, course })}
@@ -195,7 +204,7 @@ export default function SportCatalogPage() {
   );
 }
 
-function SportCard({ sport, open, courses, onToggle, onAddCourse, onEditCourse, onToggleCourse }) {
+function SportCard({ sport, open, courses, loadFailed, onRetry, onToggle, onAddCourse, onEditCourse, onToggleCourse }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
@@ -257,7 +266,14 @@ function SportCard({ sport, open, courses, onToggle, onAddCourse, onEditCourse, 
 
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Khóa học</p>
-            {!courses ? (
+            {!courses && loadFailed ? (
+              <p className="mt-2 flex items-center gap-3 text-sm text-red-700">
+                Không tải được khóa học.
+                <button type="button" onClick={onRetry} className={`inline-flex h-8 cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:border-slate-400 ${focusRing}`}>
+                  Thử lại
+                </button>
+              </p>
+            ) : !courses ? (
               <p className="mt-2 text-sm text-slate-500" aria-busy="true">
                 Đang tải khóa học...
               </p>

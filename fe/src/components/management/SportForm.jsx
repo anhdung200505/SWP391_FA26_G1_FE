@@ -49,7 +49,7 @@ export default function SportForm({ rooms, coaches, onClose, onSave }) {
         </div>
         <label className="block text-sm font-bold text-slate-700">
           Tên môn
-          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className={`${controlClass} mt-1 w-full`} />
+          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={100} className={`${controlClass} mt-1 w-full`} />
         </label>
         <p className="text-xs text-slate-500">Phòng và HLV có thể gán sau, nhưng phải có đủ mới tạo được khóa học.</p>
         <fieldset>
