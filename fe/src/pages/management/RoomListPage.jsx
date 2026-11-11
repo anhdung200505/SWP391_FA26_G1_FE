@@ -435,22 +435,21 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
   const [type, setType] = useState(room?.type || '');
   const [capacity, setCapacity] = useState(String(room?.capacity ?? 20));
   const [concurrency, setConcurrency] = useState(String(room?.privateConcurrency ?? 1));
-  const [picked, setPicked] = useState(() =>
-    Object.fromEntries((room?.sports || []).map((item) => [item.sportId, { group: item.allowGroup, private: item.allowPrivate }])),
-  );
+  const initial = room?.sports?.[0];
+  const [sportId, setSportId] = useState(initial ? String(initial.sportId) : '');
+  const [allowGroup, setAllowGroup] = useState(initial ? initial.allowGroup : true);
+  const [allowPrivate, setAllowPrivate] = useState(initial ? initial.allowPrivate : true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const toggle = (sportId, kind) =>
-    setPicked((current) => {
-      const existing = current[sportId] || { group: false, private: false };
-      return { ...current, [sportId]: { ...existing, [kind]: !existing[kind] } };
-    });
-
   const submit = async (event) => {
     event.preventDefault();
-    if (!room && !Object.values(picked).some((value) => value.group || value.private)) {
-      setError('Chọn ít nhất một môn dùng được cho phòng (lớp nhóm hoặc học 1-1).');
+    if (!room && !sportId) {
+      setError('Chọn môn cho phòng.');
+      return;
+    }
+    if (sportId && !allowGroup && !allowPrivate) {
+      setError('Chọn lớp nhóm hoặc học 1-1 cho môn của phòng.');
       return;
     }
     if (!name.trim()) {
@@ -465,9 +464,7 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
         type: type.trim() || null,
         capacity: Number(capacity),
         privateConcurrency: Number(concurrency),
-        sports: Object.entries(picked)
-          .filter(([, value]) => value.group || value.private)
-          .map(([sportId, value]) => ({ sportId, allowGroup: value.group, allowPrivate: value.private })),
+        sports: sportId ? [{ sportId, allowGroup, allowPrivate }] : [],
       });
     } catch (requestError) {
       setError(requestError.message || 'Không lưu được phòng.');
@@ -479,27 +476,29 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
         <h2 className="text-lg font-black text-slate-900">{room ? `Sửa ${room.name}` : 'Thêm phòng mới'}</h2>
-        <fieldset>
-          <legend className="text-sm font-bold text-slate-700">Môn dùng được{room ? '' : ' (chọn trước, ít nhất một môn)'}</legend>
-          <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto rounded-2xl border border-slate-200 p-3">
-            {sports.map((sport) => {
-              const value = picked[sport.id] || { group: false, private: false };
-              return (
-                <li key={sport.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-semibold text-slate-800">{sport.name}</span>
-                  <span className="flex gap-4 text-xs font-bold text-slate-600">
-                    <label className="flex items-center gap-1.5">
-                      <input type="checkbox" checked={value.group} onChange={() => toggle(sport.id, 'group')} /> Lớp nhóm
-                    </label>
-                    <label className="flex items-center gap-1.5">
-                      <input type="checkbox" checked={value.private} onChange={() => toggle(sport.id, 'private')} /> Học 1-1
-                    </label>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </fieldset>
+        <div>
+          <label className="block text-sm font-bold text-slate-700">
+            Môn của phòng
+            <select value={sportId} onChange={(event) => setSportId(event.target.value)} className={`${controlClass} mt-1 w-full`}>
+              <option value="">Chọn môn</option>
+              {sports.map((sport) => (
+                <option key={sport.id} value={String(sport.id)}>
+                  {sport.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {sportId && (
+            <div className="mt-2 flex gap-4 text-xs font-bold text-slate-600">
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" checked={allowGroup} onChange={() => setAllowGroup((value) => !value)} /> Lớp nhóm
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" checked={allowPrivate} onChange={() => setAllowPrivate((value) => !value)} /> Học 1-1
+              </label>
+            </div>
+          )}
+        </div>
         <label className="block text-sm font-bold text-slate-700">
           Tên phòng
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className={`${controlClass} mt-1 w-full`} />

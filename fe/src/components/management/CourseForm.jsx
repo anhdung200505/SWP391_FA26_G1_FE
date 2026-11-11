@@ -12,7 +12,7 @@ const FORMATS = [
 const linkClass = `font-bold text-[#e31b23] underline hover:text-[#b1131a] ${focusRing}`;
 
 // sport: môn đang thêm khóa (SportAdminDto). course: khóa đang sửa, null khi tạo mới.
-export default function CourseForm({ sport, course, rooms, coaches, onClose, onSave, onSportChanged, onReload }) {
+export default function CourseForm({ sport, course, rooms: allRooms, coaches, onClose, onSave, onSportChanged, onReload }) {
   const editing = Boolean(course);
   const [code, setCode] = useState(course?.code || '');
   const [format, setFormat] = useState(course?.format || 'group');
@@ -27,6 +27,8 @@ export default function CourseForm({ sport, course, rooms, coaches, onClose, onS
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Một phòng chỉ thuộc một môn: chỉ liệt kê phòng chưa gắn môn nào hoặc đã thuộc môn này.
+  const rooms = allRooms.filter((room) => (room.sports || []).every((item) => String(item.sportId) === String(sport.id)));
   const activeRoomIds = new Set(rooms.map((room) => room.id));
   const activeCoachIds = new Set(coaches.map((coach) => coach.id));
   const hasCoach = sport.coaches.some((coach) => activeCoachIds.has(coach.id));
