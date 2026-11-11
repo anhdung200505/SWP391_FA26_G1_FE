@@ -1,6 +1,8 @@
+import { useState } from 'react';
+import ExerciseSteps from './ExerciseSteps';
+
 const PIPELINE = [
   ['collectHealthData', 'Chỉ số sức khỏe'],
-  ['trainingHistory', 'Lịch sử tập'],
   ['sendAnalysisRequest', 'Yêu cầu phân tích'],
   ['analyzeHealthMetricAndBmi', 'Phân tích BMI'],
   ['generatePersonalizedWorkoutPlan', 'Gợi ý tập được tạo'],
@@ -12,7 +14,10 @@ function formatClock(value) {
 }
 
 export default function WorkoutPlanView({ plan }) {
+  const [picked, setPicked] = useState(0);
   if (!plan) return null;
+  const sessionList = plan.sessions || [];
+  const current = sessionList[Math.min(picked, sessionList.length - 1)];
 
   const saved = plan.status === 'saved';
 
@@ -53,22 +58,34 @@ export default function WorkoutPlanView({ plan }) {
         <p className="mt-4 text-sm text-pretty text-gray-600">Yêu cầu đã gửi: {plan.changeNote}</p>
       )}
 
-      {plan.sessions?.length ? (
-        <ol className="mt-5 space-y-3">
-          {plan.sessions.map((session) => (
-            <li key={session.dayIndex} className="rounded-2xl border border-gray-200 px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-black text-gray-900">
-                  <span className="tabular-nums">{session.dayIndex}.</span> {session.weekday} · {session.title}
-                </p>
-                <p className="text-xs font-bold text-gray-500 tabular-nums">
-                  {session.durationMinutes} phút · {session.intensity}
-                </p>
-              </div>
-              <p className="mt-2 text-sm text-pretty whitespace-pre-line text-gray-600">{session.exercises}</p>
-            </li>
-          ))}
-        </ol>
+      {current ? (
+        <div className="mt-5">
+          <label className="block text-sm font-bold text-gray-700">
+            Chọn buổi tập
+            <select
+              value={Math.min(picked, sessionList.length - 1)}
+              onChange={(event) => setPicked(Number(event.target.value))}
+              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium outline-none ring-[#e31b23] focus:ring-2"
+            >
+              {sessionList.map((session, index) => (
+                <option key={session.dayIndex} value={index}>
+                  Buổi {session.dayIndex} · {session.weekday} · {session.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mt-3 rounded-2xl border border-gray-200 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-black text-gray-900">
+                {current.weekday} · {current.title}
+              </p>
+              <p className="text-xs font-bold text-gray-500 tabular-nums">
+                {current.durationMinutes} phút · {current.intensity}
+              </p>
+            </div>
+            <ExerciseSteps text={current.exercises} />
+          </div>
+        </div>
       ) : (
         <p className="mt-5 text-sm text-gray-500">Gợi ý tập chưa có buổi tập.</p>
       )}

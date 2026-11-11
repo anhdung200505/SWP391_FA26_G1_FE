@@ -161,6 +161,7 @@ CREATE TABLE room (
     room_type           NVARCHAR(100)  NULL,
     capacity            INT            NOT NULL,
     private_concurrency INT            NOT NULL CONSTRAINT DF_room_private_concurrency DEFAULT (1),
+    is_active           BIT            NOT NULL CONSTRAINT DF_room_is_active DEFAULT (1),
     area_m2             DECIMAL(10,2)  NULL,
     description         NVARCHAR(MAX)  NULL,
     image_path          NVARCHAR(500)  NULL,
@@ -652,7 +653,7 @@ CREATE TABLE membership_package (
     CONSTRAINT PK_membership_package PRIMARY KEY (membership_package_id),
     CONSTRAINT UQ_membership_package_code UNIQUE (package_code),
     CONSTRAINT CK_membership_package_fee CHECK (fee > 0),
-    CONSTRAINT CK_membership_package_months CHECK (validity_months = 1),
+    CONSTRAINT CK_membership_package_months CHECK (validity_months >= 1 AND validity_months <= 1200),
     CONSTRAINT CK_membership_package_status CHECK (status IN (N'active', N'inactive')),
     CONSTRAINT CK_membership_package_upgrade_discount CHECK (upgrade_discount_percent >= 0 AND upgrade_discount_percent <= 100),
     CONSTRAINT CK_membership_package_ai_regeneration CHECK (ai_regeneration_limit >= 0),
@@ -938,9 +939,9 @@ CREATE TABLE ai_workout_recommendation (
     CONSTRAINT FK_ai_workout_recommendation_user FOREIGN KEY (user_id) REFERENCES [user] (user_id),
     CONSTRAINT FK_ai_workout_recommendation_body FOREIGN KEY (body_metric_id) REFERENCES member_body_metric (body_metric_id),
     CONSTRAINT FK_ai_workout_recommendation_plan FOREIGN KEY (training_plan_id) REFERENCES training_plan (training_plan_id),
-    CONSTRAINT CK_ai_workout_recommendation_sessions CHECK (sessions_per_week >= 2 AND sessions_per_week <= 6),
+    CONSTRAINT CK_ai_workout_recommendation_sessions CHECK (sessions_per_week >= 1 AND sessions_per_week <= 7),
     CONSTRAINT CK_ai_workout_recommendation_minutes CHECK (session_minutes >= 20 AND session_minutes <= 90),
-    CONSTRAINT CK_ai_workout_recommendation_weeks CHECK (duration_weeks >= 2 AND duration_weeks <= 12),
+    CONSTRAINT CK_ai_workout_recommendation_weeks CHECK (duration_weeks >= 1 AND duration_weeks <= 12),
     CONSTRAINT CK_ai_workout_recommendation_revision CHECK (revision >= 1),
     CONSTRAINT CK_ai_workout_recommendation_status CHECK (status IN (N'proposed', N'saved', N'archived'))
 );

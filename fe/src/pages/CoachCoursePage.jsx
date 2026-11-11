@@ -7,7 +7,6 @@ import StaffProfileNotice from '../components/staff/StaffProfileNotice';
 import AttendancePanel from '../components/coach/AttendancePanel';
 import AssignmentPanel from '../components/coach/AssignmentPanel';
 import ClassInfoPanel from '../components/coach/ClassInfoPanel';
-import CoachHistoryPanel from '../components/coach/CoachHistoryPanel';
 import CourseAiPanel from '../components/coach/CourseAiPanel';
 import CoachMaterialPanel from '../components/coach/CoachMaterialPanel';
 import EvaluationPanel from '../components/coach/EvaluationPanel';
@@ -19,9 +18,8 @@ const TABS = [
   { id: 'attendance', label: 'Điểm danh' },
   { id: 'evaluation', label: 'Đánh giá' },
   { id: 'assignment', label: 'Bài tập' },
-  { id: 'ai', label: 'Giáo án lớp' },
+  { id: 'ai', label: 'AI' },
   { id: 'material', label: 'Giáo trình' },
-  { id: 'history', label: 'Lịch sử tập' },
   { id: 'settings', label: 'Cài đặt' },
 ];
 
@@ -181,7 +179,12 @@ export default function CoachCoursePage() {
                 <AssignmentPanel classId={classId} sessions={detail.sessions} />
               )}
               {detail && !detailLoading && tab === 'ai' && (
-                <CourseAiPanel classId={classId} sessions={detail.sessions} onOpenHistory={() => selectTab('history')} />
+                <CourseAiPanel
+                  classId={classId}
+                  sessions={detail.sessions}
+                  view={searchParams.get('view') === 'draft' ? 'draft' : 'form'}
+                  onView={(next) => setSearchParams(next === 'draft' ? { tab: 'ai', view: 'draft' } : { tab: 'ai' }, { replace: true })}
+                />
               )}
               {detail && !detailLoading && tab === 'material' && (
                 <CoachMaterialPanel sportName={detail.sportName} />
@@ -190,11 +193,6 @@ export default function CoachCoursePage() {
           </div>
         )}
 
-        {tab === 'history' && (
-          <div className="mt-6">
-            <CoachHistoryPanel classId={classId} onClassIdChange={setClassId} />
-          </div>
-        )}
         {tab === 'settings' && (
           <div className="mt-6">
             <StaffAccountSettings />

@@ -15,6 +15,13 @@ import {
   getMemberMembership,
 } from '../../api/managementApi';
 
+// Lịch học hằng tuần của lớp, vd. "Thứ 4 · 18:00–21:00".
+const clock = (value) => String(value || '').slice(0, 5);
+const scheduleLines = (cls) =>
+  (Array.isArray(cls?.schedule) ? cls.schedule : []).map(
+    (item) => `${item.weekdayName || `Thứ ${item.weekday}`} · ${clock(item.startTime)}–${clock(item.endTime)}`,
+  );
+
 const formatFee = (fee) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(fee || 0);
 
@@ -733,8 +740,10 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                                 {classList.map((cls) => {
                                   const reason = blockedClasses.get(String(cls.id));
                                   return (
-                                    <option key={cls.id} value={cls.id} disabled={Boolean(reason)}>
-                                      {cls.name} ({formatFee(cls.tuition)}){reason ? ` · ${reason}` : ''}
+                                    <option key={cls.id} value={cls.id} disabled={Boolean(reason)} className={reason ? 'text-red-600' : undefined}>
+                                      {cls.name}
+                                      {scheduleLines(cls).length > 0 ? ` · ${scheduleLines(cls).join(', ')}` : ''}
+                                      {reason ? ` · ${reason}` : ''}
                                     </option>
                                   );
                                 })}
@@ -760,6 +769,14 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                             <span className="text-slate-500 font-bold">Thời gian học:</span>
                             <span className="font-semibold text-slate-700">
                               {selectedClass.startDate} ~ {selectedClass.endDate}
+                            </span>
+                          </div>
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500 font-bold">Lịch học hằng tuần:</span>
+                            <span className="text-right font-semibold text-slate-700">
+                              {scheduleLines(selectedClass).length > 0
+                                ? scheduleLines(selectedClass).map((line) => <span key={line} className="block">{line}</span>)
+                                : 'Đang cập nhật'}
                             </span>
                           </div>
                           <div className="flex justify-between pt-1 border-t border-slate-200">

@@ -54,11 +54,20 @@ public sealed record ChangeSessionCoachRequest(
     [Required] string CoachUserId,
     [StringLength(500)] string? Note = null);
 
+// MakeupDate + MakeupTimeSlotId: ngày và khung giờ buổi bù do quản trị chọn. Bỏ trống = hủy trước, chọn buổi bù sau.
 public sealed record CancelSessionRequest(
-    [Required, StringLength(500, MinimumLength = 1)] string Reason);
+    [Required, StringLength(500, MinimumLength = 1)] string Reason,
+    DateOnly? MakeupDate = null,
+    int? MakeupTimeSlotId = null);
 
-// Quản trị hủy buổi hôm nay hoặc buổi sắp tới: buổi gốc chuyển cancelled, MakeupSession là buổi bù cùng thứ, cùng giờ.
-public sealed record CancelSessionResult(SessionDto Session, SessionDto MakeupSession);
+// Chọn thời điểm mới: dùng cho đổi lịch một buổi và cho buổi bù của buổi đã hủy.
+public sealed record SessionSlotRequest(
+    DateOnly Date,
+    int TimeSlotId,
+    [StringLength(500)] string? Reason = null);
+
+// Quản trị hủy buổi hôm nay hoặc buổi sắp tới: buổi gốc chuyển cancelled, MakeupSession là buổi bù (null nếu chưa chọn thời điểm).
+public sealed record CancelSessionResult(SessionDto Session, SessionDto? MakeupSession);
 
 // Lựa chọn HLV hoặc phòng cho một buổi. IsBusy = true: trùng giờ với buổi khác hoặc phòng không đủ sức chứa (BusyReason).
 public sealed record SessionOptionDto(

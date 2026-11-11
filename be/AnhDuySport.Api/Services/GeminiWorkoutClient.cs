@@ -178,22 +178,20 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
             : request.SafetyNote;
         return $"""
             Bạn là huấn luyện viên. Chỉ trả về JSON, không markdown.
-            Tạo gợi ý tập cá nhân tại nhà bằng tiếng Việt cho {request.MemberName}. Đây là lịch tập riêng, không phải giáo án hay bài tập của lớp.
-            Sức khỏe: {request.HealthSummary}
-            {request.CourseMaterial}
-            Lịch sử tập coach ghi theo từng buổi đã học: {request.TrainingHistory}
-            Đánh giá đầu khóa, chỉ là nhận xét buổi đầu, không có điểm: {request.IntakeEvaluation}
-            Đánh giá tổng môn, khác với đánh giá đầu khóa: {request.OverallEvaluation}
-            Lịch môn học, gồm môn và số buổi học, không xếp bài cá nhân trùng ngày có buổi học: {request.ClassSchedule}
+            Tạo gợi ý tập cá nhân bằng tiếng Việt cho {request.MemberName}. Đây là lịch tập riêng, không phải giáo án hay bài tập của lớp. Hội viên tập được tại nhà hoặc tại trung tâm AnhDuy Sport (phòng tập đa năng, sân, hồ bơi): chọn địa điểm từng buổi cho hợp mục tiêu và cường độ, có thể xen kẽ nhà và trung tâm.
+            Sức khỏe do hội viên tự nhập: {request.HealthSummary}
+            Lịch lớp đang học (nếu có), không xếp bài cá nhân trùng ngày có buổi học: {request.ClassSchedule}
             Mục tiêu: {request.Goal}
-            Ràng buộc: {request.SessionsPerWeek} buổi/tuần, mỗi buổi {request.SessionMinutes} phút, kéo dài {request.DurationWeeks} tuần, cường độ gợi ý {request.Intensity}, giờ tập {request.StartTime}.
+            Ràng buộc: {request.SessionsPerWeek} buổi/tuần, mỗi buổi {request.SessionMinutes} phút, kéo dài {request.DurationWeeks} tuần, cường độ {request.Intensity}, giờ tập {request.StartTime}.
+            Hướng dẫn chọn bài theo cường độ: {WorkoutIntensity.Guide(request.Intensity)}
             Các buổi theo đúng thứ tự ngày: {days}.
             {change}
             {safety}
             JSON gồm analysis (2 đến 4 câu nhận xét BMI và mục tiêu), planName (tên gợi ý tập ngắn, không dùng chữ giáo án) và sessions.
-            Mỗi phần tử sessions gồm title, intensity (Thấp hoặc Trung bình hoặc Cao) và exercises (khởi động, bài chính gồm số hiệp và số lần, giãn cơ).
+            Mỗi phần tử sessions gồm title, intensity (đúng một trong: Rất nhẹ, Nhẹ, Trung bình, Cao, Tối đa, bằng mức cường độ đã chọn) và exercises là MỘT CHUỖI, mỗi dòng một phần, các dòng cách nhau bằng ký tự xuống dòng, theo đúng thứ tự: một dòng "Địa điểm: Tại nhà" hoặc "Địa điểm: Tại trung tâm (nêu khu vực hoặc dụng cụ cần dùng)", rồi một dòng "Khởi động: ...", rồi 3 đến 5 dòng "Bài chính 1: ...", "Bài chính 2: ...", rồi một dòng "Giãn cơ: ...", cuối cùng một dòng "Lưu ý: ...".
+            Mỗi dòng "Bài chính N" phải đúng định dạng, các phần cách nhau bằng dấu " | ": "Bài chính N: <tên bài> | <số> hiệp | <số> lần mỗi hiệp | <số> giây mỗi lần (hoặc giữ <số> giây nếu là bài giữ tư thế) | nghỉ <số> giây giữa các hiệp | nghỉ <số> giây rồi sang bài kế tiếp". Bài chính cuối thay phần cuối bằng "nghỉ <số> giây rồi sang phần giãn cơ". Thời gian nghỉ phải hợp với cường độ đã chọn (cường độ càng cao nghỉ càng ngắn).
             sessions phải có đúng {request.Weekdays.Count} phần tử, cùng thứ tự các ngày ở trên.
-            Bài tập phải bổ trợ đúng môn học viên đang học, bám giáo trình RAFT, lịch sử từng buổi, nhận xét đầu khóa và đánh giá tổng môn.
+            Bài tập chỉ dựa trên chỉ số cơ thể và mục tiêu hội viên đã nhập, không dựa vào giáo án hay nhận xét của huấn luyện viên.
             Không kê đơn thuốc, không bài tập nguy hiểm với mức BMI đã nêu.
             """;
     }
@@ -321,7 +319,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
 
         if (element.ValueKind == JsonValueKind.Array)
         {
-            return string.Join(". ", element.EnumerateArray()
+            return string.Join("\n", element.EnumerateArray()
                 .Select(ReadExerciseItem)
                 .Where(item => !string.IsNullOrWhiteSpace(item)));
         }
@@ -375,18 +373,7 @@ public partial class GeminiWorkoutClient(HttpClient http, IConfiguration configu
 
     private static string NormalizeIntensity(string? value)
     {
-        var text = value?.Trim().ToLowerInvariant() ?? "";
-        if (text is "thấp" or "thap" or "low" or "easy")
-        {
-            return "Thấp";
-        }
-
-        if (text is "cao" or "high")
-        {
-            return "Cao";
-        }
-
-        return "Trung bình";
+        return WorkoutIntensity.Normalize(value) ?? "Trung bình";
     }
 
     private sealed class GeminiPlanPayload

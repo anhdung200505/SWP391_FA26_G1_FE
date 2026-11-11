@@ -64,9 +64,29 @@ public class ManagementDashboardService(AppDbContext db, CurrentActor actor)
             .ToList();
         var userIds = usages.Select(item => item.UserId).Concat(current.Keys).Distinct().ToList();
         var months = MonthsOf(usages);
+        var coachUsages = await db.CoachAiTokenUsages.AsNoTracking().ToListAsync();
+        var coachIds = coachUsages.Select(item => item.CoachUserId).Distinct().ToList();
+        var coachNames = await db.UserAccounts.AsNoTracking()
+            .Where(item => coachIds.Contains(item.UserId))
+            .ToDictionaryAsync(item => item.UserId, item => item.FullName);
+        var coaches = coachUsages
+            .GroupBy(item => item.CoachUserId)
+            .Select(group => new AiCoachTokenRowDto(
+                group.Key.ToString(),
+                coachNames.GetValueOrDefault(group.Key, $"HLV #{group.Key}"),
+                AiMembershipQuota.Clamp(group.Sum(item => (long)item.TotalTokens)),
+                group.Count(item => item.Action == AiMembershipQuota.Generate),
+                group.Count(item => item.Action == AiMembershipQuota.Regenerate),
+                group.Max(item => item.CreatedAt),
+                MonthsOf(group.Select(item => new AiTokenUsage { TotalTokens = item.TotalTokens, CreatedAt = item.CreatedAt }))))
+            .OrderByDescending(item => item.TokensUsed)
+            .ThenBy(item => item.CoachName)
+            .ToList();
+        var coachMonths = MonthsOf(coachUsages.Select(item => new AiTokenUsage { TotalTokens = item.TotalTokens, CreatedAt = item.CreatedAt }));
+        var coachTotal = AiMembershipQuota.Clamp(coachUsages.Sum(item => (long)item.TotalTokens));
         if (userIds.Count == 0)
         {
-            return new AiTokenUsageReportDto(0, packages, [], months);
+            return new AiTokenUsageReportDto(0, packages, [], months, coaches, coachTotal, coachMonths);
         }
 
         var users = await db.UserAccounts
@@ -104,7 +124,10 @@ public class ManagementDashboardService(AppDbContext db, CurrentActor actor)
             AiMembershipQuota.Clamp(usages.Sum(item => (long)item.TotalTokens)),
             packages,
             rows,
-            months);
+            months,
+            coaches,
+            coachTotal,
+            coachMonths);
     }
 
     private static List<AiTokenMonthDto> MonthsOf(IEnumerable<AiTokenUsage> usages)
@@ -145,6 +168,9 @@ public class ManagementDashboardService(AppDbContext db, CurrentActor actor)
 
         package.AiRegenerationLimit = request.RegenerationLimit;
         package.AiTokenLimit = request.TokenLimit;
+        package.Benefits = AccountFlowMapper.JoinBenefits(AiMembershipQuota.SyncBenefits(
+            AccountFlowMapper.SplitBenefits(package.Benefits), true,
+            package.AiRegenerationLimit, package.AiTokenLimit, package.UpgradeDiscountPercent));
         package.UpdatedAt = DateTime.Now;
         var today = DateOnly.FromDateTime(DateTime.Today);
         var activeMembers = await db.Memberships

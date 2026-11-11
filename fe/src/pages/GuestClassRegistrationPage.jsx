@@ -50,6 +50,13 @@ const TYPE_OPTIONS = [
   },
 ];
 
+// Lịch học hằng tuần của lớp, vd. "Thứ 4 · 18:00–21:00". Một lớp có thể học nhiều thứ trong tuần.
+const clock = (value) => String(value || '').slice(0, 5);
+const scheduleLines = (cls) =>
+  (Array.isArray(cls?.schedule) ? cls.schedule : []).map(
+    (item) => `${item.weekdayName || `Thứ ${item.weekday}`} · ${clock(item.startTime)}–${clock(item.endTime)}`,
+  );
+
 const formatCountdown = (seconds) =>
   `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
@@ -694,8 +701,10 @@ export default function GuestClassRegistrationPage({ membershipOnly = false }) {
                               {classList.map((item) => {
                                 const reason = blockedClasses.get(String(item.id));
                                 return (
-                                  <option key={item.id} value={item.id} disabled={Boolean(reason)}>
-                                    {item.name} ({formatFee(item.tuition)}){reason ? ` · ${reason}` : ''}
+                                  <option key={item.id} value={item.id} disabled={Boolean(reason)} className={reason ? 'text-red-600' : undefined}>
+                                    {item.name}
+                                    {scheduleLines(item).length > 0 ? ` · ${scheduleLines(item).join(', ')}` : ''}
+                                    {reason ? ` · ${reason}` : ''}
                                   </option>
                                 );
                               })}
@@ -723,6 +732,20 @@ export default function GuestClassRegistrationPage({ membershipOnly = false }) {
                         <div>
                           <dt className="text-slate-500">Học phí</dt>
                           <dd className="font-black text-[#b1131a]">{formatFee(selectedClass.tuition)}</dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="text-slate-500">Lịch học hằng tuần</dt>
+                          <dd className="mt-1 flex flex-wrap gap-2">
+                            {scheduleLines(selectedClass).length > 0 ? (
+                              scheduleLines(selectedClass).map((line) => (
+                                <span key={line} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold tabular-nums text-slate-800">
+                                  {line}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="font-semibold text-slate-500">Đang cập nhật</span>
+                            )}
+                          </dd>
                         </div>
                       </dl>
                     ) : (

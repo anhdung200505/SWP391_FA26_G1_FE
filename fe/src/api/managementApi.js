@@ -327,11 +327,34 @@ export function saveAdminAttendance(classId, sessionId, marks) {
   );
 }
 
-export function cancelSession(sessionId, reason) {
+// makeup = { date: 'yyyy-MM-dd', timeSlotId } do quản trị chọn; bỏ trống thì hủy trước, xếp buổi bù sau.
+export function cancelSession(sessionId, reason, makeup) {
   return request(`/sessions/${sessionId}/cancel`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({
+      reason,
+      makeupDate: makeup?.date || null,
+      makeupTimeSlotId: makeup?.timeSlotId ? Number(makeup.timeSlotId) : null,
+    }),
   });
+}
+
+export function rescheduleSession(sessionId, { date, timeSlotId, reason }) {
+  return request(`/sessions/${sessionId}/reschedule`, {
+    method: 'POST',
+    body: JSON.stringify({ date, timeSlotId: Number(timeSlotId), reason: reason || null }),
+  });
+}
+
+export function scheduleSessionMakeup(sessionId, { date, timeSlotId }) {
+  return request(`/sessions/${sessionId}/makeup`, {
+    method: 'POST',
+    body: JSON.stringify({ date, timeSlotId: Number(timeSlotId) }),
+  });
+}
+
+export function getSessionSlots(sessionId, date) {
+  return request(`/sessions/${sessionId}/slots?date=${encodeURIComponent(date)}`);
 }
 
 // ==========================================
@@ -657,6 +680,20 @@ export function getPrivateCourses(sportId) {
   return request(`/private-classes/courses${toQuery({ sportId })}`);
 }
 
+// HLV dạy môn của gói 1-1 (học viên chọn HLV trước rồi mới xem lịch)
+export function getPrivateCoaches(courseId) {
+  return request(`/private-classes/coaches${toQuery({ courseId })}`);
+}
+
+// { courseId, coachUserId, startDate } (startDate từ hôm nay + 3 ngày)
+// → { sessionCount, busyCells: [{ weekday, timeSlotId, reason }] }: ô HLV hoặc học viên đã bận
+export function getPrivateCoachSchedule(payload) {
+  return request('/private-classes/coach-schedule', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 // { courseId, startDate, slots: [{ weekday, timeSlotId }] }
 // → số buổi, còn phòng, HLV kèm isBusy/busyReason
 export function checkPrivateAvailability(payload) {
@@ -711,5 +748,32 @@ export function rejectPrivateRequest(requestId, reason) {
   return request(`/management/private-requests/${requestId}/reject`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
+  });
+}
+
+// ==========================================
+// Phòng tập (quản trị)
+// ==========================================
+export function getRoomOverview() {
+  return request('/management/rooms/overview');
+}
+
+// Các lớp còn buổi sắp tới trong phòng: dùng để báo trước khi ngưng dùng.
+export function getRoomUsage(roomId) {
+  return request(`/management/rooms/${roomId}/usage`);
+}
+
+export function createRoom(payload) {
+  return request('/management/rooms', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateRoom(roomId, payload) {
+  return request(`/management/rooms/${roomId}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export function setRoomStatus(roomId, isActive) {
+  return request(`/management/rooms/${roomId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ isActive }),
   });
 }
