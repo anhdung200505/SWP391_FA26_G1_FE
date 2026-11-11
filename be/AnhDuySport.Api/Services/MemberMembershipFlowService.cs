@@ -51,6 +51,10 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
 
     private PayOSClient? PayOsClient => services.GetService<PayOSClient>();
 
+    // Bật thanh toán thử (dự phòng khi demo): payOS lỗi hoặc chưa cấu hình thì đơn gói vẫn giữ pending (không QR)
+    // để học viên bấm thanh toán thử, thay vì hủy đơn và báo lỗi.
+    private bool SandboxEnabled => configuration.GetValue<bool>("Payment:SandboxEnabled");
+
     private PayOSClient RequirePayOs() =>
         PayOsClient ?? throw new InvalidOperationException(
             "Máy này chưa cấu hình payOS nên chưa tạo được mã QR thanh toán gói. Kiểm tra file be/config/payos.json.");
@@ -403,7 +407,10 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
         var member = await FindActiveMemberAsync(memberUserId);
         var package = await FindActivePackageAsync(request.PackageId);
         var amount = RequirePayableAmount(package.Fee);
-        RequirePayOs();
+        if (!SandboxEnabled)
+        {
+            RequirePayOs();
+        }
 
         // Hỏi lại payOS trước: đơn cũ đã trả tiền thì kích hoạt, không hủy nhầm và không thu tiền lần nữa.
         if (await SyncPendingPaymentsAsync(member.UserId, CancellationToken.None) > 0)
@@ -983,6 +990,13 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
             throw new InvalidOperationException("Đơn thanh toán gói chưa có mã payOS.");
         }
 
+        if (PayOsClient is null && SandboxEnabled)
+        {
+            AddHistory(payment, "pending", "Chưa cấu hình payOS, chờ thanh toán thử (sandbox)");
+            await db.SaveChangesAsync();
+            return;
+        }
+
         var invoiceCode = payment.Invoice?.InvoiceCode ?? "";
         var description = invoiceCode.Length <= 25 ? invoiceCode : invoiceCode[..25];
         try
@@ -1004,12 +1018,26 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
         }
         catch (ApiException exception)
         {
+            if (SandboxEnabled)
+            {
+                AddHistory(payment, "pending", Trim($"payOS từ chối tạo mã QR ({exception.Message}), chờ thanh toán thử (sandbox)", 300));
+                await db.SaveChangesAsync();
+                return;
+            }
+
             await CancelPaymentAsync(payment, "payOS từ chối tạo mã QR thanh toán gói");
             membership.Status = "cancelled";
             await db.SaveChangesAsync();
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(exception.Message)
                 ? "payOS từ chối tạo link thanh toán."
                 : exception.Message);
+        }
+
+        if (string.IsNullOrWhiteSpace(payment.QrCode) && SandboxEnabled)
+        {
+            AddHistory(payment, "pending", "payOS không trả mã QR, chờ thanh toán thử (sandbox)");
+            await db.SaveChangesAsync();
+            return;
         }
 
         if (string.IsNullOrWhiteSpace(payment.QrCode))

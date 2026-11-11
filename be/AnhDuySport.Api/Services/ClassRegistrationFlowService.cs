@@ -647,6 +647,30 @@ public class ClassRegistrationFlowService(
         return await BuildStatusAsync(payment);
     }
 
+    // Thanh toán thử (sandbox): phương án dự phòng khi demo mà payOS lỗi hoặc không trả kết quả.
+    // Coi như đã nhận tiền và ghi danh y như thanh toán thật; ghi phương thức riêng để phân biệt trong lịch sử, doanh thu.
+    public const string SandboxMethodLabel = "Sandbox (thanh toán thử)";
+
+    public async Task<RegistrationStatusDto> SandboxPayAsync(string paymentId, int memberId)
+    {
+        if (!int.TryParse(paymentId, out var id))
+        {
+            throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
+        }
+
+        var payment = await db.Payments.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.PaymentId == id && item.UserId == memberId && item.ClassId != null)
+            ?? throw new KeyNotFoundException("Không tìm thấy đơn đăng ký.");
+        if (payment.Status != "pending" && payment.Status != "paid")
+        {
+            throw new RegistrationException("Chỉ thanh toán thử được đơn đang chờ thanh toán.");
+        }
+
+        var result = await MarkPaymentPaidAsync(id, memberId, SandboxMethodLabel);
+        await payOs.CancelLinkQuietlyAsync(payment.PayosOrderCode, "Đã thanh toán thử (sandbox)");
+        return result;
+    }
+
     // Hệ thống xác nhận đã nhận tiền (webhook payOS gọi hàm này). Gọi lặp lại không ghi thêm gì.
     // paymentMethod có giá trị khi lễ tân thu tiền tại quầy.
     public async Task<RegistrationStatusDto> MarkPaymentPaidAsync(int paymentId, int? actorUserId = null, string? paymentMethod = null)

@@ -19,6 +19,7 @@ import {
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 import PrivateRegistrationForm from '../components/private/PrivateRegistrationForm';
+import ClassPickList from '../components/classes/ClassPickList';
 
 const PAYMENT_TIMEOUT_SECONDS = 180;
 const PAID_REDIRECT_SECONDS = 5;
@@ -682,38 +683,19 @@ export default function GuestClassRegistrationPage({ membershipOnly = false }) {
                           ))}
                         </select>
                       </label>
-                      <label className="block text-sm font-bold text-slate-700">
+                      <div className="text-sm font-bold text-slate-700 sm:col-span-2">
                         Lớp
-                        <select
-                          value={selectedClass?.id || ''}
-                          disabled={loadingClasses || classList.length === 0}
-                          onChange={(event) => {
-                            const next = classList.find((item) => item.id === event.target.value);
-                            if (next) setSelectedClass(next);
-                          }}
-                          className={fieldClass}
-                        >
-                          {loadingClasses ? (
-                            <option value="">Đang tải lớp...</option>
-                          ) : classList.length > 0 ? (
-                            <>
-                              {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
-                              {classList.map((item) => {
-                                const reason = blockedClasses.get(String(item.id));
-                                return (
-                                  <option key={item.id} value={item.id} disabled={Boolean(reason)} className={reason ? 'text-red-600' : undefined}>
-                                    {item.name}
-                                    {scheduleLines(item).length > 0 ? ` · ${scheduleLines(item).join(', ')}` : ''}
-                                    {reason ? ` · ${reason}` : ''}
-                                  </option>
-                                );
-                              })}
-                            </>
-                          ) : (
-                            <option value="">Chưa có lớp mở cho môn này</option>
-                          )}
-                        </select>
-                      </label>
+                        <div className="mt-1">
+                          <ClassPickList
+                            classes={classList}
+                            blocked={blockedClasses}
+                            selectedId={selectedClass?.id}
+                            onSelect={setSelectedClass}
+                            loading={loadingClasses}
+                            scheduleLines={scheduleLines}
+                          />
+                        </div>
+                      </div>
                     </div>
                     {selectedClass ? (
                       <dl className="mt-4 grid gap-2 rounded-2xl bg-[#f4f5f7] p-4 text-sm sm:grid-cols-2">
@@ -748,13 +730,7 @@ export default function GuestClassRegistrationPage({ membershipOnly = false }) {
                           </dd>
                         </div>
                       </dl>
-                    ) : (
-                      <p className="mt-4 text-sm text-slate-500">
-                        {classList.length > 0
-                          ? 'Các lớp của môn này trùng lớp đã đăng ký, cùng khóa hoặc trùng lịch.'
-                          : 'Môn này chưa có lớp đang mở.'}
-                      </p>
-                    )}
+                    ) : null}
                   </section>
                 )}
 

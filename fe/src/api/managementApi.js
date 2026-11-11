@@ -423,6 +423,20 @@ export function getClassRegistrationStatus(paymentId) {
   return request(`/class-registrations/${paymentId}`);
 }
 
+// Thanh toán thử (sandbox): dự phòng khi demo mà payOS lỗi. { enabled } cho biết có hiện nút không.
+export function getSandboxPayment() {
+  return request('/class-registrations/sandbox');
+}
+
+export function sandboxPayRegistration(paymentId) {
+  return request(`/class-registrations/${paymentId}/sandbox-pay`, { method: 'POST' });
+}
+
+// Thanh toán thử đơn gói hội viên riêng (đăng ký thành viên, gia hạn, nâng hạng).
+export function sandboxPayMembership(memberUserId, paymentId) {
+  return request(`/members/${memberUserId}/membership/renewals/${paymentId}/sandbox-pay`, { method: 'POST' });
+}
+
 // Đơn đang chờ thanh toán còn trong 3 phút
 // (đăng ký lớp và mua gói), mới nhất lên đầu
 export function getPendingCheckouts() {

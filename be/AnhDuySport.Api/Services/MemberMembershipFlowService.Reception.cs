@@ -128,11 +128,32 @@ public partial class MemberMembershipFlowService
             "Cho học viên quét QR hoặc thu tiền tại quầy rồi xác nhận.");
     }
 
+    // Thanh toán thử (sandbox) đơn gói của chính học viên: dự phòng khi demo mà payOS lỗi.
+    // Kích hoạt gói y như thanh toán thật, phương thức ghi là Sandbox (thanh toán thử). payOS vẫn là cách thanh toán chính.
+    public async Task<MembershipPaymentResultDto> SandboxMembershipPaymentAsync(string memberUserId, string paymentId)
+    {
+        var member = await FindActiveMemberAsync(memberUserId);
+        var membership = await FindOwnMembershipPaymentAsync(member.UserId, paymentId);
+        if (membership.PaymentId is not int id || membership.Payment?.ClassId != null)
+        {
+            throw new KeyNotFoundException("Không tìm thấy thanh toán gói.");
+        }
+
+        if (membership.Payment?.Status == "paid")
+        {
+            return await ConfirmMembershipPaymentAsync(memberUserId, id.ToString());
+        }
+
+        return await ConfirmCounterMembershipPaymentAsync(id, ClassRegistrationFlowService.SandboxMethodLabel, member.UserId, sandbox: true);
+    }
+
     // Lễ tân thu tiền đơn gói tại quầy. methodLabel: Tiền mặt / Chuyển khoản / Thẻ.
+    // sandbox = true: học viên tự thanh toán thử (performerUserId là chính học viên), lời ghi chú khác lễ tân thu tiền.
     public async Task<MembershipPaymentResultDto> ConfirmCounterMembershipPaymentAsync(
         int paymentId,
         string methodLabel,
-        int performerUserId)
+        int performerUserId,
+        bool sandbox = false)
     {
         var found = await db.Memberships
             .AsNoTracking()
@@ -143,12 +164,14 @@ public partial class MemberMembershipFlowService
         var performerName = await PerformerNameAsync(performerUserId);
 
         // Hỏi payOS trước: học viên có thể đã quét QR trả tiền rồi.
-        if (await SyncWithPayOsAsync(paymentId, "Lễ tân kiểm tra trước khi thu tại quầy") is not null)
+        if (await SyncWithPayOsAsync(paymentId, sandbox ? "Kiểm tra trước khi thanh toán thử" : "Lễ tân kiểm tra trước khi thu tại quầy") is not null)
         {
-            throw new InvalidOperationException(
-                "Học viên đã thanh toán đơn này qua payOS và gói đã được kích hoạt. Không thu tiền tại quầy nữa.");
+            throw new InvalidOperationException(sandbox
+                ? "Đơn này đã được thanh toán qua payOS và gói đã được kích hoạt."
+                : "Học viên đã thanh toán đơn này qua payOS và gói đã được kích hoạt. Không thu tiền tại quầy nữa.");
         }
 
+        var firstPackage = false;
         var log = await InMemberLockAsync(member.UserId, async () =>
         {
             var membership = await db.Memberships
@@ -163,7 +186,7 @@ public partial class MemberMembershipFlowService
 
             if (payment.Invoice is null || PaymentTimeout.SecondsLeft(payment.Invoice.IssuedAt) == 0)
             {
-                throw new InvalidOperationException("Đơn đã hết hạn. Hãy tạo đơn mới cho học viên.");
+                throw new InvalidOperationException(sandbox ? "Đơn đã hết hạn. Hãy tạo đơn mới." : "Đơn đã hết hạn. Hãy tạo đơn mới cho học viên.");
             }
 
             var now = DateTime.Now;
@@ -172,19 +195,24 @@ public partial class MemberMembershipFlowService
             payment.PaymentMethod = methodLabel;
             payment.RegisteredByUserId ??= performerUserId;
             payment.Invoice.Status = "paid";
-            AddHistory(payment, "paid", Trim($"Lễ tân {performerName} thu {Money(payment.Amount)} tại quầy ({methodLabel})", 300));
+            AddHistory(payment, "paid", Trim(sandbox
+                ? $"{performerName} thanh toán thử {Money(payment.Amount)} ({methodLabel})"
+                : $"Lễ tân {performerName} thu {Money(payment.Amount)} tại quầy ({methodLabel})", 300));
             db.ActivityLogs.Add(new ActivityLog
             {
                 ActorUserId = performerUserId,
-                Action = Trim($"Thu tiền gói tại quầy cho {member.FullName}", 100),
+                Action = Trim(sandbox ? $"Thanh toán thử gói cho {member.FullName}" : $"Thu tiền gói tại quầy cho {member.FullName}", 100),
                 EntityName = "payment",
                 EntityId = payment.PaymentId,
                 Detail = $"{membership.PlanName} · {Money(payment.Amount)} · {methodLabel} · hóa đơn {payment.Invoice.InvoiceCode}",
                 CreatedAt = now,
             });
 
+            var otherPackages = await db.Memberships.AnyAsync(item =>
+                item.UserId == member.UserId && item.MembershipId != membership.MembershipId);
             var activated = await ActivateAsync(member, membership, payment, now);
-            // Người thao tác là lễ tân, không phải học viên.
+            firstPackage = !otherPackages && activated.Action.StartsWith("Đăng ký mới", StringComparison.Ordinal);
+            // Người thao tác: lễ tân thu tại quầy, hoặc chính học viên khi thanh toán thử.
             activated.ActorUserId = performerUserId;
             db.Notifications.Add(new AccountNotification
             {
@@ -198,12 +226,12 @@ public partial class MemberMembershipFlowService
             return activated;
         });
 
-        // Đã thu tại quầy: hủy link payOS để học viên không quét QR trả thêm lần nữa. Lỗi thì bỏ qua.
+        // Đã thu tại quầy / thanh toán thử: hủy link payOS để học viên không quét QR trả thêm lần nữa. Lỗi thì bỏ qua.
         if (found.Payment?.PayosOrderCode is long orderCode && PayOsClient is PayOSClient payOs)
         {
             try
             {
-                await payOs.PaymentRequests.CancelAsync(orderCode, "Đã thu tiền gói tại quầy");
+                await payOs.PaymentRequests.CancelAsync(orderCode, sandbox ? "Đã thanh toán thử (sandbox)" : "Đã thu tiền gói tại quầy");
             }
             catch (ApiException)
             {
@@ -216,6 +244,19 @@ public partial class MemberMembershipFlowService
             .Include(item => item.Payment!)
             .ThenInclude(item => item.Invoice)
             .FirstAsync(item => item.PaymentId == paymentId);
+        if (firstPackage)
+        {
+            try
+            {
+                await services.GetRequiredService<EmailNotificationService>()
+                    .SendFirstPackageAsync(member, saved.PlanName, saved.StartDate, saved.EndDate);
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine($"Không gửi được thư cảm ơn gói cho học viên {member.UserId}: {exception.Message}");
+            }
+        }
+
         var today = DateOnly.FromDateTime(DateTime.Now);
         var endDate = await db.Memberships
             .AsNoTracking()

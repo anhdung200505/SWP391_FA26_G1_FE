@@ -16,9 +16,13 @@ import {
   createMembershipRenewal,
   getPendingCheckouts,
   getMemberMembership,
+  getSandboxPayment,
+  sandboxPayMembership,
+  sandboxPayRegistration,
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 import PrivateRegistrationForm from '../components/private/PrivateRegistrationForm';
+import ClassPickList from '../components/classes/ClassPickList';
 
 const PAYMENT_TIMEOUT_SECONDS = 180;
 const PAID_REDIRECT_SECONDS = 5;
@@ -147,6 +151,8 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
 
   const [registrationResult, setRegistrationResult] = useState(null);
   const [paymentStatusData, setPaymentStatusData] = useState(null);
+  const [sandboxEnabled, setSandboxEnabled] = useState(false);
+  const [sandboxPaying, setSandboxPaying] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [redirectLeft, setRedirectLeft] = useState(PAID_REDIRECT_SECONDS);
   const [membershipAfterPay, setMembershipAfterPay] = useState(null);
@@ -302,6 +308,37 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
       active = false;
     };
   }, [user?.id]);
+
+  // Thanh toán thử (sandbox): dự phòng khi demo mà payOS lỗi, cho cả đơn lớp và đơn gói riêng.
+  // Chỉ hiện khi backend bật Payment:SandboxEnabled; payOS vẫn là cách thanh toán chính.
+  useEffect(() => {
+    let active = true;
+    getSandboxPayment()
+      .then((res) => {
+        if (active) setSandboxEnabled(Boolean(res?.enabled));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSandboxPay = async () => {
+    if (!registrationResult?.paymentId || sandboxPaying) return;
+    setSandboxPaying(true);
+    setError('');
+    try {
+      const status =
+        registrationResult.kind === 'membership'
+          ? await sandboxPayMembership(user?.id, registrationResult.paymentId)
+          : await sandboxPayRegistration(registrationResult.paymentId);
+      setPaymentStatusData(status);
+    } catch (err) {
+      setError(err.message || 'Thanh toán thử thất bại.');
+    } finally {
+      setSandboxPaying(false);
+    }
+  };
 
   const qrImage = registrationResult?.payosQrImage || '';
   const isPaid = paymentStatusData?.paymentStatus === 'paid' || paymentStatusData?.paymentStatus === 'success';
@@ -597,6 +634,25 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
                   Mở trang thanh toán
                 </a>
               )}
+              {!isPaid && sandboxEnabled && (
+                <div className="mt-4 w-full max-w-xs rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-3">
+                  <p className="text-[11px] font-semibold text-amber-900">
+                    Dự phòng khi payOS lỗi: thanh toán thử sẽ {registrationResult.kind === 'membership' ? 'kích hoạt gói' : 'ghi danh'} như
+                    đã trả tiền (không trừ tiền thật).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSandboxPay}
+                    disabled={sandboxPaying}
+                    className="mt-2 w-full rounded-xl border border-amber-400 bg-white px-3 py-2 text-sm font-bold text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                  >
+                    {sandboxPaying ? 'Đang xử lý...' : 'Thanh toán thử (sandbox)'}
+                  </button>
+                </div>
+              )}
+              {error && registrationResult && !isPaid && (
+                <p className="mt-3 max-w-xs text-xs font-semibold text-red-700">{error}</p>
+              )}
             </div>
           </div>
 
@@ -688,38 +744,19 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
                         ))}
                       </select>
                     </label>
-                    <label className="block text-sm font-bold text-slate-700">
+                    <div className="text-sm font-bold text-slate-700 sm:col-span-2">
                       Lớp
-                      <select
-                        value={selectedClass?.id || ''}
-                        disabled={loadingClasses || classList.length === 0}
-                        onChange={(event) => {
-                          const next = classList.find((item) => item.id === event.target.value);
-                          if (next) setSelectedClass(next);
-                        }}
-                        className={fieldClass}
-                      >
-                        {loadingClasses ? (
-                          <option value="">Đang tải lớp...</option>
-                        ) : classList.length > 0 ? (
-                          <>
-                            {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
-                            {classList.map((item) => {
-                              const reason = blockedClasses.get(String(item.id));
-                              return (
-                                <option key={item.id} value={item.id} disabled={Boolean(reason)} className={reason ? 'text-red-600' : undefined}>
-                                  {item.name}
-                                  {scheduleLines(item).length > 0 ? ` · ${scheduleLines(item).join(', ')}` : ''}
-                                  {reason ? ` · ${reason}` : ''}
-                                </option>
-                              );
-                            })}
-                          </>
-                        ) : (
-                          <option value="">Chưa có lớp mở cho môn này</option>
-                        )}
-                      </select>
-                    </label>
+                      <div className="mt-1">
+                        <ClassPickList
+                          classes={classList}
+                          blocked={blockedClasses}
+                          selectedId={selectedClass?.id}
+                          onSelect={setSelectedClass}
+                          loading={loadingClasses}
+                          scheduleLines={scheduleLines}
+                        />
+                      </div>
+                    </div>
                   </div>
                   {selectedClass ? (
                     <dl className="mt-4 grid gap-2 rounded-2xl bg-[#f4f5f7] p-4 text-sm sm:grid-cols-2">
@@ -754,13 +791,7 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
                         </dd>
                       </div>
                     </dl>
-                  ) : (
-                    <p className="mt-4 text-sm text-slate-500">
-                      {classList.length > 0
-                        ? 'Các lớp của môn này trùng lớp đã đăng ký, cùng khóa hoặc trùng lịch.'
-                        : 'Môn này chưa có lớp đang mở.'}
-                    </p>
-                  )}
+                  ) : null}
                 </section>
               )}
 

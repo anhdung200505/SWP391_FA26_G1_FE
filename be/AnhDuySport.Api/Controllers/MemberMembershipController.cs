@@ -10,7 +10,7 @@ namespace AnhDuySport.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/members/{memberUserId}")]
-public class MemberMembershipController(MemberMembershipFlowService flow, CurrentActor actor) : ControllerBase
+public class MemberMembershipController(MemberMembershipFlowService flow, CurrentActor actor, IConfiguration configuration) : ControllerBase
 {
     [Authorize(Roles = "MEMBER,RECEPTIONIST,COACH,ADMIN")]
     [HttpGet("profile")]
@@ -144,6 +144,28 @@ public class MemberMembershipController(MemberMembershipFlowService flow, Curren
         try
         {
             return Ok(await flow.ConfirmMembershipPaymentAsync(memberUserId, paymentId));
+        }
+        catch (Exception exception) when (MapFlowError(exception, out var result))
+        {
+            return result!;
+        }
+    }
+
+    [Authorize(Roles = "MEMBER")]
+    [HttpPost("membership/renewals/{paymentId}/sandbox-pay")]
+    [EndpointSummary("Học viên thanh toán thử (sandbox) đơn gói hội viên")]
+    [EndpointDescription("Dự phòng khi demo mà payOS lỗi: kích hoạt gói (đăng ký mới, gia hạn, nâng hạng) y như thanh toán thật, phương thức ghi là Sandbox (thanh toán thử). payOS vẫn là cách thanh toán chính. Chỉ đơn gói của chính học viên, đang chờ thanh toán. Tắt Payment:SandboxEnabled thì trả 404.")]
+    public async Task<ActionResult<MembershipPaymentResultDto>> SandboxMembershipPayment(string memberUserId, string paymentId)
+    {
+        if (EnsureOwner(memberUserId) is { } denied) return denied;
+        if (!configuration.GetValue<bool>("Payment:SandboxEnabled"))
+        {
+            return NotFound(new { message = "Thanh toán thử đang tắt." });
+        }
+
+        try
+        {
+            return Ok(await flow.SandboxMembershipPaymentAsync(memberUserId, paymentId));
         }
         catch (Exception exception) when (MapFlowError(exception, out var result))
         {
