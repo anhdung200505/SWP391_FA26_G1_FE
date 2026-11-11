@@ -41,3 +41,34 @@ public class SportManagementController(SportCourseManagementFlowService catalog)
     public async Task<ActionResult<SportAdminDto>> AddCoaches(string sportId, AddSportCoachesRequest request) =>
         Ok(await catalog.AddCoachesAsync(sportId, request));
 }
+
+[Authorize(Roles = "ADMIN")]
+[ApiController]
+[FlowErrors]
+[Route("api/management/catalog")]
+public class CourseCatalogController(SportCourseManagementFlowService catalog) : ControllerBase
+{
+    [HttpGet("courses")]
+    [EndpointSummary("Quản trị xem danh sách khóa học")]
+    [EndpointDescription("Gồm cả khóa đã ngưng. Có thể lọc theo môn bằng sportId.")]
+    public async Task<ActionResult<IReadOnlyList<CourseAdminDto>>> Courses([FromQuery] string? sportId) =>
+        Ok(await catalog.ListCoursesAsync(sportId));
+
+    [HttpPost("courses")]
+    [EndpointSummary("Quản trị tạo khóa học")]
+    [EndpointDescription("Mã khóa (tự in hoa, không trùng, tối đa 50 ký tự), tên, học phí không âm, hình thức group hoặc private. Khóa 1-1 bắt buộc số phút và số buổi; khóa nhóm thì không. Môn phải có HLV đang hoạt động và phòng đang hoạt động dùng được cho hình thức đó.")]
+    public async Task<ActionResult<CourseAdminDto>> CreateCourse(CreateCourseRequest request) =>
+        Ok(await catalog.CreateCourseAsync(request));
+
+    [HttpPut("courses/{courseId}")]
+    [EndpointSummary("Quản trị sửa khóa học")]
+    [EndpointDescription("Sửa tên, mô tả, học phí, hình ảnh, số buổi và số phút. Không đổi mã, môn và hình thức. Học phí mới áp dụng ngay cho mọi lớp thuộc khóa.")]
+    public async Task<ActionResult<CourseAdminDto>> UpdateCourse(string courseId, UpdateCourseRequest request) =>
+        Ok(await catalog.UpdateCourseAsync(courseId, request));
+
+    [HttpPut("courses/{courseId}/status")]
+    [EndpointSummary("Quản trị ngưng hoặc mở lại khóa học")]
+    [EndpointDescription("isActive=false để ngưng: khóa không còn hiện khi tạo lớp. Không xóa dữ liệu, bật lại bằng isActive=true.")]
+    public async Task<ActionResult<CourseAdminDto>> SetCourseStatus(string courseId, SetCourseStatusRequest request) =>
+        Ok(await catalog.SetCourseActiveAsync(courseId, request.IsActive));
+}
