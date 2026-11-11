@@ -92,6 +92,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
         foreach (var item in request.Rooms ?? [])
         {
             var roomId = await ValidateRoomAsync(item);
+            await EnsureRoomFreeForSportAsync(roomId, null);
             if (rooms.All(existing => existing.RoomId != roomId))
             {
                 rooms.Add((roomId, item.AllowGroup, item.AllowPrivate));
@@ -139,6 +140,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
     {
         var id = await FindSportAsync(sportId);
         var roomId = await ValidateRoomAsync(request);
+        await EnsureRoomFreeForSportAsync(roomId, id);
         var link = await db.SportRooms.FirstOrDefaultAsync(item => item.SportId == id && item.RoomId == roomId);
         if (link is null)
         {
@@ -386,6 +388,20 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
         }
 
         return roomId;
+    }
+
+    // Một phòng chỉ thuộc một môn: phòng đã gắn cho môn khác thì không dùng được.
+    private async Task EnsureRoomFreeForSportAsync(int roomId, int? sportId)
+    {
+        var other = await db.SportRooms.AsNoTracking()
+            .Where(link => link.RoomId == roomId && link.SportId != sportId)
+            .Join(db.Sports, link => link.SportId, sport => sport.SportId, (link, sport) => new { sport.SportName, link.RoomId })
+            .Join(db.Rooms, item => item.RoomId, room => room.RoomId, (item, room) => new { item.SportName, room.RoomName })
+            .FirstOrDefaultAsync();
+        if (other is not null)
+        {
+            throw new RegistrationException($"Phòng {other.RoomName} đã dùng cho môn {other.SportName}.");
+        }
     }
 
     private async Task<List<int>> ValidateCoachesAsync(List<string>? coachUserIds)

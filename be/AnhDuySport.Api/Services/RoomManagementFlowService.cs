@@ -229,6 +229,11 @@ public class RoomManagementFlowService(AppDbContext db, CurrentActor actor, ILog
             }
         }
 
+        if (sports.Count > 1)
+        {
+            throw new RegistrationException("Một phòng chỉ dùng cho một môn.");
+        }
+
         return (name, type, sports);
     }
 
