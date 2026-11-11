@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import ClassPickList from '../classes/ClassPickList';
 import {
   lookupMember,
   getMemberBlockedClasses,
@@ -720,16 +719,37 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                           </select>
                         </div>
 
-                        <div className="sm:col-span-2">
-                          <span className="block text-sm font-bold text-slate-700 mb-1">Chọn lớp học *</span>
-                          <ClassPickList
-                            classes={classList}
-                            blocked={blockedClasses}
-                            selectedId={selectedClass?.id}
-                            onSelect={setSelectedClass}
-                            loading={loadingClasses}
-                            scheduleLines={scheduleLines}
-                          />
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">
+                            Chọn lớp học *
+                          </label>
+                          <select
+                            value={selectedClass?.id || ''}
+                            disabled={loadingClasses || classList.length === 0}
+                            onChange={(e) => {
+                              const cls = classList.find((c) => c.id === e.target.value);
+                              if (cls) setSelectedClass(cls);
+                            }}
+                            className="w-full rounded-xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-xs text-slate-800 font-bold outline-none focus:border-[#e31b23] cursor-pointer disabled:opacity-50"
+                          >
+                            {loadingClasses ? (
+                              <option value="">Đang tải lớp...</option>
+                            ) : classList.length > 0 ? (
+                              <>
+                                {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
+                                {classList.map((cls) => {
+                                  const reason = blockedClasses.get(String(cls.id));
+                                  return (
+                                    <option key={cls.id} value={cls.id} disabled={Boolean(reason)}>
+                                      {cls.name}{reason ? ` · ${reason}` : ''}
+                                    </option>
+                                  );
+                                })}
+                              </>
+                            ) : (
+                              <option value="">Chưa có lớp mở cho môn này</option>
+                            )}
+                          </select>
                         </div>
                       </div>
 
@@ -762,7 +782,9 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                             <span className="font-black text-[#e31b23] text-sm">{formatFee(selectedClass.tuition)}</span>
                           </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <p className="text-xs text-slate-500 italic">Hiện bộ môn này chưa có lớp nào mở đăng ký.</p>
+                      )}
                     </div>
                   ) : (
                     <p className="text-xs text-slate-500 italic">
