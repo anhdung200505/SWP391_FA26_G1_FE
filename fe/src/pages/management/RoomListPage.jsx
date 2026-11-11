@@ -227,7 +227,6 @@ export default function RoomListPage() {
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap tabular-nums">
                       <p className="font-semibold">{room.capacity} người</p>
-                      <p className="text-xs text-slate-500">1-1 tối đa {room.privateConcurrency} buổi cùng lúc</p>
                     </td>
                     <td className="px-5 py-3">
                       {room.sports.length === 0 ? (
@@ -432,7 +431,8 @@ function DeactivateDialog({ dialog, onClose, onConfirm }) {
 
 function RoomFormModal({ room, sports, onClose, onSave }) {
   const [name, setName] = useState(room?.name || '');
-  const [type, setType] = useState(room?.type || '');
+  // Không còn nhập loại phòng trên form: phòng mới để trống, phòng đang sửa giữ giá trị hiện có.
+  const type = room?.type ?? null;
   const [capacity, setCapacity] = useState(String(room?.capacity ?? 20));
   // Không còn nhập trên form: phòng mới lấy 1, phòng đang sửa giữ giá trị hiện có (luật xếp buổi 1-1 vẫn đọc cột này).
   const privateConcurrency = room?.privateConcurrency ?? 1;
@@ -462,7 +462,7 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
     try {
       await onSave({
         name: name.trim(),
-        type: type.trim() || null,
+        type,
         capacity: Number(capacity),
         privateConcurrency,
         sports: sportId ? [{ sportId, allowGroup, allowPrivate }] : [],
@@ -503,10 +503,6 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
         <label className="block text-sm font-bold text-slate-700">
           Tên phòng
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className={`${controlClass} mt-1 w-full`} />
-        </label>
-        <label className="block text-sm font-bold text-slate-700">
-          Loại phòng
-          <input value={type} onChange={(event) => setType(event.target.value)} maxLength={100} placeholder="Ví dụ: Sân cầu lông, Phòng nhảy" className={`${controlClass} mt-1 w-full`} />
         </label>
         <label className="block text-sm font-bold text-slate-700">
           Sức chứa (người)
