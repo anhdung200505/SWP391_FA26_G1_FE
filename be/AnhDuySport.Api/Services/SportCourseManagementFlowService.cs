@@ -23,7 +23,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
             .ToListAsync();
 
         var coachLinks = await db.CoachSports.AsNoTracking()
-            .Join(db.UserAccounts, link => link.CoachUserId, user => user.UserId, (link, user) => new
+            .Join(ActiveCoaches(), link => link.CoachUserId, user => user.UserId, (link, user) => new
             {
                 link.SportId,
                 user.UserId,
@@ -53,9 +53,12 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
             .ToList();
     }
 
+    // Một điều kiện duy nhất cho "HLV dùng được": vai trò COACH và đang hoạt động.
+    private IQueryable<Models.UserAccount> ActiveCoaches() =>
+        db.UserAccounts.Where(user => user.Status == "active" && user.Role!.RoleCode == "COACH");
+
     public async Task<IReadOnlyList<SportCoachOptionDto>> ListCoachOptionsAsync() =>
-        await db.UserAccounts.AsNoTracking()
-            .Where(user => user.Status == "active" && user.Role!.RoleCode == "COACH")
+        await ActiveCoaches().AsNoTracking()
             .OrderBy(user => user.FullName)
             .Select(user => new SportCoachOptionDto(user.UserId.ToString(), user.FullName))
             .ToListAsync();
@@ -131,7 +134,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
         }
     }
 
-    // Chỉ thêm liên kết phòng; thêm lại phòng đã gắn thì cập nhật hai cờ.
+    // Chỉ thêm quyền: thêm lại phòng đã gắn thì gộp (OR) hai cờ, không bao giờ gỡ quyền đã có.
     public async Task<SportAdminDto> AddRoomAsync(string sportId, SportRoomRequest request)
     {
         var id = await FindSportAsync(sportId);
@@ -143,8 +146,8 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
         }
         else
         {
-            link.AllowGroup = request.AllowGroup;
-            link.AllowPrivate = request.AllowPrivate;
+            link.AllowGroup |= request.AllowGroup;
+            link.AllowPrivate |= request.AllowPrivate;
         }
 
         await db.SaveChangesAsync();
@@ -203,7 +206,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
         }
 
         var hasCoach = await db.CoachSports.AnyAsync(link => link.SportId == sportId
-            && db.UserAccounts.Any(user => user.UserId == link.CoachUserId && user.Status == "active" && user.Role!.RoleCode == "COACH"));
+            && ActiveCoaches().Any(user => user.UserId == link.CoachUserId));
         if (!hasCoach)
         {
             throw new RegistrationException("Môn này chưa có huấn luyện viên đang hoạt động, hãy gắn HLV cho môn trước.");

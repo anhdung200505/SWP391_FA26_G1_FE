@@ -31,7 +31,7 @@ public class SportManagementController(SportCourseManagementFlowService catalog)
 
     [HttpPost("sports/{sportId}/rooms")]
     [EndpointSummary("Quản trị gắn thêm phòng cho môn")]
-    [EndpointDescription("Chỉ thêm liên kết, không gỡ phòng nào. Gắn lại phòng đã có thì cập nhật hai cờ lớp nhóm / 1-1. Phòng phải đang hoạt động và bật ít nhất một cờ.")]
+    [EndpointDescription("Chỉ thêm liên kết, không gỡ phòng nào. Gắn lại phòng đã có thì chỉ bật thêm cờ lớp nhóm / 1-1 (gộp, không tắt cờ đang bật). Phòng phải đang hoạt động và bật ít nhất một cờ.")]
     public async Task<ActionResult<SportAdminDto>> AddRoom(string sportId, SportRoomRequest request) =>
         Ok(await catalog.AddRoomAsync(sportId, request));
 
