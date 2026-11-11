@@ -169,6 +169,100 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
         return await GetAsync(id);
     }
 
+    // Xem trước: dùng chung ComputeDeleteCheckAsync với lệnh xóa nên hai bên không thể lệch nhau.
+    public async Task<DeleteSportCheckDto> CheckDeleteSportAsync(string sportId)
+    {
+        var check = await ComputeDeleteCheckAsync(await FindSportAsync(sportId));
+        return new DeleteSportCheckDto(check.BlockReason is null, check.BlockReason, check.CourseCount, check.RoomLinkCount,
+            check.CoachLinkCount, check.CoachesWithoutSport);
+    }
+
+    // Xóa trọn gói trong một giao dịch, kiểm tra lại điều kiện chặn ngay trong giao dịch. Không xóa phòng, HLV hay tài khoản, chỉ gỡ liên kết.
+    public async Task<DeleteSportResultDto> DeleteSportAsync(string sportId)
+    {
+        var id = await FindSportAsync(sportId);
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        var check = await ComputeDeleteCheckAsync(id);
+        if (check.BlockReason is not null)
+        {
+            throw new RegistrationException(check.BlockReason);
+        }
+
+        await db.SportCourseUnits.Where(item => item.SportId == id).ExecuteDeleteAsync();
+        await db.SportCourseMaterials.Where(item => item.SportId == id).ExecuteDeleteAsync();
+        await db.CoachSports.Where(item => item.SportId == id).ExecuteDeleteAsync();
+        await db.SportRooms.Where(item => item.SportId == id).ExecuteDeleteAsync();
+        var deletedCourses = await db.Courses.Where(item => item.SportId == id).ExecuteDeleteAsync();
+        await db.TrainingPlans.Where(item => item.SportId == id).ExecuteDeleteAsync();
+        await db.Sports.Where(item => item.SportId == id).ExecuteDeleteAsync();
+        await transaction.CommitAsync();
+
+        logger.LogInformation("Quản trị {ActorId} xóa môn {SportId} ({Name}), {Courses} khóa học", actor.UserId, id, check.SportName, deletedCourses);
+        return new DeleteSportResultDto(id.ToString(), check.SportName, deletedCourses, check.CoachesWithoutSport);
+    }
+
+    private sealed record DeleteCheck(string SportName, string? BlockReason, int CourseCount, int RoomLinkCount, int CoachLinkCount,
+        IReadOnlyList<SportCoachOptionDto> CoachesWithoutSport);
+
+    private async Task<DeleteCheck> ComputeDeleteCheckAsync(int sportId)
+    {
+        var sportName = await db.Sports.AsNoTracking().Where(sport => sport.SportId == sportId).Select(sport => sport.SportName).FirstAsync();
+        var courses = await db.Courses.AsNoTracking().Where(course => course.SportId == sportId)
+            .Select(course => new
+            {
+                course.CourseName,
+                Classes = db.Classes.Count(item => item.CourseId == course.CourseId),
+                Requests = db.PrivateClassRequests.Count(item => item.CourseId == course.CourseId),
+            })
+            .OrderBy(course => course.CourseName)
+            .ToListAsync();
+
+        string? blockReason = null;
+        var blocked = courses.Where(course => course.Classes > 0 || course.Requests > 0).ToList();
+        if (blocked.Count > 0)
+        {
+            var parts = blocked.Take(3).Select(course =>
+            {
+                var reasons = new List<string>();
+                if (course.Classes > 0)
+                {
+                    reasons.Add($"đã có {course.Classes} lớp");
+                }
+
+                if (course.Requests > 0)
+                {
+                    reasons.Add($"có {course.Requests} yêu cầu học 1-1");
+                }
+
+                return $"Khóa học '{course.CourseName}' {string.Join(" và ", reasons)}";
+            });
+            blockReason = string.Join(", ", parts) + (blocked.Count > 3 ? $" và {blocked.Count - 3} khóa khác" : "") + " nên không xóa được môn.";
+        }
+        else
+        {
+            var planClasses = await db.Classes.CountAsync(item => db.TrainingPlans.Any(plan => plan.TrainingPlanId == item.TrainingPlanId && plan.SportId == sportId));
+            var planRecommendations = await db.WorkoutRecommendations.CountAsync(item => db.TrainingPlans.Any(plan => plan.TrainingPlanId == item.TrainingPlanId && plan.SportId == sportId));
+            if (planClasses > 0)
+            {
+                blockReason = $"Có {planClasses} lớp đang dùng giáo án của môn nên không xóa được môn.";
+            }
+            else if (planRecommendations > 0)
+            {
+                blockReason = $"Có {planRecommendations} gợi ý tập luyện AI đang dùng giáo án của môn nên không xóa được môn.";
+            }
+        }
+
+        var roomLinks = await db.SportRooms.CountAsync(link => link.SportId == sportId);
+        var coachLinks = await db.CoachSports.CountAsync(link => link.SportId == sportId);
+        var withoutSport = await ActiveCoaches().AsNoTracking()
+            .Where(user => db.CoachSports.Any(link => link.CoachUserId == user.UserId && link.SportId == sportId)
+                && !db.CoachSports.Any(link => link.CoachUserId == user.UserId && link.SportId != sportId))
+            .OrderBy(user => user.FullName)
+            .Select(user => new SportCoachOptionDto(user.UserId.ToString(), user.FullName))
+            .ToListAsync();
+        return new DeleteCheck(sportName, blockReason, courses.Count, roomLinks, coachLinks, withoutSport);
+    }
+
     public async Task<IReadOnlyList<CourseAdminDto>> ListCoursesAsync(string? sportId)
     {
         var query = db.Courses.AsNoTracking().AsQueryable();

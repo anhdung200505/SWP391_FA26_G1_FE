@@ -15,6 +15,21 @@ public sealed record SportAdminDto(
     IReadOnlyList<SportCoachOptionDto> Coaches,
     int CourseCount);
 
+// Xem trước khi xóa môn: có xóa được không, vì sao không, và HLV nào sẽ không còn môn nào.
+public sealed record DeleteSportCheckDto(
+    bool CanDelete,
+    string? BlockReason,
+    int CourseCount,
+    int RoomLinkCount,
+    int CoachLinkCount,
+    IReadOnlyList<SportCoachOptionDto> CoachesWithoutSport);
+
+public sealed record DeleteSportResultDto(
+    string SportId,
+    string SportName,
+    int DeletedCourses,
+    IReadOnlyList<SportCoachOptionDto> CoachesWithoutSport);
+
 // Gắn phòng cho môn. RoomId là id phòng (khác RoomSportRequest mang id môn).
 public sealed record SportRoomRequest(string RoomId, bool AllowGroup, bool AllowPrivate);
 

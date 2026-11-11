@@ -40,6 +40,18 @@ public class SportManagementController(SportCourseManagementFlowService catalog)
     [EndpointDescription("Chỉ thêm HLV chưa dạy môn này, không gỡ ai. HLV phải đang hoạt động.")]
     public async Task<ActionResult<SportAdminDto>> AddCoaches(string sportId, AddSportCoachesRequest request) =>
         Ok(await catalog.AddCoachesAsync(sportId, request));
+
+    [HttpGet("sports/{sportId}/delete-check")]
+    [EndpointSummary("Quản trị xem trước khi xóa môn")]
+    [EndpointDescription("Chỉ đọc, không đổi dữ liệu. Cho biết môn có xóa được không (blockReason là đúng lý do mà lệnh xóa sẽ trả), số khóa học, phòng, HLV sẽ bị gỡ và các HLV sẽ không còn môn nào.")]
+    public async Task<ActionResult<DeleteSportCheckDto>> DeleteSportCheck(string sportId) =>
+        Ok(await catalog.CheckDeleteSportAsync(sportId));
+
+    [HttpDelete("sports/{sportId}")]
+    [EndpointSummary("Quản trị xóa môn")]
+    [EndpointDescription("Chỉ xóa được khi mọi khóa học của môn chưa có lớp nào (mọi trạng thái), chưa có yêu cầu học 1-1, và không lớp nào dùng giáo án của môn. Xóa trong một giao dịch: đơn vị và tài liệu khóa học, liên kết HLV và phòng, khóa học, giáo án, rồi môn. Không xóa phòng hay HLV. Trả về danh sách HLV không còn môn nào.")]
+    public async Task<ActionResult<DeleteSportResultDto>> DeleteSport(string sportId) =>
+        Ok(await catalog.DeleteSportAsync(sportId));
 }
 
 [Authorize(Roles = "ADMIN")]
