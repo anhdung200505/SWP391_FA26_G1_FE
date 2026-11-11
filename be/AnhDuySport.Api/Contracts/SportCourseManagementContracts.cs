@@ -22,7 +22,11 @@ public sealed record DeleteSportCheckDto(
     int CourseCount,
     int RoomLinkCount,
     int CoachLinkCount,
-    IReadOnlyList<SportCoachOptionDto> CoachesWithoutSport);
+    IReadOnlyList<SportCoachOptionDto> CoachesWithoutSport,
+    IReadOnlyList<BlockedCourseDto>? BlockedCourses = null);
+
+// Khóa học đang chặn việc xóa môn: số lớp và số yêu cầu học 1-1 còn gắn với khóa.
+public sealed record BlockedCourseDto(string CourseName, int Classes, int Requests);
 
 public sealed record DeleteSportResultDto(
     string SportId,

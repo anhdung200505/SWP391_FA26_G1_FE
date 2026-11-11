@@ -168,7 +168,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
     {
         var check = await ComputeDeleteCheckAsync(await FindSportAsync(sportId));
         return new DeleteSportCheckDto(check.BlockReason is null, check.BlockReason, check.CourseCount, check.RoomLinkCount,
-            check.CoachLinkCount, check.CoachesWithoutSport);
+            check.CoachLinkCount, check.CoachesWithoutSport, check.BlockedCourses);
     }
 
     // Xóa trọn gói trong một giao dịch, kiểm tra lại điều kiện chặn ngay trong giao dịch. Không xóa phòng, HLV hay tài khoản, chỉ gỡ liên kết.
@@ -196,7 +196,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
     }
 
     private sealed record DeleteCheck(string SportName, string? BlockReason, int CourseCount, int RoomLinkCount, int CoachLinkCount,
-        IReadOnlyList<SportCoachOptionDto> CoachesWithoutSport);
+        IReadOnlyList<SportCoachOptionDto> CoachesWithoutSport, IReadOnlyList<BlockedCourseDto> BlockedCourses);
 
     private async Task<DeleteCheck> ComputeDeleteCheckAsync(int sportId)
     {
@@ -254,7 +254,8 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
             .OrderBy(user => user.FullName)
             .Select(user => new SportCoachOptionDto(user.UserId.ToString(), user.FullName))
             .ToListAsync();
-        return new DeleteCheck(sportName, blockReason, courses.Count, roomLinks, coachLinks, withoutSport);
+        var blockedCourses = blocked.Select(course => new BlockedCourseDto(course.CourseName, course.Classes, course.Requests)).ToList();
+        return new DeleteCheck(sportName, blockReason, courses.Count, roomLinks, coachLinks, withoutSport, blockedCourses);
     }
 
     public async Task<IReadOnlyList<CourseAdminDto>> ListCoursesAsync(string? sportId)
