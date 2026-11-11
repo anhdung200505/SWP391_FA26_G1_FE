@@ -480,7 +480,7 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
           <label className="block text-sm font-bold text-slate-700">
             Môn của phòng
             <select value={sportId} onChange={(event) => setSportId(event.target.value)} className={`${controlClass} mt-1 w-full`}>
-              <option value="">Chọn môn</option>
+              <option value="" disabled={Boolean(initial)}>Chọn môn</option>
               {sports.map((sport) => (
                 <option key={sport.id} value={String(sport.id)}>
                   {sport.name}
