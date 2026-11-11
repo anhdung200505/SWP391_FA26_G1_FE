@@ -6,7 +6,7 @@ import { clearSession, readSession } from '../auth/session';
 // ============================================
 
 // Local: sử dụng Vite Proxy.
-// Azure: gọi trực tiếp Backend thông qua LocalTunnel.
+// Production: gọi API trên Fly theo VITE_API_BASE_URL trong .env.production.
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || ''
 ).replace(/\/+$/, '');

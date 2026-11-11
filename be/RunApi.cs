@@ -22,19 +22,6 @@ var api = new Process
 };
 api.StartInfo.Environment["PUBLIC_GATE_PASSWORD"] = "AnhDuy@123";
 
-var tunnel = new Process
-{
-    StartInfo = new ProcessStartInfo
-    {
-        FileName = "cmd.exe",
-        Arguments = "/c npx --yes localtunnel --port 5080 --subdomain anhduysport",
-        WorkingDirectory = apiDirectory,
-        UseShellExecute = false,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-    },
-};
-
 void Write(string? line)
 {
     if (!string.IsNullOrEmpty(line)) Console.WriteLine(line);
@@ -42,28 +29,20 @@ void Write(string? line)
 
 api.OutputDataReceived += (_, eventArgs) => Write(eventArgs.Data);
 api.ErrorDataReceived += (_, eventArgs) => Write(eventArgs.Data);
-tunnel.OutputDataReceived += (_, eventArgs) => Write(eventArgs.Data);
-tunnel.ErrorDataReceived += (_, eventArgs) => Write(eventArgs.Data);
 
 api.Start();
 api.BeginOutputReadLine();
 api.BeginErrorReadLine();
-tunnel.Start();
-tunnel.BeginOutputReadLine();
-tunnel.BeginErrorReadLine();
 
 Console.WriteLine("Swagger trên máy: http://localhost:5080/swagger");
-Console.WriteLine("Swagger trên web: https://anhduysport.loca.lt/swagger");
 
 Console.CancelKeyPress += (_, eventArgs) =>
 {
     eventArgs.Cancel = true;
-    Stop(tunnel);
     Stop(api);
 };
 
 api.WaitForExit();
-Stop(tunnel);
 Environment.Exit(api.ExitCode);
 
 static void Stop(Process process)
