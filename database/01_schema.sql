@@ -653,7 +653,7 @@ CREATE TABLE membership_package (
     CONSTRAINT PK_membership_package PRIMARY KEY (membership_package_id),
     CONSTRAINT UQ_membership_package_code UNIQUE (package_code),
     CONSTRAINT CK_membership_package_fee CHECK (fee > 0),
-    CONSTRAINT CK_membership_package_months CHECK (validity_months = 1),
+    CONSTRAINT CK_membership_package_months CHECK (validity_months >= 1 AND validity_months <= 1200),
     CONSTRAINT CK_membership_package_status CHECK (status IN (N'active', N'inactive')),
     CONSTRAINT CK_membership_package_upgrade_discount CHECK (upgrade_discount_percent >= 0 AND upgrade_discount_percent <= 100),
     CONSTRAINT CK_membership_package_ai_regeneration CHECK (ai_regeneration_limit >= 0),
