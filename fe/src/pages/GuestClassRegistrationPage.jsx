@@ -16,6 +16,9 @@ import {
   createMembershipRenewal,
   getPendingCheckouts,
   getMemberMembership,
+  getSandboxPayment,
+  sandboxPayMembership,
+  sandboxPayRegistration,
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 import PrivateRegistrationForm from '../components/private/PrivateRegistrationForm';
@@ -132,6 +135,8 @@ export default function GuestClassRegistrationPage({ membershipOnly = false }) {
   const [now, setNow] = useState(() => Date.now());
   const [redirectLeft, setRedirectLeft] = useState(PAID_REDIRECT_SECONDS);
   const [membershipAfterPay, setMembershipAfterPay] = useState(null);
+  const [sandboxEnabled, setSandboxEnabled] = useState(false);
+  const [sandboxPaying, setSandboxPaying] = useState(false);
 
   // KIỂM TRA GÓI HỘI VIÊN VÀ TỰ ĐỘNG CHUYỂN HƯỚNG NẾU ĐÃ CÓ GÓI
   useEffect(() => {
@@ -305,6 +310,37 @@ export default function GuestClassRegistrationPage({ membershipOnly = false }) {
       active = false;
     };
   }, [user?.id]);
+
+  // Thanh toán thử (sandbox): dự phòng khi demo mà payOS lỗi, cho đơn lớp, đơn 1-1 và đơn gói riêng.
+  // Chỉ hiện khi backend bật Payment:SandboxEnabled; payOS vẫn là cách thanh toán chính.
+  useEffect(() => {
+    let active = true;
+    getSandboxPayment()
+      .then((res) => {
+        if (active) setSandboxEnabled(Boolean(res?.enabled));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSandboxPay = async () => {
+    if (!registrationResult?.paymentId || sandboxPaying) return;
+    setSandboxPaying(true);
+    setError('');
+    try {
+      const status =
+        registrationResult.kind === 'membership'
+          ? await sandboxPayMembership(user?.id, registrationResult.paymentId)
+          : await sandboxPayRegistration(registrationResult.paymentId);
+      setPaymentStatusData(status);
+    } catch (err) {
+      setError(err.message || 'Thanh toán thử thất bại.');
+    } finally {
+      setSandboxPaying(false);
+    }
+  };
 
   const qrImage = registrationResult?.payosQrImage || '';
   const isPaid = paymentStatusData?.paymentStatus === 'paid' || paymentStatusData?.paymentStatus === 'success';
@@ -603,6 +639,25 @@ export default function GuestClassRegistrationPage({ membershipOnly = false }) {
                   <a href={registrationResult.paymentUrl} target="_blank" rel="noreferrer" className="mt-3 text-sm font-bold text-[#e31b23]">
                     Mở trang thanh toán
                   </a>
+                )}
+                {!isPaid && sandboxEnabled && (
+                  <div className="mt-4 w-full max-w-xs rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-3">
+                    <p className="text-[11px] font-semibold text-amber-900">
+                      Dự phòng khi payOS lỗi: thanh toán thử sẽ {registrationResult.kind === 'membership' ? 'kích hoạt gói' : 'ghi danh'} như
+                      đã trả tiền (không trừ tiền thật).
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSandboxPay}
+                      disabled={sandboxPaying}
+                      className="mt-2 w-full rounded-xl border border-amber-400 bg-white px-3 py-2 text-sm font-bold text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                    >
+                      {sandboxPaying ? 'Đang xử lý...' : 'Thanh toán thử (sandbox)'}
+                    </button>
+                  </div>
+                )}
+                {error && !isPaid && (
+                  <p className="mt-3 max-w-xs text-xs font-semibold text-red-700">{error}</p>
                 )}
               </div>
             </div>
