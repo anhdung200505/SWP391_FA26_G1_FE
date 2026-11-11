@@ -25,9 +25,9 @@ function pickSession(sessions) {
   return (due.at(-1) || sessions[0])?.sessionId || '';
 }
 
-export default function AttendancePanel({ classId, sessions }) {
+export default function AttendancePanel({ classId, sessions, initialSessionId }) {
   const openSessions = (sessions || []).filter((session) => session.status !== 'cancelled');
-  const [sessionId, setSessionId] = useState(() => pickSession(openSessions));
+  const [sessionId, setSessionId] = useState(() => initialSessionId || pickSession(openSessions));
   const [sheet, setSheet] = useState(null);
   const [marks, setMarks] = useState({});
   const [loading, setLoading] = useState(false);
@@ -36,8 +36,8 @@ export default function AttendancePanel({ classId, sessions }) {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    setSessionId(pickSession(openSessions));
-  }, [classId]);
+    setSessionId(initialSessionId || pickSession(openSessions));
+  }, [classId, initialSessionId]);
 
   useEffect(() => {
     if (!classId || !sessionId) {
