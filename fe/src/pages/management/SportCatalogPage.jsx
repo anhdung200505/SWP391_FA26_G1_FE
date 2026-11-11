@@ -187,7 +187,7 @@ export default function SportCatalogPage() {
         )}
       </div>
 
-      {sportForm && <SportForm rooms={rooms} coaches={coaches} onClose={() => setSportForm(false)} onSave={saveSport} />}
+      {sportForm && <SportForm onClose={() => setSportForm(false)} onSave={saveSport} />}
       {courseForm && (
         <CourseForm
           sport={currentSport}
