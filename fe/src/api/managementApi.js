@@ -812,6 +812,15 @@ export function createCatalogSport(payload) {
   return request('/management/catalog/sports', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+// Xem trước khi xóa môn (chỉ đọc).
+export function getCatalogSportDeleteCheck(sportId) {
+  return request(`/management/catalog/sports/${sportId}/delete-check`);
+}
+
+export function deleteCatalogSport(sportId) {
+  return request(`/management/catalog/sports/${sportId}`, { method: 'DELETE' });
+}
+
 export function addCatalogSportRoom(sportId, payload) {
   return request(`/management/catalog/sports/${sportId}/rooms`, { method: 'POST', body: JSON.stringify(payload) });
 }

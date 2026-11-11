@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import ManagementShell from '../../components/management/ManagementShell';
 import SportForm from '../../components/management/SportForm';
 import CourseForm from '../../components/management/CourseForm';
+import DeleteSportDialog from '../../components/management/DeleteSportDialog';
 import { focusRing } from '../../components/management/sportLinkUtils';
 import {
   createCatalogCourse,
@@ -35,6 +36,7 @@ export default function SportCatalogPage() {
   // { sport, course } (course = null khi thêm mới)
   const [courseForm, setCourseForm] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const applyAll = useCallback(([sportData, roomData, coachData]) => {
     setSports(Array.isArray(sportData) ? sportData : []);
@@ -102,6 +104,19 @@ export default function SportCatalogPage() {
     setCourseForm(null);
     setError('');
     setNotice(course ? `Đã cập nhật khóa ${saved.name}.` : `Đã thêm khóa ${saved.name} (${saved.code}).`);
+  };
+
+  const sportDeleted = (result) => {
+    setSports((current) => current.filter((item) => item.id !== result.sportId));
+    setCoursesBySport((current) => {
+      const { [result.sportId]: removed, ...rest } = current;
+      void removed;
+      return rest;
+    });
+    setOpenId((current) => (current === result.sportId ? null : current));
+    setDeleteTarget(null);
+    setError('');
+    setNotice(`Đã xóa môn ${result.sportName} và ${result.deletedCourses} khóa học.`);
   };
 
   const toggleCourse = async (sport, course) => {
@@ -180,6 +195,7 @@ export default function SportCatalogPage() {
               onRetry={() => loadCourses(sport.id)}
               onToggle={() => toggleSport(sport.id)}
               onAddCourse={() => setCourseForm({ sport, course: null })}
+              onDelete={() => setDeleteTarget(sport)}
               onEditCourse={(course) => setCourseForm({ sport, course })}
               onToggleCourse={(course) => toggleCourse(sport, course)}
             />
@@ -187,6 +203,7 @@ export default function SportCatalogPage() {
         )}
       </div>
 
+      {deleteTarget && <DeleteSportDialog key={deleteTarget.id} sport={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={sportDeleted} />}
       {sportForm && <SportForm onClose={() => setSportForm(false)} onSave={saveSport} />}
       {courseForm && (
         <CourseForm
@@ -204,7 +221,7 @@ export default function SportCatalogPage() {
   );
 }
 
-function SportCard({ sport, open, courses, loadFailed, onRetry, onToggle, onAddCourse, onEditCourse, onToggleCourse }) {
+function SportCard({ sport, open, courses, loadFailed, onRetry, onToggle, onAddCourse, onDelete, onEditCourse, onToggleCourse }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
@@ -220,13 +237,22 @@ function SportCard({ sport, open, courses, loadFailed, onRetry, onToggle, onAddC
             </span>
           </span>
         </button>
-        <button
-          type="button"
-          onClick={onAddCourse}
-          className={`inline-flex h-9 cursor-pointer items-center rounded-xl bg-slate-900 px-3.5 text-xs font-bold text-white transition-colors hover:bg-[#e31b23] ${focusRing}`}
-        >
-          Thêm khóa học
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onDelete}
+            className={`inline-flex h-9 cursor-pointer items-center rounded-xl border border-red-300 bg-white px-3.5 text-xs font-bold text-[#e31b23] transition-colors hover:bg-red-50 ${focusRing}`}
+          >
+            Xóa môn
+          </button>
+          <button
+            type="button"
+            onClick={onAddCourse}
+            className={`inline-flex h-9 cursor-pointer items-center rounded-xl bg-slate-900 px-3.5 text-xs font-bold text-white transition-colors hover:bg-[#e31b23] ${focusRing}`}
+          >
+            Thêm khóa học
+          </button>
+        </div>
       </div>
 
       {open && (
