@@ -273,9 +273,24 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
             throw new RegistrationException("Tên khóa học là bắt buộc và không quá 200 ký tự.");
         }
 
-        if (price < 0)
+        if (price is < 0 or > 9999999999999.99m)
         {
-            throw new RegistrationException("Học phí không được âm.");
+            throw new RegistrationException("Học phí phải từ 0 đến 9.999.999.999.999,99.");
+        }
+
+        if (Clean(levelName) is { Length: > 50 })
+        {
+            throw new RegistrationException("Cấp độ không quá 50 ký tự.");
+        }
+
+        if (Clean(ageRange) is { Length: > 50 })
+        {
+            throw new RegistrationException("Độ tuổi không quá 50 ký tự.");
+        }
+
+        if (Clean(imagePath) is { Length: > 500 })
+        {
+            throw new RegistrationException("Đường dẫn hình ảnh không quá 500 ký tự.");
         }
 
         if (format is not ("group" or "private"))
