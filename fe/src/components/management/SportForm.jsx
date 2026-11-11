@@ -36,7 +36,6 @@ export default function SportForm({ onClose, onSave }) {
           Tên môn
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={100} className={`${controlClass} mt-1 w-full`} />
         </label>
-        <p className="text-xs text-slate-500">Phòng và HLV gán khi tạo khóa học đầu tiên của môn.</p>
         {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="h-10 cursor-pointer rounded-xl bg-slate-100 px-5 text-sm font-bold text-slate-700 hover:bg-slate-200">
