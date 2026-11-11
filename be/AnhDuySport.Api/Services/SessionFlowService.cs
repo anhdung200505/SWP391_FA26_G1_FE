@@ -63,8 +63,17 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
         var attendance = await db.ClassAttendances.AsNoTracking()
             .Where(item => item.UserId == memberUserId && sessionIds.Contains(item.SessionId))
             .ToDictionaryAsync(item => item.SessionId, item => item.Status);
+        // Buổi bắt đầu trước giờ ghi danh (enrolled_at) của lớp đó thì đánh dấu BeforeEnrollment để lịch không hiện "Vắng".
+        var enrolledAt = await db.ClassEnrollments.AsNoTracking()
+            .Where(item => item.UserId == memberUserId && item.Status == "enrolled")
+            .ToDictionaryAsync(item => item.ClassId, item => item.EnrolledAt);
         return rows
-            .Select(row => row with { AttendanceStatus = attendance.GetValueOrDefault(int.Parse(row.Id)) })
+            .Select(row => row with
+            {
+                AttendanceStatus = attendance.GetValueOrDefault(int.Parse(row.Id)),
+                BeforeEnrollment = enrolledAt.TryGetValue(int.Parse(row.ClassId), out var joined)
+                    && row.Date.ToDateTime(row.StartTime) < joined,
+            })
             .ToList();
     }
 
