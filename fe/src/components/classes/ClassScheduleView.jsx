@@ -214,11 +214,6 @@ export default function ClassScheduleView({ classId, mode = 'admin', loadClasses
                             Đổi
                           </button>
                           {isAdmin && (
-                            <button type="button" onClick={() => setSlotting({ session, mode: 'reschedule' })} className="text-xs font-semibold text-gray-700 underline">
-                              Đổi lịch
-                            </button>
-                          )}
-                          {isAdmin && (
                             <button type="button" onClick={() => setCancelling(session)} className="text-xs font-semibold text-[#e31b23] underline">
                               Hủy buổi
                             </button>
