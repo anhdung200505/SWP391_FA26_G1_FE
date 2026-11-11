@@ -608,6 +608,12 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
             return "Buổi bù không xếp vào khung tối (sau 18:00).";
         }
 
+        // Cùng ngày với buổi bị hủy vẫn bù được ở khung khác, chỉ không trùng đúng khung của buổi bị hủy.
+        if (isMakeup && date == context.Session.SessionDate && slot.TimeSlotId == context.Session.TimeSlotId)
+        {
+            return "Trùng khung giờ của buổi bị hủy, chọn khung khác.";
+        }
+
         if (slot.Kind != context.Class.ClassType)
         {
             return "Khung giờ không đúng loại lớp.";
