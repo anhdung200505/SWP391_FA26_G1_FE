@@ -12,6 +12,7 @@ const BADGES = {
   pending: { label: 'Chưa điểm danh', className: 'border-slate-200 bg-slate-100 text-slate-500' },
   today: { label: 'Hôm nay', className: 'border-amber-200 bg-amber-50 text-amber-700' },
   upcoming: { label: 'Chưa điểm danh', className: 'border-slate-200 bg-slate-100 text-slate-500' },
+  beforeJoin: { label: 'Chưa vào lớp', className: 'border-slate-200 bg-slate-100 text-slate-500' },
 };
 
 const pad = (value) => String(value).padStart(2, '0');
@@ -19,6 +20,8 @@ const pad = (value) => String(value).padStart(2, '0');
 function badgeKey(session, now) {
   if (session.status === 'cancelled') return 'cancelled';
   if (session.attendanceStatus) return session.attendanceStatus;
+  // Buổi bắt đầu trước giờ học viên đăng ký lớp thì không tính vắng.
+  if (session.beforeEnrollment) return 'beforeJoin';
   const today = toIso(now);
   // Qua 23:59 của ngày học mà chưa có điểm danh thì BE tự ghi vắng; hiện luôn để khỏi chờ job.
   if (session.date < today) return 'absent';

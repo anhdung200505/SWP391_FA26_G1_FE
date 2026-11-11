@@ -99,7 +99,7 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
     {
         var owned = await access.RequireAsync(classId);
         var session = await RequireSessionAsync(owned.ClassId, sessionId);
-        var rows = await RosterMarksAsync(owned.ClassId, session.SessionId);
+        var rows = await RosterMarksAsync(owned.ClassId, session);
         return ToSheet(session, rows, AttendanceLock(session, DateTime.Now, asAdmin: false));
     }
 
@@ -108,7 +108,7 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
     {
         var owned = await access.RequireAnyAsync(classId);
         var session = await RequireSessionAsync(owned.ClassId, sessionId);
-        var rows = await RosterMarksAsync(owned.ClassId, session.SessionId);
+        var rows = await RosterMarksAsync(owned.ClassId, session);
         return ToSheet(session, rows, AttendanceLock(session, DateTime.Now, asAdmin: true));
     }
 
@@ -134,10 +134,8 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
             throw new RegistrationException(locked);
         }
 
-        var roster = await db.ClassEnrollments
-            .Where(enrollment => enrollment.ClassId == owned.ClassId && enrollment.Status == "enrolled")
-            .Select(enrollment => enrollment.UserId)
-            .ToListAsync();
+        // Chỉ học viên đã ghi danh trước giờ bắt đầu buổi (hoặc đã có dòng điểm danh) mới thuộc bảng của buổi này.
+        var roster = (await SessionRosterAsync(owned.ClassId, session)).Select(member => member.UserId).ToList();
         if (roster.Count == 0)
         {
             throw new RegistrationException("Lớp chưa có học viên để điểm danh.");
@@ -208,7 +206,7 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
             CreatedAt = now,
         });
         await db.SaveChangesAsync();
-        var rows = await RosterMarksAsync(owned.ClassId, session.SessionId);
+        var rows = await RosterMarksAsync(owned.ClassId, session);
         return ToSheet(session, rows, AttendanceLock(session, DateTime.Now, asAdmin));
     }
 
@@ -404,11 +402,26 @@ public class CoachCourseFlowService(AppDbContext db, CoachClassAccess access, Cu
         return rows.Select(row => (row.UserId, row.FullName)).ToList();
     }
 
-    private async Task<List<AttendanceRowDto>> RosterMarksAsync(int classId, int sessionId)
+    // Bảng điểm danh của một buổi: học viên đang ghi danh có enrolled_at <= giờ bắt đầu buổi, cộng người đã có dòng điểm danh buổi đó.
+    // Người vào lớp sau khi buổi đã bắt đầu không hiện và không bắt buộc điểm danh (khớp job tự đánh vắng).
+    private async Task<List<(int UserId, string FullName)>> SessionRosterAsync(int classId, ClassSession session)
     {
-        var members = await EnrolledMembersAsync(classId);
+        var start = session.SessionDate.ToDateTime(session.StartTime);
+        var marked = db.ClassAttendances.AsNoTracking().Where(row => row.SessionId == session.SessionId).Select(row => row.UserId);
+        var rows = await db.ClassEnrollments.AsNoTracking()
+            .Where(enrollment => enrollment.ClassId == classId && enrollment.Status == "enrolled"
+                && (enrollment.EnrolledAt <= start || marked.Contains(enrollment.UserId)))
+            .Join(db.UserAccounts.AsNoTracking(), enrollment => enrollment.UserId, user => user.UserId, (enrollment, user) => new { user.UserId, user.FullName })
+            .OrderBy(row => row.FullName)
+            .ToListAsync();
+        return rows.Select(row => (row.UserId, row.FullName)).ToList();
+    }
+
+    private async Task<List<AttendanceRowDto>> RosterMarksAsync(int classId, ClassSession session)
+    {
+        var members = await SessionRosterAsync(classId, session);
         var marks = await db.ClassAttendances.AsNoTracking()
-            .Where(row => row.SessionId == sessionId)
+            .Where(row => row.SessionId == session.SessionId)
             .ToDictionaryAsync(row => row.UserId, row => row.Status);
         return members
             .Select(member => new AttendanceRowDto(member.UserId.ToString(), member.FullName, marks.GetValueOrDefault(member.UserId)))

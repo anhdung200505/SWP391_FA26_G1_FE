@@ -282,15 +282,6 @@ export default function SessionSchedulePanel({ mode = 'admin', initialClassId = 
                             {isAdmin && (
                               <button
                                 type="button"
-                                onClick={() => setSlotting({ session, mode: 'reschedule' })}
-                                className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer"
-                              >
-                                Đổi lịch học
-                              </button>
-                            )}
-                            {isAdmin && (
-                              <button
-                                type="button"
                                 onClick={() => setCancelling(session)}
                                 className="border border-red-200 bg-white text-[#e31b23] hover:bg-red-50 font-bold text-[11px] px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                               >

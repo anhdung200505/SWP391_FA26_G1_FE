@@ -5,7 +5,7 @@ namespace AnhDuySport.Api.Services;
 
 // Sau 23:59 của ngày học, học viên đang học trong lớp mà buổi đó chưa có điểm danh thì tự ghi "absent" (vắng).
 // Chạy lúc khởi động (bù cả buổi cũ) rồi mỗi 10 phút; chỉ thêm dòng còn thiếu nên chạy lại không đổi gì thêm.
-// Bỏ qua buổi đã hủy và học viên ghi danh sau ngày học.
+// Bỏ qua buổi đã hủy và buổi đã bắt đầu trước giờ học viên ghi danh (so enrolled_at với ngày + giờ bắt đầu buổi, không chỉ so ngày).
 public class AttendanceAutoAbsentService(IServiceScopeFactory scopes, ILogger<AttendanceAutoAbsentService> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
@@ -25,7 +25,7 @@ public class AttendanceAutoAbsentService(IServiceScopeFactory scopes, ILogger<At
                     JOIN class_enrollment e ON e.class_id = s.class_id AND e.status = N'enrolled'
                     WHERE s.session_date < {DateOnly.FromDateTime(DateTime.Now)}
                       AND s.status <> N'cancelled'
-                      AND CAST(e.enrolled_at AS DATE) <= s.session_date
+                      AND e.enrolled_at <= CAST(s.session_date AS DATETIME) + CAST(s.start_time AS DATETIME)
                       AND NOT EXISTS (SELECT 1 FROM attendance a WHERE a.session_id = s.session_id AND a.user_id = e.user_id)
                     """, stoppingToken);
                 if (added > 0)

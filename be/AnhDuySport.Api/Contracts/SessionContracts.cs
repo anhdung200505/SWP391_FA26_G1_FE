@@ -33,7 +33,9 @@ public sealed record SessionDto(
     bool IsSubstituteCoach = false,
     // CoachChange: null, substitute (dạy thay một buổi) hoặc permanent (đổi HLV vĩnh viễn). RoomChanged: phòng khác phòng mặc định của lớp.
     string? CoachChange = null,
-    bool RoomChanged = false);
+    bool RoomChanged = false,
+    // Chỉ điền ở lịch của học viên: true = buổi bắt đầu trước giờ học viên ghi danh lớp (không tính vắng).
+    bool BeforeEnrollment = false);
 
 // Khung giờ cố định. Kind: group (3 giờ) hoặc private (90 phút).
 public sealed record TimeSlotDto(
