@@ -22,7 +22,6 @@ import {
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 import PrivateRegistrationForm from '../components/private/PrivateRegistrationForm';
-import ClassPickList from '../components/classes/ClassPickList';
 
 const PAYMENT_TIMEOUT_SECONDS = 180;
 const PAID_REDIRECT_SECONDS = 5;
@@ -744,20 +743,60 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
                         ))}
                       </select>
                     </label>
-                    <div className="text-sm font-bold text-slate-700 sm:col-span-2">
+                    <label className="block text-sm font-bold text-slate-700">
                       Lớp
-                      <div className="mt-1">
-                        <ClassPickList
-                          classes={classList}
-                          blocked={blockedClasses}
-                          selectedId={selectedClass?.id}
-                          onSelect={setSelectedClass}
-                          loading={loadingClasses}
-                          scheduleLines={scheduleLines}
-                        />
-                      </div>
-                    </div>
+                      <select
+                        value={selectedClass?.id || ''}
+                        disabled={loadingClasses || classList.length === 0}
+                        onChange={(event) => {
+                          const next = classList.find((item) => item.id === event.target.value);
+                          if (next) setSelectedClass(next);
+                        }}
+                        className={fieldClass}
+                      >
+                        {loadingClasses ? (
+                          <option value="">Đang tải lớp...</option>
+                        ) : classList.length > 0 ? (
+                          <>
+                            {!selectedClass && <option value="">Không còn lớp không bị trùng</option>}
+                            {classList.map((item) => {
+                              const reason = blockedClasses.get(String(item.id));
+                              return (
+                                <option key={item.id} value={item.id} disabled={Boolean(reason)}>
+                                  {item.name}{reason ? ` · ${reason}` : ''}
+                                </option>
+                              );
+                            })}
+                          </>
+                        ) : (
+                          <option value="">Chưa có lớp mở cho môn này</option>
+                        )}
+                      </select>
+                    </label>
                   </div>
+                  {(() => {
+                    const blocked = classList.filter((item) => blockedClasses.has(String(item.id)));
+                    if (blocked.length === 0) return null;
+                    return (
+                      <div role="status" className="mt-4 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+                          <path d="M12 9v4M12 17h.01" />
+                        </svg>
+                        <div className="min-w-0">
+                          <p className="font-black">{selectedClass ? 'Không thể chọn các lớp sau' : 'Không còn lớp nào có thể đăng ký'}</p>
+                          <ul className="mt-1 space-y-1">
+                            {blocked.map((item) => (
+                              <li key={item.id}>
+                                <span className="font-bold">{item.name}</span>
+                                <span className="text-amber-900"> — {blockedClasses.get(String(item.id))}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {selectedClass ? (
                     <dl className="mt-4 grid gap-2 rounded-2xl bg-[#f4f5f7] p-4 text-sm sm:grid-cols-2">
                       <div>
@@ -791,6 +830,8 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
                         </dd>
                       </div>
                     </dl>
+                  ) : classList.length === 0 ? (
+                    <p className="mt-4 text-sm text-slate-500">Môn này chưa có lớp đang mở.</p>
                   ) : null}
                 </section>
               )}

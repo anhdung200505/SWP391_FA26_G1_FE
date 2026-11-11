@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
-import { createRoom, getRoomOverview, getRoomUsage, getSports, setRoomStatus, updateRoom } from '../../api/managementApi';
+import { createRoom, getCatalogSports, getRoomOverview, getRoomUsage, setRoomStatus, updateRoom } from '../../api/managementApi';
 import { formatDate } from '../../data/accountManagement';
 
 const focusRing =
@@ -36,7 +36,7 @@ export default function RoomListPage() {
   const [allSports, setAllSports] = useState([]);
 
   useEffect(() => {
-    getSports('1').then((data) => setAllSports(Array.isArray(data) ? data : [])).catch(() => setAllSports([]));
+    getCatalogSports().then((data) => setAllSports(Array.isArray(data) ? data : [])).catch(() => setAllSports([]));
   }, []);
 
   useEffect(() => {
@@ -227,7 +227,6 @@ export default function RoomListPage() {
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap tabular-nums">
                       <p className="font-semibold">{room.capacity} người</p>
-                      <p className="text-xs text-slate-500">1-1 tối đa {room.privateConcurrency} buổi cùng lúc</p>
                     </td>
                     <td className="px-5 py-3">
                       {room.sports.length === 0 ? (
@@ -432,23 +431,28 @@ function DeactivateDialog({ dialog, onClose, onConfirm }) {
 
 function RoomFormModal({ room, sports, onClose, onSave }) {
   const [name, setName] = useState(room?.name || '');
-  const [type, setType] = useState(room?.type || '');
+  // Không còn nhập loại phòng trên form: phòng mới để trống, phòng đang sửa giữ giá trị hiện có.
+  const type = room?.type ?? null;
   const [capacity, setCapacity] = useState(String(room?.capacity ?? 20));
-  const [concurrency, setConcurrency] = useState(String(room?.privateConcurrency ?? 1));
-  const [picked, setPicked] = useState(() =>
-    Object.fromEntries((room?.sports || []).map((item) => [item.sportId, { group: item.allowGroup, private: item.allowPrivate }])),
-  );
+  // Không còn nhập trên form: phòng mới lấy 1, phòng đang sửa giữ giá trị hiện có (luật xếp buổi 1-1 vẫn đọc cột này).
+  const privateConcurrency = room?.privateConcurrency ?? 1;
+  const initial = room?.sports?.[0];
+  const [sportId, setSportId] = useState(initial ? String(initial.sportId) : '');
+  const [allowGroup, setAllowGroup] = useState(initial ? initial.allowGroup : true);
+  const [allowPrivate, setAllowPrivate] = useState(initial ? initial.allowPrivate : true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const toggle = (sportId, kind) =>
-    setPicked((current) => {
-      const existing = current[sportId] || { group: false, private: false };
-      return { ...current, [sportId]: { ...existing, [kind]: !existing[kind] } };
-    });
-
   const submit = async (event) => {
     event.preventDefault();
+    if (!room && !sportId) {
+      setError('Chọn môn cho phòng.');
+      return;
+    }
+    if (sportId && !allowGroup && !allowPrivate) {
+      setError('Chọn lớp nhóm hoặc học 1-1 cho môn của phòng.');
+      return;
+    }
     if (!name.trim()) {
       setError('Nhập tên phòng.');
       return;
@@ -458,12 +462,10 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
     try {
       await onSave({
         name: name.trim(),
-        type: type.trim() || null,
+        type,
         capacity: Number(capacity),
-        privateConcurrency: Number(concurrency),
-        sports: Object.entries(picked)
-          .filter(([, value]) => value.group || value.private)
-          .map(([sportId, value]) => ({ sportId, allowGroup: value.group, allowPrivate: value.private })),
+        privateConcurrency,
+        sports: sportId ? [{ sportId, allowGroup, allowPrivate }] : [],
       });
     } catch (requestError) {
       setError(requestError.message || 'Không lưu được phòng.');
@@ -475,46 +477,38 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
         <h2 className="text-lg font-black text-slate-900">{room ? `Sửa ${room.name}` : 'Thêm phòng mới'}</h2>
+        <div>
+          <label className="block text-sm font-bold text-slate-700">
+            Môn của phòng
+            <select value={sportId} onChange={(event) => setSportId(event.target.value)} className={`${controlClass} mt-1 w-full`}>
+              <option value="" disabled={Boolean(initial)}>Chọn môn</option>
+              {sports.map((sport) => (
+                <option key={sport.id} value={String(sport.id)}>
+                  {sport.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {sportId && (
+            <div className="mt-2 flex gap-4 text-xs font-bold text-slate-600">
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" checked={allowGroup} onChange={() => setAllowGroup((value) => !value)} /> Lớp nhóm
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" checked={allowPrivate} onChange={() => setAllowPrivate((value) => !value)} /> Học 1-1
+              </label>
+            </div>
+          )}
+        </div>
         <label className="block text-sm font-bold text-slate-700">
           Tên phòng
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className={`${controlClass} mt-1 w-full`} />
         </label>
         <label className="block text-sm font-bold text-slate-700">
-          Loại phòng
-          <input value={type} onChange={(event) => setType(event.target.value)} maxLength={100} placeholder="Ví dụ: Sân cầu lông, Phòng nhảy" className={`${controlClass} mt-1 w-full`} />
+          Sức chứa (người)
+          <input type="number" min="1" max="1000" value={capacity} onChange={(event) => setCapacity(event.target.value)} className={`${controlClass} mt-1 w-full`} />
         </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-slate-700">
-            Sức chứa (người)
-            <input type="number" min="1" max="1000" value={capacity} onChange={(event) => setCapacity(event.target.value)} className={`${controlClass} mt-1 w-full`} />
-          </label>
-          <label className="block text-sm font-bold text-slate-700">
-            Số buổi 1-1 cùng lúc
-            <input type="number" min="1" max="50" value={concurrency} onChange={(event) => setConcurrency(event.target.value)} className={`${controlClass} mt-1 w-full`} />
-          </label>
-        </div>
-        <fieldset>
-          <legend className="text-sm font-bold text-slate-700">Môn dùng được</legend>
-          <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto rounded-2xl border border-slate-200 p-3">
-            {sports.map((sport) => {
-              const value = picked[sport.id] || { group: false, private: false };
-              return (
-                <li key={sport.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-semibold text-slate-800">{sport.name}</span>
-                  <span className="flex gap-4 text-xs font-bold text-slate-600">
-                    <label className="flex items-center gap-1.5">
-                      <input type="checkbox" checked={value.group} onChange={() => toggle(sport.id, 'group')} /> Lớp nhóm
-                    </label>
-                    <label className="flex items-center gap-1.5">
-                      <input type="checkbox" checked={value.private} onChange={() => toggle(sport.id, 'private')} /> Học 1-1
-                    </label>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </fieldset>
-        {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
+        {error &&<p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="h-10 cursor-pointer rounded-xl bg-slate-100 px-5 text-sm font-bold text-slate-700 hover:bg-slate-200">
             Đóng

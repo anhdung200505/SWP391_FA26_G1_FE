@@ -800,3 +800,57 @@ export function setRoomStatus(roomId, isActive) {
     body: JSON.stringify({ isActive }),
   });
 }
+
+// ==========================================
+// Môn học và khóa học (quản trị)
+// ==========================================
+export function getCatalogSports() {
+  return request('/management/catalog/sports');
+}
+
+export function createCatalogSport(payload) {
+  return request('/management/catalog/sports', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Xem trước khi xóa môn (chỉ đọc).
+export function getCatalogSportDeleteCheck(sportId) {
+  return request(`/management/catalog/sports/${sportId}/delete-check`);
+}
+
+export function deleteCatalogSport(sportId) {
+  return request(`/management/catalog/sports/${sportId}`, { method: 'DELETE' });
+}
+
+export function addCatalogSportRoom(sportId, payload) {
+  return request(`/management/catalog/sports/${sportId}/rooms`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function addCatalogSportCoaches(sportId, coachUserIds) {
+  return request(`/management/catalog/sports/${sportId}/coaches`, {
+    method: 'POST',
+    body: JSON.stringify({ coachUserIds }),
+  });
+}
+
+export function getCatalogCoachOptions() {
+  return request('/management/catalog/coach-options');
+}
+
+export function getCatalogCourses(sportId) {
+  return request(`/management/catalog/courses?sportId=${encodeURIComponent(sportId)}`);
+}
+
+export function createCatalogCourse(payload) {
+  return request('/management/catalog/courses', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateCatalogCourse(courseId, payload) {
+  return request(`/management/catalog/courses/${courseId}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export function setCatalogCourseStatus(courseId, isActive) {
+  return request(`/management/catalog/courses/${courseId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ isActive }),
+  });
+}

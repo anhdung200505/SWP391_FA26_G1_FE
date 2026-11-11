@@ -34,7 +34,7 @@ const errorBox = 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm f
 
 const pad = (value) => String(value).padStart(2, '0');
 
-// Trung tâm cần vài ngày để thu tiền và sắp xếp nên chỉ nhận ngày bắt đầu từ hôm nay + 3 ngày (BE chặn cùng quy tắc).
+// Trung tâm cần vài ngày để duyệt và thu tiền nên chỉ nhận ngày bắt đầu từ hôm nay + 3 ngày (BE chặn cùng quy tắc).
 const MIN_LEAD_DAYS = 3;
 
 function earliestStartIso() {
@@ -83,7 +83,7 @@ function MyRequests({ onPaymentCreated, refreshKey }) {
   };
 
   const cancel = async (item) => {
-    if (!window.confirm(`Hủy lịch học 1-1 "${item.courseName}"?`)) return;
+    if (!window.confirm(`Hủy yêu cầu học 1-1 "${item.courseName}"?`)) return;
     setError('');
     setWorking(item.id);
     try {
@@ -107,7 +107,7 @@ function MyRequests({ onPaymentCreated, refreshKey }) {
         className="flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-4 text-left sm:px-6"
       >
         <span className="flex items-center gap-2 text-lg font-black">
-          Lịch đã giữ của tôi
+          Yêu cầu của tôi
           {loaded && items.length > 0 && (
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">{items.length}</span>
           )}
@@ -122,7 +122,7 @@ function MyRequests({ onPaymentCreated, refreshKey }) {
         <div className="space-y-3 border-t border-gray-100 px-5 pb-5 pt-4 sm:px-6">
           {error && <p className={errorBox}>{error}</p>}
           {!loaded && <p className="text-sm text-gray-500">Đang tải...</p>}
-          {loaded && items.length === 0 && <p className="text-sm text-gray-600">Bạn chưa đặt lịch học 1-1 nào.</p>}
+          {loaded && items.length === 0 && <p className="text-sm text-gray-600">Bạn chưa gửi yêu cầu học 1-1 nào.</p>}
           {items.map((item) => (
             <article key={item.id} className="rounded-2xl border border-gray-200 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -144,11 +144,11 @@ function MyRequests({ onPaymentCreated, refreshKey }) {
               )}
               {item.status === 'approved' && (
                 <p className="mt-2 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800">
-                  Đã giữ lịch. Thanh toán trước {formatDateTime(item.approvalExpiresAt)}, quá hạn lịch sẽ được nhả.
+                  Đã được duyệt. Thanh toán trước {formatDateTime(item.approvalExpiresAt)}, quá hạn lịch sẽ được nhả.
                 </p>
               )}
               {item.status === 'expired' && (
-                <p className="mt-2 text-xs text-slate-500">Quá hạn thanh toán nên lịch đã được nhả. Bạn có thể đặt lịch mới.</p>
+                <p className="mt-2 text-xs text-slate-500">Quá hạn thanh toán nên lịch đã được nhả. Bạn có thể gửi yêu cầu mới.</p>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 {item.status === 'approved' && (
@@ -163,7 +163,7 @@ function MyRequests({ onPaymentCreated, refreshKey }) {
                     onClick={() => cancel(item)}
                     className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50"
                   >
-                    Hủy lịch
+                    Hủy yêu cầu
                   </button>
                 )}
               </div>
@@ -375,7 +375,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
 
     setSubmitting(true);
     try {
-      const created = await createPrivateRequest({
+      await createPrivateRequest({
         courseId: course.id,
         coachUserId: coachId,
         startDate,
@@ -394,18 +394,13 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
         ...(dateOfBirth ? { dateOfBirth } : {}),
         gender,
       });
-      // Không còn bước chờ duyệt: lịch được giữ ngay, tạo đơn thanh toán luôn.
+      setNotice('Đã gửi yêu cầu. Quản lý sẽ duyệt và bạn nhận thông báo, sau đó có 24 giờ để thanh toán. Xem ở mục "Yêu cầu của tôi".');
       setCells([]);
       setCoachId('');
       setNote('');
       setRefreshKey((key) => key + 1);
-      try {
-        onPaymentCreated(await payPrivateRequest(created.id));
-      } catch (payError) {
-        setNotice(`Đã giữ lịch học 1-1 cho bạn nhưng chưa tạo được đơn thanh toán (${payError.message || 'lỗi không rõ'}). Thanh toán lại ở mục "Lịch đã giữ của tôi" trước hạn giữ chỗ.`);
-      }
     } catch (err) {
-      setError(err.message || 'Chưa đặt được lịch học.');
+      setError(err.message || 'Chưa gửi được yêu cầu.');
     } finally {
       setSubmitting(false);
     }
@@ -517,7 +512,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
                     className={fieldClass}
                   />
                 </label>
-                <p className="mt-1 text-xs text-gray-500">Sớm nhất là {MIN_LEAD_DAYS} ngày sau hôm nay để bạn kịp thanh toán và trung tâm kịp sắp xếp.</p>
+                <p className="mt-1 text-xs text-gray-500">Sớm nhất là {MIN_LEAD_DAYS} ngày sau hôm nay để trung tâm kịp duyệt và bạn kịp thanh toán.</p>
                 {!startOk && <p className={`mt-3 ${errorBox}`}>Ngày bắt đầu phải từ {formatDate(earliestStartIso())} trở đi.</p>}
                 <div className={`mt-4 overflow-x-auto rounded-2xl border border-slate-200 ${loadingSchedule ? 'opacity-60' : ''}`} aria-busy={loadingSchedule}>
                   <table className="w-full min-w-[640px] border-collapse text-left text-xs">
@@ -585,7 +580,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
               <h2 className="text-lg font-black">Gói hội viên</h2>
               <p className="mt-1 text-sm text-pretty text-gray-500">
                 Hạng Đồng là gói bắt buộc khi đăng ký khóa học và được tặng khi thanh toán. Chọn Hạng Bạc hoặc Hạng Vàng nếu muốn nâng hạng thay cho gói tặng.
-                Gói và giá được chốt lúc bạn thanh toán.
+                Gói và giá được áp lúc bạn thanh toán sau khi quản lý duyệt, nên có thể thay đổi nếu gói hội viên của bạn đổi trong lúc chờ.
               </p>
               {ownedPackage && (
                 <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
@@ -746,9 +741,9 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
               disabled={submitting || !course || cells.length === 0 || !coachId || !startOk}
               className={`${primaryButtonClass} mt-4 w-full`}
             >
-              {submitting ? 'Đang giữ lịch...' : 'Giữ lịch và thanh toán'}
+              {submitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
             </button>
-            <p className="mt-3 text-sm text-gray-500">Lịch được giữ ngay khi bạn bấm nút, sau đó thanh toán qua VietQR / payOS trong 24 giờ, quá hạn lịch sẽ được nhả.</p>
+            <p className="mt-3 text-sm text-gray-500">Chưa thanh toán. Quản lý duyệt xong bạn có 24 giờ để thanh toán qua VietQR / payOS.</p>
           </aside>
         </form>
       )}

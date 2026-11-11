@@ -65,6 +65,7 @@ builder.Services.AddScoped<ManagementDashboardService>();
 builder.Services.AddScoped<ClassRegistrationFlowService>();
 builder.Services.AddScoped<ClassManagementFlowService>();
 builder.Services.AddScoped<RoomManagementFlowService>();
+builder.Services.AddScoped<SportCourseManagementFlowService>();
 builder.Services.AddScoped<ReceptionFlowService>();
 builder.Services.AddScoped<CenterCheckInFlowService>();
 builder.Services.AddScoped<PrivateClassFlowService>();

@@ -28,6 +28,36 @@ const EMPTY = {
   expired: 'Chưa có yêu cầu nào hết hạn thanh toán.',
 };
 
+const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+
+// "yyyy-MM-dd" -> Date theo giờ máy (tránh lệch múi giờ khi new Date(chuỗi)).
+function parseDay(value) {
+  const [year, month, day] = String(value).slice(0, 10).split('-').map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
+const shortDay = (date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+// Gom các buổi dự kiến theo tuần lịch (thứ 2 đến chủ nhật): mỗi tuần một dòng, kèm khoảng ngày của tuần.
+function groupSessionsByWeek(sessions) {
+  const weeks = new Map();
+  [...sessions]
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)) || a.no - b.no)
+    .forEach((session) => {
+      const day = parseDay(session.date);
+      const monday = new Date(day);
+      monday.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+      const key = `${monday.getFullYear()}-${monday.getMonth()}-${monday.getDate()}`;
+      if (!weeks.has(key)) {
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        weeks.set(key, { range: `${shortDay(monday)} – ${shortDay(sunday)}`, sessions: [] });
+      }
+      weeks.get(key).sessions.push({ ...session, weekday: WEEKDAYS[day.getDay()] });
+    });
+  return [...weeks.values()].map((week, index) => ({ ...week, number: index + 1 }));
+}
+
 export default function PrivateRequestsPage() {
   const [status, setStatus] = useState('pending');
   const [items, setItems] = useState([]);
@@ -213,7 +243,7 @@ export default function PrivateRequestsPage() {
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true">
-          <div className="max-h-[92vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="max-h-[92vh] w-full max-w-3xl space-y-4 overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h2 className="text-sm font-black uppercase text-slate-900">Yêu cầu học 1-1 của {view.memberName}</h2>
               <button type="button" onClick={close} aria-label="Đóng" className="font-bold text-slate-400 cursor-pointer">✕</button>
@@ -240,15 +270,35 @@ export default function PrivateRequestsPage() {
 
             {detail?.plannedSessions?.length > 0 && (
               <div>
-                <p className="mb-2 text-xs font-black uppercase text-slate-500">Các buổi dự kiến</p>
-                <ul className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                  {detail.plannedSessions.map((session) => (
-                    <li key={session.no} className="rounded-xl border border-slate-200 px-3 py-2 tabular-nums">
-                      <span className="block font-black text-slate-800">Buổi {session.no}</span>
-                      {formatDate(session.date)} · {clock(session.startTime)}-{clock(session.endTime)}
+                <div className="mb-2 flex items-baseline justify-between gap-3">
+                  <p className="text-xs font-black uppercase text-slate-500">Các buổi dự kiến</p>
+                  <p className="text-xs tabular-nums text-slate-400">{detail.plannedSessions.length} buổi</p>
+                </div>
+                <ol className="space-y-2">
+                  {groupSessionsByWeek(detail.plannedSessions).map((week) => (
+                    <li key={week.number} className="flex flex-col gap-2 rounded-2xl border border-slate-200 p-3 sm:flex-row sm:items-stretch sm:gap-3">
+                      <div className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-white sm:w-28">
+                        <p className="text-xs font-black uppercase">Tuần {week.number}</p>
+                        <p className="mt-0.5 text-[11px] tabular-nums text-white/70">{week.range}</p>
+                      </div>
+                      <ul className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2">
+                        {week.sessions.map((session) => (
+                          <li key={session.no} className="rounded-xl bg-slate-50 px-3 py-2 text-xs tabular-nums">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-black text-slate-800">Buổi {session.no}</span>
+                              <span className="font-semibold text-slate-500">
+                                {clock(session.startTime)}–{clock(session.endTime)}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 font-bold text-slate-700">
+                              {session.weekday}, {formatDate(session.date)}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
                     </li>
                   ))}
-                </ul>
+                </ol>
               </div>
             )}
 

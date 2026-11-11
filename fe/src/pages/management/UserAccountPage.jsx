@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption, FlowTrail, RoleBadge, StatusBadge } from '../../components/management/ManagementBits';
 import { useAccountManagement } from '../../context/AccountManagementContext';
-import { getSports } from '../../api/managementApi';
+import { getCatalogSports } from '../../api/managementApi';
 import {
   ROLES,
   formatDate,
@@ -47,7 +47,7 @@ export default function UserAccountPage() {
 
   useEffect(() => {
     let active = true;
-    getSports('1')
+    getCatalogSports()
       .then((data) => {
         if (active) setCatalogSports(Array.isArray(data) ? data : []);
       })
