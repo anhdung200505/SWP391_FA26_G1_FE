@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
 import { DiagramCaption } from '../../components/management/ManagementBits';
 import { useAccountManagement } from '../../context/AccountManagementContext';
-import { getSports } from '../../api/managementApi';
+import { getCatalogSports } from '../../api/managementApi';
 
 export default function CreateStaffAccountPage() {
   const navigate = useNavigate();
@@ -25,7 +25,7 @@ export default function CreateStaffAccountPage() {
 
   useEffect(() => {
     document.title = 'Tạo tài khoản Nhân viên / HLV · AnhDuy Sport';
-    getSports('1').then((data) => setSports(Array.isArray(data) ? data : [])).catch(() => setSports([]));
+    getCatalogSports().then((data) => setSports(Array.isArray(data) ? data : [])).catch(() => setSports([]));
   }, []);
 
   const handleChange = (e) => {
