@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ManagementShell from '../../components/management/ManagementShell';
-import { createRoom, getRoomOverview, getRoomUsage, getSports, setRoomStatus, updateRoom } from '../../api/managementApi';
+import { createRoom, getCatalogSports, getRoomOverview, getRoomUsage, setRoomStatus, updateRoom } from '../../api/managementApi';
 import { formatDate } from '../../data/accountManagement';
 
 const focusRing =
@@ -36,7 +36,7 @@ export default function RoomListPage() {
   const [allSports, setAllSports] = useState([]);
 
   useEffect(() => {
-    getSports('1').then((data) => setAllSports(Array.isArray(data) ? data : [])).catch(() => setAllSports([]));
+    getCatalogSports().then((data) => setAllSports(Array.isArray(data) ? data : [])).catch(() => setAllSports([]));
   }, []);
 
   useEffect(() => {
@@ -449,6 +449,10 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
 
   const submit = async (event) => {
     event.preventDefault();
+    if (!room && !Object.values(picked).some((value) => value.group || value.private)) {
+      setError('Chọn ít nhất một môn dùng được cho phòng (lớp nhóm hoặc học 1-1).');
+      return;
+    }
     if (!name.trim()) {
       setError('Nhập tên phòng.');
       return;
@@ -475,26 +479,8 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
         <h2 className="text-lg font-black text-slate-900">{room ? `Sửa ${room.name}` : 'Thêm phòng mới'}</h2>
-        <label className="block text-sm font-bold text-slate-700">
-          Tên phòng
-          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className={`${controlClass} mt-1 w-full`} />
-        </label>
-        <label className="block text-sm font-bold text-slate-700">
-          Loại phòng
-          <input value={type} onChange={(event) => setType(event.target.value)} maxLength={100} placeholder="Ví dụ: Sân cầu lông, Phòng nhảy" className={`${controlClass} mt-1 w-full`} />
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-slate-700">
-            Sức chứa (người)
-            <input type="number" min="1" max="1000" value={capacity} onChange={(event) => setCapacity(event.target.value)} className={`${controlClass} mt-1 w-full`} />
-          </label>
-          <label className="block text-sm font-bold text-slate-700">
-            Số buổi 1-1 cùng lúc
-            <input type="number" min="1" max="50" value={concurrency} onChange={(event) => setConcurrency(event.target.value)} className={`${controlClass} mt-1 w-full`} />
-          </label>
-        </div>
         <fieldset>
-          <legend className="text-sm font-bold text-slate-700">Môn dùng được</legend>
+          <legend className="text-sm font-bold text-slate-700">Môn dùng được{room ? '' : ' (chọn trước, ít nhất một môn)'}</legend>
           <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto rounded-2xl border border-slate-200 p-3">
             {sports.map((sport) => {
               const value = picked[sport.id] || { group: false, private: false };
@@ -514,7 +500,25 @@ function RoomFormModal({ room, sports, onClose, onSave }) {
             })}
           </ul>
         </fieldset>
-        {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
+        <label className="block text-sm font-bold text-slate-700">
+          Tên phòng
+          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className={`${controlClass} mt-1 w-full`} />
+        </label>
+        <label className="block text-sm font-bold text-slate-700">
+          Loại phòng
+          <input value={type} onChange={(event) => setType(event.target.value)} maxLength={100} placeholder="Ví dụ: Sân cầu lông, Phòng nhảy" className={`${controlClass} mt-1 w-full`} />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm font-bold text-slate-700">
+            Sức chứa (người)
+            <input type="number" min="1" max="1000" value={capacity} onChange={(event) => setCapacity(event.target.value)} className={`${controlClass} mt-1 w-full`} />
+          </label>
+          <label className="block text-sm font-bold text-slate-700">
+            Số buổi 1-1 cùng lúc
+            <input type="number" min="1" max="50" value={concurrency} onChange={(event) => setConcurrency(event.target.value)} className={`${controlClass} mt-1 w-full`} />
+          </label>
+        </div>
+        {error &&<p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="h-10 cursor-pointer rounded-xl bg-slate-100 px-5 text-sm font-bold text-slate-700 hover:bg-slate-200">
             Đóng
