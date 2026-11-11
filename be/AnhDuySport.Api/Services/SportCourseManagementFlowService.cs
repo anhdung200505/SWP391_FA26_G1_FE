@@ -108,13 +108,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
             db.Sports.Add(sport);
             await db.SaveChangesAsync();
 
-            db.TrainingPlans.Add(new Models.TrainingPlan
-            {
-                CreatedByUserId = actor.UserId,
-                PlanName = $"Giáo án chuẩn {name}",
-                SportId = sport.SportId,
-                CreatedAt = DateTime.Now,
-            });
+            db.TrainingPlans.Add(StandardTrainingPlan.Create(sport.SportId, name, actor.UserId));
             db.SportRooms.AddRange(rooms.Select(item => new Models.SportRoom
             {
                 SportId = sport.SportId,

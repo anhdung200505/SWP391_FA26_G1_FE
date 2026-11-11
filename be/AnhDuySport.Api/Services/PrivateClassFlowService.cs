@@ -413,11 +413,7 @@ public class PrivateClassFlowService(
                 throw new RegistrationException(block);
             }
 
-            var trainingPlanId = await db.TrainingPlans
-                .Where(item => item.SportId == course.SportId)
-                .Select(item => (int?)item.TrainingPlanId)
-                .FirstOrDefaultAsync()
-                ?? throw new RegistrationException("Môn này chưa có giáo án chuẩn.");
+            var trainingPlanId = await StandardTrainingPlan.EnsureAsync(db, course.SportId, course.Sport!.SportName, actor.UserId);
 
             var now = DateTime.Now;
             var room = plan.Room!;

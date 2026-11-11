@@ -283,14 +283,14 @@ public class ClassManagementFlowService(AppDbContext db, CurrentActor actor, Ema
             throw new RegistrationException("Ngày bắt đầu phải sau hôm nay.");
         }
 
-        var trainingPlanId = await db.TrainingPlans
-            .Where(plan => plan.SportId == course.SportId)
-            .Select(plan => (int?)plan.TrainingPlanId)
-            .FirstOrDefaultAsync()
-            ?? throw new RegistrationException("Môn này chưa có giáo án chuẩn.");
+        var sportName = await db.Sports.AsNoTracking()
+            .Where(sport => sport.SportId == course.SportId)
+            .Select(sport => sport.SportName)
+            .FirstAsync();
 
         var now = DateTime.Now;
         await using var transaction = await db.Database.BeginTransactionAsync();
+        var trainingPlanId = await StandardTrainingPlan.EnsureAsync(db, course.SportId, sportName, actor.UserId);
         var item = new TrainingClass
         {
             CourseId = course.CourseId,

@@ -58,7 +58,7 @@ public class ClassManagementController(ClassManagementFlowService classes) : Con
 
     [HttpPost]
     [EndpointSummary("Quản trị thêm lớp")]
-    [EndpointDescription("Lớp luôn tạo ở trạng thái open. Giáo án tự chọn theo môn của khóa học (400 nếu môn chưa có giáo án chuẩn). Bắt buộc startDate (phải sau hôm nay), endDate, capacity và ít nhất một dòng schedules (weekday 2..7, timeSlotId từ GET /api/time-slots?kind=group). HLV phải dạy môn của khóa học, phòng phải thuộc môn và đủ sức chứa. Toàn bộ buổi học được sinh luôn; mỗi dòng lịch phải có ít nhất một buổi trong khoảng ngày, trùng lịch HLV hoặc phòng trả 400. Trả 201 kèm lớp vừa tạo.")]
+    [EndpointDescription("Lớp luôn tạo ở trạng thái open. Giáo án tự chọn theo môn của khóa học (môn chưa có giáo án chuẩn thì hệ thống tự tạo một giáo án rỗng). Bắt buộc startDate (phải sau hôm nay), endDate, capacity và ít nhất một dòng schedules (weekday 2..7, timeSlotId từ GET /api/time-slots?kind=group). HLV phải dạy môn của khóa học, phòng phải thuộc môn và đủ sức chứa. Toàn bộ buổi học được sinh luôn; mỗi dòng lịch phải có ít nhất một buổi trong khoảng ngày, trùng lịch HLV hoặc phòng trả 400. Trả 201 kèm lớp vừa tạo.")]
     public async Task<ActionResult<AdminClassDto>> CreateClass(CreateClassRequest request)
     {
         var created = await classes.CreateClassAsync(request);
