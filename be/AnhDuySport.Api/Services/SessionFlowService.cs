@@ -463,7 +463,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
     {
         var session = await LoadSessionAsync(ParseId(sessionId), tracking: false);
         var now = DateTime.Now;
-        var (from, to) = MakeupWindow(session.SessionDate, DateOnly.FromDateTime(now));
+        var (from, to, weekendOnly) = MakeupWindow(session.SessionDate, DateOnly.FromDateTime(now), session.Class!.EndDate);
         var context = await LoadSlotContextAsync(session, from, to, session.SessionId);
         var slots = (await ClassSlotsAsync(session))
             .Where(IsMakeupSlot)
@@ -477,9 +477,9 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
             .ToList();
         var mainName = session.Class.Coach?.FullName ?? coaches.FirstOrDefault(coach => coach.Id == mainId).Name ?? "";
         var roomId = MakeupRoomId(context);
-        var dates = Enumerable.Range(0, to.DayNumber - from.DayNumber + 1)
+        var dates = Enumerable.Range(0, Math.Max(0, to.DayNumber - from.DayNumber + 1))
             .Select(offset => from.AddDays(offset))
-            .Where(IsWeekend)
+            .Where(date => !weekendOnly || IsWeekend(date))
             .ToList();
 
         // Khung trống của một HLV, theo thứ tự ngày rồi ưu tiên khung giờ.
@@ -519,7 +519,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
         var coachList = coaches
             .Select(coach => new MakeupCoachDto(coach.Id.ToString(), coach.Name, coach.Id == mainId, freeByCoach[coach.Id].Count))
             .ToList();
-        return new MakeupPlanDto(mainId.ToString(), mainName, selectedId.ToString(), coachList, days, suggestion);
+        return new MakeupPlanDto(mainId.ToString(), mainName, selectedId.ToString(), coachList, days, suggestion, weekendOnly, context.Class.EndDate);
     }
 
     // Buổi bù không xếp vào khung tối: chỉ khung kết thúc trước hoặc đúng 18:00.
@@ -607,7 +607,7 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
             return "Không chọn được thời điểm đã qua.";
         }
 
-        if (isMakeup && MakeupDateProblem(context.Session.SessionDate, date, today) is { } makeupProblem)
+        if (isMakeup && MakeupDateProblem(context.Session.SessionDate, context.Class.EndDate, date, today) is { } makeupProblem)
         {
             return makeupProblem;
         }
@@ -727,30 +727,54 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
 
     // Buổi bù rơi vào cuối tuần (thứ 7, chủ nhật) cùng tháng với buổi bị hủy, để tháng đó vẫn đủ số buổi
     // và khóa học không bị kéo dài thêm. Tháng đó đã hết cuối tuần (tính từ hôm nay) thì lấy cuối tuần gần nhất sau đó.
-    internal static (DateOnly From, DateOnly To) MakeupWindow(DateOnly cancelledDate, DateOnly today)
+    // Không bao giờ vượt ngày kết thúc khóa học (classEnd): từ hôm nay tới ngày kết thúc không còn cuối tuần nào
+    // thì cho bù vào ngày thường còn trong khóa (WeekendOnly = false). From > To nghĩa là không còn ngày nào để bù.
+    internal static (DateOnly From, DateOnly To, bool WeekendOnly) MakeupWindow(DateOnly cancelledDate, DateOnly today, DateOnly? classEnd)
     {
         var monthStart = new DateOnly(cancelledDate.Year, cancelledDate.Month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
         var from = today > monthStart ? today : monthStart;
+        DateOnly to;
         if (from <= monthEnd && NextWeekendDay(from) <= monthEnd)
         {
-            return (from, monthEnd);
+            to = monthEnd;
+        }
+        else
+        {
+            from = NextWeekendDay(today > monthEnd ? today : monthEnd.AddDays(1));
+            to = from.DayOfWeek == DayOfWeek.Saturday ? from.AddDays(1) : from;
         }
 
-        var first = NextWeekendDay(today > monthEnd ? today : monthEnd.AddDays(1));
-        return (first, first.DayOfWeek == DayOfWeek.Saturday ? first.AddDays(1) : first);
+        if (classEnd is not DateOnly end)
+        {
+            return (from, to, true);
+        }
+
+        if (to > end)
+        {
+            to = end;
+        }
+
+        return from <= to && NextWeekendDay(from) <= to ? (from, to, true) : (today, end, false);
     }
 
-    private static string? MakeupDateProblem(DateOnly cancelledDate, DateOnly date, DateOnly today)
+    private static string? MakeupDateProblem(DateOnly cancelledDate, DateOnly? classEnd, DateOnly date, DateOnly today)
     {
-        if (!IsWeekend(date))
+        var (from, to, weekendOnly) = MakeupWindow(cancelledDate, today, classEnd);
+        if (weekendOnly && !IsWeekend(date))
         {
             return "Buổi bù chỉ xếp vào cuối tuần (thứ 7 hoặc chủ nhật).";
         }
 
-        var (from, to) = MakeupWindow(cancelledDate, today);
+        if (from > to)
+        {
+            return "Khóa học đã hết ngày, không còn ngày nào để xếp buổi bù.";
+        }
+
         return date < from || date > to
-            ? $"Buổi bù phải là cuối tuần trong khoảng {from:dd/MM/yyyy} – {to:dd/MM/yyyy} để không kéo dài khóa học."
+            ? weekendOnly
+                ? $"Buổi bù phải là cuối tuần trong khoảng {from:dd/MM/yyyy} – {to:dd/MM/yyyy} để không kéo dài khóa học."
+                : $"Buổi bù phải trong khoảng {from:dd/MM/yyyy} – {to:dd/MM/yyyy}, trước khi khóa học kết thúc."
             : null;
     }
 
@@ -774,11 +798,6 @@ public class SessionFlowService(AppDbContext db, CurrentActor actor, EmailNotifi
             .Where(item => item.ClassId == session.ClassId)
             .MaxAsync(item => (int?)item.SessionNo) ?? 0) + 1;
         var trainingClass = session.Class!;
-        if (trainingClass.EndDate is DateOnly end && end < date)
-        {
-            trainingClass.EndDate = date;
-        }
-
         var substitute = coach.UserId != trainingClass.CoachUserId;
         return new ClassSession
         {

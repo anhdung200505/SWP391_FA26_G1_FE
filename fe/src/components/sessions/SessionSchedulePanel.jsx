@@ -660,6 +660,9 @@ export function MakeupPicker({ session, value, onChange }) {
     suggestion && date === suggestionDay && String(slotId) === String(suggestion.timeSlotId) && String(coachId) === String(suggestion.coachUserId);
   const coachList = plan?.coaches || [];
   const selectedCoach = coachList.find((coach) => String(coach.id) === String(coachId));
+  const weekendOnly = plan?.weekendOnly !== false;
+  const classEnd = plan?.classEndDate ? formatDate(String(plan.classEndDate).slice(0, 10)) : '';
+  const dayScope = weekendOnly ? 'khung cuối tuần' : 'khung';
 
   return (
     <div className="space-y-3">
@@ -708,13 +711,20 @@ export function MakeupPicker({ session, value, onChange }) {
       ) : (
         <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
           {selectedCoach
-            ? `HLV ${selectedCoach.name} không còn khung cuối tuần nào trong tháng (lớp, phòng, học viên cũng phải rảnh). Chọn HLV khác.`
-            : 'Không còn khung cuối tuần nào trong tháng mà lớp, phòng, học viên và HLV đều rảnh.'}
+            ? `HLV ${selectedCoach.name} không còn ${dayScope} nào trước khi khóa học kết thúc (lớp, phòng, học viên cũng phải rảnh). Chọn HLV khác.`
+            : `Không còn ${dayScope} nào trước khi khóa học kết thúc mà lớp, phòng, học viên và HLV đều rảnh.`}
         </p>
       )}
 
       <div className="space-y-1.5">
-        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">2. Ngày bù (cuối tuần cùng tháng)</span>
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+          2. Ngày bù ({weekendOnly ? 'cuối tuần cùng tháng' : 'ngày thường'}{classEnd ? `, trước ${classEnd}` : ''})
+        </span>
+        {!weekendOnly && (
+          <span className="block text-[11px] font-semibold text-amber-700">
+            Từ nay tới ngày kết thúc khóa không còn thứ 7 / chủ nhật nên buổi bù xếp vào ngày thường.
+          </span>
+        )}
         <div className="flex flex-wrap gap-2">
           {(plan?.days || []).map((dayInfo) => {
             const day = String(dayInfo.date).slice(0, 10);
@@ -785,8 +795,8 @@ export function MakeupPicker({ session, value, onChange }) {
       )}
 
       <p className="text-[11px] font-medium text-slate-500">
-        Buổi bù giữ số buổi của buổi bị hủy, chỉ xếp vào thứ 7 hoặc chủ nhật trong tháng (không xếp khung tối sau 18:00) để tháng đó đủ số
-        buổi và khóa học không bị kéo dài.
+        Buổi bù giữ số buổi của buổi bị hủy, xếp vào thứ 7 hoặc chủ nhật trong tháng (không xếp khung tối sau 18:00) và không vượt ngày kết
+        thúc khóa học{classEnd ? ` (${classEnd})` : ''}. Hết cuối tuần trước ngày kết thúc thì xếp vào ngày thường.
       </p>
     </div>
   );

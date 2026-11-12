@@ -75,6 +75,7 @@ public sealed record SessionSlotRequest(
 // Kế hoạch buổi bù cho HLV đang chọn (CoachUserId, mặc định HLV chính): các ngày cuối tuần được chọn kèm số khung
 // còn trống (lớp, phòng, học viên và HLV đó đều rảnh; khung tối sau 18:00 không tính) và buổi gợi ý.
 // Coaches: HLV dạy được môn, kèm số khung trống của từng người trong cả khoảng ngày bù.
+// WeekendOnly = false khi trước ngày kết thúc khóa (ClassEndDate) không còn cuối tuần nên được bù vào ngày thường.
 public sealed record MakeupDayDto(DateOnly Date, string WeekdayName, int FreeSlots, int TotalSlots);
 
 public sealed record MakeupSuggestionDto(DateOnly Date, string TimeSlotId, string CoachUserId, string CoachName, bool IsMainCoach);
@@ -87,7 +88,9 @@ public sealed record MakeupPlanDto(
     string CoachUserId,
     IReadOnlyList<MakeupCoachDto> Coaches,
     IReadOnlyList<MakeupDayDto> Days,
-    MakeupSuggestionDto? Suggestion);
+    MakeupSuggestionDto? Suggestion,
+    bool WeekendOnly,
+    DateOnly? ClassEndDate);
 
 // Quản trị hủy buổi hôm nay hoặc buổi sắp tới: buổi gốc chuyển cancelled, MakeupSession là buổi bù.
 public sealed record CancelSessionResult(SessionDto Session, SessionDto? MakeupSession);
