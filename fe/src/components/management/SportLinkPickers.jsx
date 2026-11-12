@@ -27,20 +27,3 @@ export function RoomPicker({ rooms, value, onChange, locked = {} }) {
     </ul>
   );
 }
-
-// Danh sách HLV có ô tick. value: mảng id.
-export function CoachPicker({ coaches, value, onChange }) {
-  if (coaches.length === 0) return <p className="text-xs text-slate-500">Chưa có HLV đang hoạt động nào.</p>;
-  const toggle = (id) => onChange(value.includes(id) ? value.filter((item) => item !== id) : [...value, id]);
-  return (
-    <ul className="max-h-48 space-y-1.5 overflow-y-auto rounded-2xl border border-slate-200 p-3">
-      {coaches.map((coach) => (
-        <li key={coach.id}>
-          <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <input type="checkbox" checked={value.includes(coach.id)} onChange={() => toggle(coach.id)} /> {coach.fullName}
-          </label>
-        </li>
-      ))}
-    </ul>
-  );
-}

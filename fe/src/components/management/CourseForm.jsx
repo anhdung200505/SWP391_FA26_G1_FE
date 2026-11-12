@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { addCatalogSportCoaches, addCatalogSportRoom } from '../../api/managementApi';
-import { CoachPicker, RoomPicker } from './SportLinkPickers';
+import { addCatalogSportRoom } from '../../api/managementApi';
+import { RoomPicker } from './SportLinkPickers';
 import { controlClass, focusRing, pickedRoomRequests } from './sportLinkUtils';
 
 // Hình thức khóa học do BE định nghĩa: "group" (lớp nhóm) và "private" (học 1-1).
@@ -78,7 +78,6 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
           <MissingLinksPanel
             sport={sport}
             rooms={rooms}
-            coaches={coaches}
             needCoach={!hasCoach}
             needRoom={!hasRoom}
             format={format}
@@ -151,10 +150,9 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
   );
 }
 
-function MissingLinksPanel({ sport, rooms, coaches, needCoach, needRoom, format, onSportChanged, onReload }) {
+function MissingLinksPanel({ sport, rooms, needCoach, needRoom, format, onSportChanged, onReload }) {
   // Ô tick khởi tạo từ quyền đã gán của môn; ô đã tick bị khóa vì chỉ được thêm, không gỡ.
   const [pickedRooms, setPickedRooms] = useState({});
-  const [pickedCoaches, setPickedCoaches] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -202,13 +200,6 @@ function MissingLinksPanel({ sport, rooms, coaches, needCoach, needRoom, format,
       }
     });
 
-  const assignCoaches = () =>
-    run(async () => {
-      if (pickedCoaches.length === 0) return;
-      onSportChanged(await addCatalogSportCoaches(sport.id, pickedCoaches));
-      setPickedCoaches([]);
-    });
-
   return (
     <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
       <p className="text-sm font-black text-amber-900">Môn này chưa có HLV / phòng</p>
@@ -227,12 +218,11 @@ function MissingLinksPanel({ sport, rooms, coaches, needCoach, needRoom, format,
         </button>
       </div>
       {needCoach && (
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-slate-700">HLV có sẵn</p>
-          <CoachPicker coaches={coaches} value={pickedCoaches} onChange={setPickedCoaches} />
-          <button type="button" onClick={assignCoaches} disabled={busy || pickedCoaches.length === 0} className={`h-9 cursor-pointer rounded-xl bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50 ${focusRing}`}>
-            Gán HLV cho môn
-          </button>
+        <div className="space-y-1">
+          <p className="text-xs font-bold text-slate-700">HLV đang dạy môn này</p>
+          <p className="text-xs text-slate-500">
+            Chưa có HLV đang hoạt động nào. Tạo HLV mới và chọn môn này, hoặc gán môn này cho HLV ở trang Tài khoản người dùng, rồi bấm Tải lại.
+          </p>
         </div>
       )}
       {needRoom && (
