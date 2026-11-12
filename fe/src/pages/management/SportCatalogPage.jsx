@@ -83,8 +83,6 @@ export default function SportCatalogPage() {
     if (!coursesBySport[sportId]) loadCourses(sportId);
   };
 
-  const replaceSport = (updated) => setSports((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-
   const saveSport = async (payload) => {
     const saved = await createCatalogSport(payload);
     setSports((current) => [...current, saved]);
@@ -138,9 +136,6 @@ export default function SportCatalogPage() {
       setTogglingId(null);
     }
   };
-
-  // Nút "Tải lại" trong khung thiếu HLV / phòng: lấy lại phòng, HLV và các môn.
-  const reloadLinks = async () => applyAll(await Promise.all([getCatalogSports(), getRoomOverview(), getCatalogCoachOptions()]));
 
   const currentSport = courseForm ? sports.find((item) => item.id === courseForm.sport.id) || courseForm.sport : null;
 
@@ -213,8 +208,6 @@ export default function SportCatalogPage() {
           coaches={coaches}
           onClose={() => setCourseForm(null)}
           onSave={saveCourse}
-          onSportChanged={replaceSport}
-          onReload={reloadLinks}
         />
       )}
     </ManagementShell>
