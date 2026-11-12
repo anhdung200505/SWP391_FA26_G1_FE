@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { addCatalogSportCoaches, addCatalogSportRoom } from '../../api/managementApi';
-import { CoachPicker, RoomPicker } from './SportLinkPickers';
-import { controlClass, focusRing, pickedRoomRequests } from './sportLinkUtils';
+import { controlClass } from './sportLinkUtils';
 
 // Hình thức khóa học do BE định nghĩa: "group" (lớp nhóm) và "private" (học 1-1).
 const FORMATS = [
@@ -9,10 +7,8 @@ const FORMATS = [
   { id: 'private', label: 'Học 1-1' },
 ];
 
-const linkClass = `font-bold text-[#e31b23] underline hover:text-[#b1131a] ${focusRing}`;
-
 // sport: môn đang thêm khóa (SportAdminDto). course: khóa đang sửa, null khi tạo mới.
-export default function CourseForm({ sport, course, rooms: allRooms, coaches, onClose, onSave, onSportChanged, onReload }) {
+export default function CourseForm({ sport, course, rooms: allRooms, coaches, onClose, onSave }) {
   const editing = Boolean(course);
   const [code, setCode] = useState(course?.code || '');
   const [format, setFormat] = useState(course?.format || 'group');
@@ -31,7 +27,6 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
   const activeCoachIds = new Set(coaches.map((coach) => coach.id));
   const hasCoach = sport.coaches.some((coach) => activeCoachIds.has(coach.id));
   const hasRoom = sport.rooms.some((link) => activeRoomIds.has(link.roomId) && (format === 'group' ? link.allowGroup : link.allowPrivate));
-  const ready = editing || (hasCoach && hasRoom);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -74,18 +69,7 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
         <h2 className="text-lg font-black text-slate-900">{editing ? `Sửa khóa ${course.name}` : `Thêm khóa học cho ${sport.name}`}</h2>
 
-        {!editing && !ready && (
-          <MissingLinksPanel
-            sport={sport}
-            rooms={rooms}
-            coaches={coaches}
-            needCoach={!hasCoach}
-            needRoom={!hasRoom}
-            format={format}
-            onSportChanged={onSportChanged}
-            onReload={onReload}
-          />
-        )}
+        {!editing && (!hasCoach || !hasRoom) && <MissingLinksNote needCoach={!hasCoach} needRoom={!hasRoom} format={format} />}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm font-bold text-slate-700">
@@ -142,7 +126,7 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
           <button type="button" onClick={onClose} className="h-10 cursor-pointer rounded-xl bg-slate-100 px-5 text-sm font-bold text-slate-700 hover:bg-slate-200">
             Đóng
           </button>
-          <button type="submit" disabled={saving || !ready} className="h-10 cursor-pointer rounded-xl bg-[#e31b23] px-5 text-sm font-bold text-white hover:bg-[#b1131a] disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="submit" disabled={saving} className="h-10 cursor-pointer rounded-xl bg-[#e31b23] px-5 text-sm font-bold text-white hover:bg-[#b1131a] disabled:cursor-not-allowed disabled:opacity-60">
             {saving ? 'Đang lưu...' : 'Lưu khóa học'}
           </button>
         </div>
@@ -151,100 +135,13 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
   );
 }
 
-function MissingLinksPanel({ sport, rooms, coaches, needCoach, needRoom, format, onSportChanged, onReload }) {
-  // Ô tick khởi tạo từ quyền đã gán của môn; ô đã tick bị khóa vì chỉ được thêm, không gỡ.
-  const [pickedRooms, setPickedRooms] = useState({});
-  const [pickedCoaches, setPickedCoaches] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const run = async (task) => {
-    setBusy(true);
-    setError('');
-    try {
-      await task();
-    } catch (requestError) {
-      setError(requestError.message || 'Không gán được cho môn.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const existingFlags = (roomId) => {
-    const link = sport.rooms.find((item) => item.roomId === roomId);
-    return { group: Boolean(link?.allowGroup), private: Boolean(link?.allowPrivate) };
-  };
-  // Giá trị hiển thị: quyền đã có OR quyền vừa tick.
-  const shownRooms = Object.fromEntries(
-    rooms.map((room) => {
-      const existing = existingFlags(room.id);
-      const extra = pickedRooms[room.id] || { group: false, private: false };
-      return [room.id, { group: existing.group || extra.group, private: existing.private || extra.private }];
-    }),
-  );
-  const lockedRooms = Object.fromEntries(rooms.map((room) => [room.id, existingFlags(room.id)]));
-  // Chỉ gửi phòng có thêm ô tick mới, kèm OR của quyền cũ và mới (BE ghi đè cờ của liên kết có sẵn).
-  const roomRequests = () =>
-    pickedRoomRequests(shownRooms).filter((request) => {
-      const existing = existingFlags(request.roomId);
-      return (request.allowGroup && !existing.group) || (request.allowPrivate && !existing.private);
-    });
-
-  const assignRooms = () =>
-    run(async () => {
-      for (const request of roomRequests()) {
-        onSportChanged(await addCatalogSportRoom(sport.id, request));
-        setPickedRooms((current) => {
-          const next = { ...current };
-          delete next[request.roomId];
-          return next;
-        });
-      }
-    });
-
-  const assignCoaches = () =>
-    run(async () => {
-      if (pickedCoaches.length === 0) return;
-      onSportChanged(await addCatalogSportCoaches(sport.id, pickedCoaches));
-      setPickedCoaches([]);
-    });
-
+function MissingLinksNote({ needCoach, needRoom, format }) {
+  const missing = [needCoach && 'HLV', needRoom && 'phòng'].filter(Boolean).join(' và ');
+  const usable = needRoom ? ` dùng được cho ${format === 'group' ? 'lớp nhóm' : 'học 1-1'}` : '';
   return (
-    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-      <p className="text-sm font-black text-amber-900">Môn này chưa có HLV / phòng</p>
-      <p className="text-xs text-pretty text-amber-900">
-        Cần ít nhất một HLV đang hoạt động và một phòng đang hoạt động dùng được cho {format === 'group' ? 'lớp nhóm' : 'học 1-1'} thì mới lưu được khóa học.
-      </p>
-      <div className="flex flex-wrap items-center gap-3 text-xs">
-        <a href="/quan-ly/phong-tap" target="_blank" rel="noreferrer" className={linkClass}>
-          Tạo phòng mới
-        </a>
-        <a href="/quan-ly/tai-khoan/moi" target="_blank" rel="noreferrer" className={linkClass}>
-          Tạo HLV mới
-        </a>
-        <button type="button" onClick={() => run(onReload)} disabled={busy} className={`h-8 cursor-pointer rounded-lg border border-amber-300 bg-white px-3 font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-60 ${focusRing}`}>
-          Tải lại
-        </button>
-      </div>
-      {needCoach && (
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-slate-700">HLV có sẵn</p>
-          <CoachPicker coaches={coaches} value={pickedCoaches} onChange={setPickedCoaches} />
-          <button type="button" onClick={assignCoaches} disabled={busy || pickedCoaches.length === 0} className={`h-9 cursor-pointer rounded-xl bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50 ${focusRing}`}>
-            Gán HLV cho môn
-          </button>
-        </div>
-      )}
-      {needRoom && (
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-slate-700">Phòng đang hoạt động</p>
-          <RoomPicker rooms={rooms} value={shownRooms} locked={lockedRooms} onChange={(next) => setPickedRooms(next)} />
-          <button type="button" onClick={assignRooms} disabled={busy || roomRequests().length === 0} className={`h-9 cursor-pointer rounded-xl bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50 ${focusRing}`}>
-            Gán phòng cho môn
-          </button>
-        </div>
-      )}
-      {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{error}</p>}
-    </div>
+    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-pretty text-amber-900">
+      Lưu ý: môn này chưa có {missing}
+      {usable}. Vẫn lưu được khóa học, nhưng cần có khi tạo lớp.
+    </p>
   );
 }

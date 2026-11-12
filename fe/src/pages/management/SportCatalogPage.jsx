@@ -83,8 +83,6 @@ export default function SportCatalogPage() {
     if (!coursesBySport[sportId]) loadCourses(sportId);
   };
 
-  const replaceSport = (updated) => setSports((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-
   const saveSport = async (payload) => {
     const saved = await createCatalogSport(payload);
     setSports((current) => [...current, saved]);
@@ -139,9 +137,6 @@ export default function SportCatalogPage() {
     }
   };
 
-  // Nút "Tải lại" trong khung thiếu HLV / phòng: lấy lại phòng, HLV và các môn.
-  const reloadLinks = async () => applyAll(await Promise.all([getCatalogSports(), getRoomOverview(), getCatalogCoachOptions()]));
-
   const currentSport = courseForm ? sports.find((item) => item.id === courseForm.sport.id) || courseForm.sport : null;
 
   return (
@@ -149,7 +144,7 @@ export default function SportCatalogPage() {
       <section className="rounded-3xl border border-slate-200 bg-white px-6 py-8 sm:px-8">
         <h1 className="text-2xl font-black text-balance text-slate-900 sm:text-3xl">Môn học và khóa học</h1>
         <p className="mt-2 max-w-prose text-sm text-pretty text-slate-500">
-          Thêm môn mới, gán phòng và huấn luyện viên cho môn, rồi tạo khóa học. Khóa học chỉ tạo được khi môn đã có HLV và phòng phù hợp. Việc gán phòng và HLV chỉ thêm, không gỡ.
+          Thêm môn mới và các khóa học của môn. HLV và phòng chỉ cần khi tạo lớp: gán phòng cho môn ở trang Phòng tập, gán môn cho HLV ở trang Tài khoản người dùng.
         </p>
       </section>
 
@@ -213,8 +208,6 @@ export default function SportCatalogPage() {
           coaches={coaches}
           onClose={() => setCourseForm(null)}
           onSave={saveCourse}
-          onSportChanged={replaceSport}
-          onReload={reloadLinks}
         />
       )}
     </ManagementShell>

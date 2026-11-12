@@ -811,17 +811,6 @@ export function deleteCatalogSport(sportId) {
   return request(`/management/catalog/sports/${sportId}`, { method: 'DELETE' });
 }
 
-export function addCatalogSportRoom(sportId, payload) {
-  return request(`/management/catalog/sports/${sportId}/rooms`, { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export function addCatalogSportCoaches(sportId, coachUserIds) {
-  return request(`/management/catalog/sports/${sportId}/coaches`, {
-    method: 'POST',
-    body: JSON.stringify({ coachUserIds }),
-  });
-}
-
 export function getCatalogCoachOptions() {
   return request('/management/catalog/coach-options');
 }

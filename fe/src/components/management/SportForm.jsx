@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { controlClass } from './sportLinkUtils';
 
-// Tạo môn chỉ cần mã và tên. Phòng và HLV gán ở bước tạo khóa học (khung "Môn này chưa có HLV / phòng").
+// Tạo môn chỉ cần mã và tên. Phòng gán ở trang Phòng tập, HLV gán ở trang Tài khoản người dùng; chỉ cần khi tạo lớp.
 export default function SportForm({ onClose, onSave }) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
