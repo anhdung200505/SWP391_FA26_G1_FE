@@ -486,16 +486,6 @@ export function getRevenue() {
   return request('/management/revenue');
 }
 
-export function updatePackageAiQuota(packageId, payload) {
-  return request(
-    `/management/packages/${encodeURIComponent(packageId)}/ai-quota`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    },
-  );
-}
-
 export function getUserAccounts(params = {}) {
   const query = new URLSearchParams(params).toString();
 

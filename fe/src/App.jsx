@@ -29,7 +29,6 @@ import SportCatalogPage from './pages/management/SportCatalogPage';
 import ClassSchedulePage from './pages/management/ClassSchedulePage';
 import CreateClassPage from './pages/management/CreateClassPage';
 import AiWorkoutPage from './pages/AiWorkoutPage';
-import AiQuotaPage from './pages/management/AiQuotaPage';
 import RevenuePage from './pages/management/RevenuePage';
 import EnrollmentConsultationsPage from './pages/management/EnrollmentConsultationsPage';
 import CenterCheckInPage from './pages/management/CenterCheckInPage';
@@ -153,7 +152,6 @@ export default function App() {
             <Route path="/quan-ly/tai-khoan/:userId" element={<Protected allowedRoles={['ADMIN']}><UserAccountPage /></Protected>} />
             
             <Route path="/quan-ly/goi" element={<Protected allowedRoles={['ADMIN']}><PackageListPage /></Protected>} />
-            <Route path="/quan-ly/han-muc-ai" element={<Protected allowedRoles={['ADMIN']}><AiQuotaPage /></Protected>} />
             <Route path="/quan-ly/goi/moi" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="create" /></Protected>} />
             <Route path="/quan-ly/goi/:packageId" element={<Protected allowedRoles={['ADMIN']}><PackageEditorPage mode="edit" /></Protected>} />
             <Route path="/quan-ly/tu-van-ghi-danh" element={<Protected allowedRoles={['ADMIN']}><EnrollmentConsultationsPage /></Protected>} />
