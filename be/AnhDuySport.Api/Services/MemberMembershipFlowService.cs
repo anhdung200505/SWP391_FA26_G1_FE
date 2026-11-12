@@ -1348,10 +1348,12 @@ public partial class MemberMembershipFlowService(AppDbContext db, IConfiguration
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        if (dateOfBirth > today || dateOfBirth < today.AddYears(-100))
+        // Hồ sơ giữ thêm giới hạn cũ: không quá 100 tuổi.
+        var error = DateOfBirthRule.Check(dateOfBirth)
+            ?? (dateOfBirth < DateOnly.FromDateTime(DateTime.Now).AddYears(-100) ? "Ngày sinh không hợp lệ." : null);
+        if (error is not null)
         {
-            throw new InvalidOperationException("Ngày sinh không hợp lệ.");
+            throw new InvalidOperationException(error);
         }
     }
 

@@ -312,9 +312,9 @@ public class ClassRegistrationFlowService(
             throw new RegistrationException("Họ tên không được để trống.");
         }
 
-        if (request.DateOfBirth > DateOnly.FromDateTime(DateTime.Now))
+        if (DateOfBirthRule.Check(request.DateOfBirth) is { } dateOfBirthError)
         {
-            throw new RegistrationException("Ngày sinh không hợp lệ.");
+            throw new RegistrationException(dateOfBirthError);
         }
 
         // Số điện thoại gửi lên thay số trong hồ sơ; hồ sơ thiếu và không gửi thì không đăng ký được.
