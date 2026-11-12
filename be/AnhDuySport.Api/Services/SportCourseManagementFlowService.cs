@@ -296,23 +296,6 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
             throw new RegistrationException("Môn không tồn tại.");
         }
 
-        var hasCoach = await db.CoachSports.AnyAsync(link => link.SportId == sportId
-            && ActiveCoaches().Any(user => user.UserId == link.CoachUserId));
-        if (!hasCoach)
-        {
-            throw new RegistrationException("Môn này chưa có huấn luyện viên đang hoạt động, hãy gắn HLV cho môn trước.");
-        }
-
-        var hasRoom = await db.SportRooms.AnyAsync(link => link.SportId == sportId
-            && (format == "group" ? link.AllowGroup : link.AllowPrivate)
-            && db.Rooms.Any(room => room.RoomId == link.RoomId && room.IsActive));
-        if (!hasRoom)
-        {
-            throw new RegistrationException(format == "group"
-                ? "Môn này chưa có phòng đang hoạt động dùng được cho lớp nhóm, hãy gắn phòng cho môn trước."
-                : "Môn này chưa có phòng đang hoạt động dùng được cho học 1-1, hãy gắn phòng cho môn trước.");
-        }
-
         if (await db.Courses.AnyAsync(course => course.CourseCode == code))
         {
             throw new RegistrationException("Mã khóa học đã tồn tại.");
