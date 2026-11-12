@@ -22,6 +22,7 @@ import {
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 import PrivateRegistrationForm from '../components/private/PrivateRegistrationForm';
+import { DOB_ERROR, dobBounds, isValidDob } from '../utils/dateOfBirth';
 
 const PAYMENT_TIMEOUT_SECONDS = 180;
 const PAID_REDIRECT_SECONDS = 5;
@@ -479,6 +480,11 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
 
     if (!fullName.trim() || !phone.trim()) {
       setError('Vui lòng điền đầy đủ họ và tên và số điện thoại.');
+      return;
+    }
+
+    if (!isValidDob(dateOfBirth)) {
+      setError(DOB_ERROR);
       return;
     }
 
@@ -966,7 +972,7 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
                     </label>
                     <label className="block text-sm font-bold text-slate-700">
                       Ngày sinh
-                      <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className={fieldClass} />
+                      <input type="date" min={dobBounds().min} max={dobBounds().max} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className={fieldClass} />
                     </label>
                     <label className="block text-sm font-bold text-slate-700">
                       Giới tính
