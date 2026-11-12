@@ -78,6 +78,9 @@ export default function WeekSlotTable({ weekStart, onWeekStart, sessions = [], r
     return date >= firstIso && date <= lastIso;
   });
 
+  // Buổi đã hủy vẫn hiện trên lưới (gạch ngang) nhưng không tính vào số buổi của tuần.
+  const cancelledCount = weekSessions.filter((session) => session.status === 'cancelled').length;
+
   const rows = (() => {
     const catalog = slots.map((slot) => ({
       key: slotKey(slot.startTime, slot.endTime),
@@ -105,7 +108,8 @@ export default function WeekSlotTable({ weekStart, onWeekStart, sessions = [], r
         <div>
           <h2 className="text-lg font-black text-balance text-slate-900">Thời khóa biểu tuần</h2>
           <p className="mt-1 text-sm font-bold text-slate-500 tabular-nums">
-            Tuần {shortDate(days[0].date)} – {shortDate(days[6].date)}/{days[6].date.getFullYear()} · {weekSessions.length} buổi
+            Tuần {shortDate(days[0].date)} – {shortDate(days[6].date)}/{days[6].date.getFullYear()} · {weekSessions.length - cancelledCount} buổi
+            {cancelledCount > 0 && ` · ${cancelledCount} đã hủy`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
