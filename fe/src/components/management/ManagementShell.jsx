@@ -10,7 +10,6 @@ const links = [
     label: 'Hội viên',
     children: [
       { id: 'packages', to: '/quan-ly/goi', label: 'Gói hội viên' },
-      { id: 'ai', to: '/quan-ly/han-muc-ai', label: 'Hạn mức gợi ý tập' },
     ],
   },
   {

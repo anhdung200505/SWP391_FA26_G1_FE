@@ -429,8 +429,8 @@ export default function MemberTokenUsageTable() {
             Token AI của học viên (gợi ý tập cá nhân) và của huấn luyện viên (soạn bài từng buổi).
           </p>
         </div>
-        <Link to="/quan-ly/han-muc-ai" className="text-sm font-bold text-[#e31b23]">
-          Chỉnh hạn mức
+        <Link to="/quan-ly/goi" className="text-sm font-bold text-[#e31b23]">
+          Chỉnh hạn mức trong gói hội viên
         </Link>
       </div>
 
@@ -514,8 +514,8 @@ export default function MemberTokenUsageTable() {
               <p className="mt-1 text-sm text-pretty text-gray-500">
                 Khi học viên có hội viên hiệu lực, chọn tên trong danh sách để xem token.
               </p>
-              <Link to="/quan-ly/han-muc-ai" className="mt-4 inline-flex rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white">
-                Mở hạn mức AI
+              <Link to="/quan-ly/goi" className="mt-4 inline-flex rounded-xl bg-[#e31b23] px-4 py-2.5 text-sm font-bold text-white">
+                Mở gói hội viên
               </Link>
             </div>
           ) : (
