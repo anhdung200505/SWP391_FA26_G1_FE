@@ -15,6 +15,7 @@ import {
   payPrivateRequest,
 } from '../../api/managementApi';
 import { formatFee } from '../../data/accountManagement';
+import { DOB_ERROR, dobBounds, isValidDob } from '../../utils/dateOfBirth';
 
 const DAYS = [
   { weekday: 2, name: 'Thứ 2' },
@@ -373,6 +374,11 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
       return;
     }
 
+    if (!isValidDob(dateOfBirth)) {
+      setError(DOB_ERROR);
+      return;
+    }
+
     setSubmitting(true);
     try {
       await createPrivateRequest({
@@ -685,7 +691,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
                 </label>
                 <label className="block text-sm font-bold text-gray-700">
                   Ngày sinh
-                  <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className={fieldClass} />
+                  <input type="date" min={dobBounds().min} max={dobBounds().max} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className={fieldClass} />
                 </label>
                 <label className="block text-sm font-bold text-gray-700">
                   Giới tính

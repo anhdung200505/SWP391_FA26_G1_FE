@@ -14,6 +14,7 @@ import {
   getClasses,
   getMemberMembership,
 } from '../../api/managementApi';
+import { DOB_ERROR, dobBounds, isValidDob } from '../../utils/dateOfBirth';
 
 // Lịch học hằng tuần của lớp, vd. "Thứ 4 · 18:00–21:00".
 const clock = (value) => String(value || '').slice(0, 5);
@@ -298,6 +299,8 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
     if (includeClass && blockedClasses.has(String(selectedClass.id))) {
       return showErr(blockedClasses.get(String(selectedClass.id)));
     }
+
+    if (!isValidDob(dateOfBirth)) return showErr(DOB_ERROR);
 
     const isBronze = selectedPackage?.name?.toLowerCase().includes('đồng') || selectedPackage?.code === 'PKG-001';
 
@@ -801,6 +804,8 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                       <label className="block text-sm font-bold text-slate-700 mb-1">Ngày sinh</label>
                       <input
                         type="date"
+                        min={dobBounds().min}
+                        max={dobBounds().max}
                         value={dateOfBirth}
                         onChange={(e) => setDateOfBirth(e.target.value)}
                         className="w-full rounded-xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 outline-none"

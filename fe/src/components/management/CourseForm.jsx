@@ -17,8 +17,6 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
   const [code, setCode] = useState(course?.code || '');
   const [format, setFormat] = useState(course?.format || 'group');
   const [name, setName] = useState(course?.name || '');
-  const [levelName, setLevelName] = useState(course?.levelName || '');
-  const [ageRange, setAgeRange] = useState(course?.ageRange || '');
   const [description, setDescription] = useState(course?.description || '');
   const [price, setPrice] = useState(String(course?.price ?? 0));
   const [imagePath, setImagePath] = useState(course?.imagePath || '');
@@ -52,8 +50,9 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
     }
     const common = {
       name: name.trim(),
-      levelName: levelName.trim() || null,
-      ageRange: ageRange.trim() || null,
+      // Trình độ và độ tuổi không còn nhập trên form: khóa mới để trống, khóa đang sửa giữ giá trị hiện có (API sửa ghi đè cả hai trường).
+      levelName: course?.levelName ?? null,
+      ageRange: course?.ageRange ?? null,
       description: description.trim() || null,
       price: Number(price),
       imagePath: imagePath.trim() || null,
@@ -108,16 +107,6 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
           Tên khóa học
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className={`${controlClass} mt-1 w-full`} />
         </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-slate-700">
-            Trình độ
-            <input value={levelName} onChange={(event) => setLevelName(event.target.value)} maxLength={50} className={`${controlClass} mt-1 w-full`} />
-          </label>
-          <label className="block text-sm font-bold text-slate-700">
-            Độ tuổi
-            <input value={ageRange} onChange={(event) => setAgeRange(event.target.value)} maxLength={50} placeholder="Ví dụ: 6-12 tuổi" className={`${controlClass} mt-1 w-full`} />
-          </label>
-        </div>
         <label className="block text-sm font-bold text-slate-700">
           Mô tả
           <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className={`${controlClass} mt-1 h-auto w-full py-2`} />
