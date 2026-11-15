@@ -1,0 +1,24 @@
+# Deploy API AnhDuy Sport lên Render (thay Fly.io đã hết trial).
+# rootDir = be vì Dockerfile COPY config/ và AnhDuySport.Api/ từ thư mục be/.
+# plan: free = không cần thẻ nhưng ngủ khi rảnh (mở lại chậm). Gắn thẻ rồi đổi thành starter để luôn online.
+services:
+  - type: web
+    name: anhduy-sport-api
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: be
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /swagger/index.html
+    autoDeployTrigger: commit
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:8080
+      - key: Payment__SandboxEnabled
+        value: "true"
+      # ai.json không commit: đặt khóa Gemini trên Dashboard Render (Environment).
+      - key: Ai__ApiKey
+        sync: false
