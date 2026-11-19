@@ -288,7 +288,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
         }
 
         var format = (request.Format ?? "").Trim();
-        var fields = ValidateCourseFields(request.Name, request.Price, format, request.SessionMinutes, request.SessionCount,
+        var fields = ValidateCourseFields(request.Name, request.Price, format, request.SessionMinutes, null, request.SessionCount,
             request.LevelName, request.AgeRange, request.Description, request.ImagePath);
         var sportId = int.TryParse(request.SportId, out var parsedSport) ? parsedSport : 0;
         if (!await db.Sports.AnyAsync(sport => sport.SportId == sportId))
@@ -320,7 +320,7 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
     public async Task<CourseAdminDto> UpdateCourseAsync(string courseId, UpdateCourseRequest request)
     {
         var entity = await FindCourseAsync(courseId);
-        var fields = ValidateCourseFields(request.Name, request.Price, entity.Format, request.SessionMinutes, request.SessionCount,
+        var fields = ValidateCourseFields(request.Name, request.Price, entity.Format, request.SessionMinutes, entity.SessionMinutes, request.SessionCount,
             request.LevelName, request.AgeRange, request.Description, request.ImagePath);
         ApplyCourseFields(entity, fields);
         await db.SaveChangesAsync();
@@ -340,8 +340,12 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
     private sealed record CourseFields(string Name, decimal Price, int? SessionMinutes, int? SessionCount,
         string? LevelName, string? AgeRange, string? Description, string? ImagePath);
 
-    // Dùng chung cho tạo và sửa. Khóa nhóm không có số buổi/số phút; khóa 1-1 bắt buộc cả hai.
-    private static CourseFields ValidateCourseFields(string? rawName, decimal price, string format, int? sessionMinutes, int? sessionCount,
+    // Số phút mỗi buổi của khóa 1-1 không còn do quản trị nhập: khi tạo mà không gửi thì dùng mặc định này.
+    private const int DefaultPrivateSessionMinutes = 90;
+
+    // Dùng chung cho tạo và sửa. Khóa nhóm không có số buổi/số phút; khóa 1-1 bắt buộc số buổi,
+    // số phút không bắt buộc (không gửi thì giữ giá trị đang lưu, chưa có thì lấy mặc định).
+    private static CourseFields ValidateCourseFields(string? rawName, decimal price, string format, int? sessionMinutes, int? storedMinutes, int? sessionCount,
         string? levelName, string? ageRange, string? description, string? imagePath)
     {
         var name = (rawName ?? "").Trim();
@@ -377,10 +381,12 @@ public class SportCourseManagementFlowService(AppDbContext db, CurrentActor acto
 
         if (format == "private")
         {
-            if (sessionMinutes is null or <= 0 || sessionCount is null or <= 0)
+            if (sessionCount is null or <= 0 || sessionMinutes is <= 0)
             {
-                throw new RegistrationException("Khóa học 1-1 cần số phút mỗi buổi và số buổi lớn hơn 0.");
+                throw new RegistrationException("Khóa học 1-1 cần số buổi lớn hơn 0 (số phút nếu có cũng phải lớn hơn 0).");
             }
+
+            sessionMinutes ??= storedMinutes is > 0 ? storedMinutes : DefaultPrivateSessionMinutes;
         }
         else if (sessionMinutes is not null || sessionCount is not null)
         {

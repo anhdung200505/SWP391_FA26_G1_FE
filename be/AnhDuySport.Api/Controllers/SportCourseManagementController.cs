@@ -68,13 +68,13 @@ public class CourseCatalogController(SportCourseManagementFlowService catalog) :
 
     [HttpPost("courses")]
     [EndpointSummary("Quản trị tạo khóa học")]
-    [EndpointDescription("Mã khóa (tự in hoa, không trùng, tối đa 50 ký tự), tên, học phí không âm, hình thức group hoặc private. Khóa 1-1 bắt buộc số phút và số buổi; khóa nhóm thì không. Môn chưa có HLV hoặc phòng vẫn tạo được khóa; HLV và phòng chỉ cần khi tạo lớp.")]
+    [EndpointDescription("Mã khóa (tự in hoa, không trùng, tối đa 50 ký tự), tên, học phí không âm, hình thức group hoặc private. Khóa 1-1 bắt buộc số buổi; số phút mỗi buổi không cần gửi (tự gán 90); khóa nhóm không có số buổi hay số phút. Môn chưa có HLV hoặc phòng vẫn tạo được khóa; HLV và phòng chỉ cần khi tạo lớp.")]
     public async Task<ActionResult<CourseAdminDto>> CreateCourse(CreateCourseRequest request) =>
         Ok(await catalog.CreateCourseAsync(request));
 
     [HttpPut("courses/{courseId}")]
     [EndpointSummary("Quản trị sửa khóa học")]
-    [EndpointDescription("Sửa tên, mô tả, học phí, hình ảnh, số buổi và số phút. Không đổi mã, môn và hình thức. Học phí mới áp dụng ngay cho mọi lớp thuộc khóa.")]
+    [EndpointDescription("Sửa tên, mô tả, học phí, hình ảnh, số buổi (số phút không gửi thì giữ nguyên). Không đổi mã, môn và hình thức. Học phí mới áp dụng ngay cho mọi lớp thuộc khóa.")]
     public async Task<ActionResult<CourseAdminDto>> UpdateCourse(string courseId, UpdateCourseRequest request) =>
         Ok(await catalog.UpdateCourseAsync(courseId, request));
 
