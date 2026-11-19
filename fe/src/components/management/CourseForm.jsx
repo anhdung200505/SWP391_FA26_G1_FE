@@ -16,7 +16,6 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
   const [description, setDescription] = useState(course?.description || '');
   const [price, setPrice] = useState(String(course?.price ?? 0));
   const [imagePath, setImagePath] = useState(course?.imagePath || '');
-  const [sessionMinutes, setSessionMinutes] = useState(String(course?.sessionMinutes ?? ''));
   const [sessionCount, setSessionCount] = useState(String(course?.sessionCount ?? ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -39,8 +38,8 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
       setError('Học phí phải là số không âm, tối đa 2 chữ số thập phân (dùng dấu chấm).');
       return;
     }
-    if (isPrivate && (!(Number(sessionMinutes) > 0) || !(Number(sessionCount) > 0))) {
-      setError('Khóa 1-1 cần số buổi và số phút mỗi buổi lớn hơn 0.');
+    if (isPrivate && !(Number(sessionCount) > 0)) {
+      setError('Khóa 1-1 cần số buổi lớn hơn 0.');
       return;
     }
     const common = {
@@ -51,9 +50,10 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
       description: description.trim() || null,
       price: Number(price),
       imagePath: imagePath.trim() || null,
-      sessionMinutes: isPrivate ? Number(sessionMinutes) : null,
       sessionCount: isPrivate ? Number(sessionCount) : null,
     };
+    // Khóa nhóm gửi số phút null; khóa 1-1 không gửi thuộc tính này để BE tự gán 90 khi tạo và giữ nguyên khi sửa.
+    if (!isPrivate) common.sessionMinutes = null;
     setSaving(true);
     setError('');
     try {
@@ -106,19 +106,13 @@ export default function CourseForm({ sport, course, rooms: allRooms, coaches, on
           </label>
         </div>
         {format === 'private' && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-bold text-slate-700">
-              Số buổi
-              <input type="number" min="1" step="1" value={sessionCount} onChange={(event) => setSessionCount(event.target.value)} className={`${controlClass} mt-1 w-full`} />
-            </label>
-            <label className="block text-sm font-bold text-slate-700">
-              Số phút mỗi buổi
-              <input type="number" min="1" step="1" value={sessionMinutes} onChange={(event) => setSessionMinutes(event.target.value)} className={`${controlClass} mt-1 w-full`} />
-            </label>
-          </div>
+          <label className="block text-sm font-bold text-slate-700">
+            Số buổi
+            <input type="number" min="1" step="1" value={sessionCount} onChange={(event) => setSessionCount(event.target.value)} className={`${controlClass} mt-1 w-full`} />
+          </label>
         )}
         {editing && format === 'private' && (
-          <p className="-mt-2 text-xs text-slate-500">Đổi số buổi hoặc số phút áp dụng cho cả yêu cầu 1-1 đang chờ.</p>
+          <p className="-mt-2 text-xs text-slate-500">Đổi số buổi áp dụng cho cả yêu cầu 1-1 đang chờ.</p>
         )}
 
         {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}

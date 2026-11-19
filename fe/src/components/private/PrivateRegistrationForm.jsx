@@ -15,7 +15,6 @@ import {
   payPrivateRequest,
 } from '../../api/managementApi';
 import { formatFee } from '../../data/accountManagement';
-import { DOB_ERROR, dobBounds, isValidDob } from '../../utils/dateOfBirth';
 
 const DAYS = [
   { weekday: 2, name: 'Thứ 2' },
@@ -198,7 +197,6 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
 
   const [fullName, setFullName] = useState(user?.fullName || user?.userName || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('Nam');
 
   const [submitting, setSubmitting] = useState(false);
@@ -231,7 +229,6 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
         if (profile) {
           setFullName(profile.fullName || '');
           setPhone(profile.phone || '');
-          setDateOfBirth(profile.dateOfBirth ? String(profile.dateOfBirth).slice(0, 10) : '');
           setGender(profile.gender || 'Nam');
         }
       })
@@ -374,11 +371,6 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
       return;
     }
 
-    if (!isValidDob(dateOfBirth)) {
-      setError(DOB_ERROR);
-      return;
-    }
-
     setSubmitting(true);
     try {
       await createPrivateRequest({
@@ -397,7 +389,6 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
             }),
         fullName: fullName.trim(),
         phone: phone.trim(),
-        ...(dateOfBirth ? { dateOfBirth } : {}),
         gender,
       });
       setNotice('Đã gửi yêu cầu. Quản lý sẽ duyệt và bạn nhận thông báo, sau đó có 24 giờ để thanh toán. Xem ở mục "Yêu cầu của tôi".');
@@ -463,7 +454,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
                   </div>
                   <div>
                     <dt className="text-gray-500">Số buổi</dt>
-                    <dd className="font-semibold">{course.sessionCount} buổi, mỗi buổi {course.sessionMinutes} phút</dd>
+                    <dd className="font-semibold">{course.sessionCount} buổi</dd>
                   </div>
                   <div>
                     <dt className="text-gray-500">Học phí</dt>
@@ -688,10 +679,6 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
                 <label className="block text-sm font-bold text-gray-700">
                   Số điện thoại
                   <input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" className={fieldClass} placeholder="0901234567" />
-                </label>
-                <label className="block text-sm font-bold text-gray-700">
-                  Ngày sinh
-                  <input type="date" min={dobBounds().min} max={dobBounds().max} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className={fieldClass} />
                 </label>
                 <label className="block text-sm font-bold text-gray-700">
                   Giới tính

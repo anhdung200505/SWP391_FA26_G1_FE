@@ -14,7 +14,6 @@ import {
   getClasses,
   getMemberMembership,
 } from '../../api/managementApi';
-import { DOB_ERROR, dobBounds, isValidDob } from '../../utils/dateOfBirth';
 
 // Lịch học hằng tuần của lớp, vd. "Thứ 4 · 18:00–21:00".
 const clock = (value) => String(value || '').slice(0, 5);
@@ -70,7 +69,6 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
       : pickedPackage;
 
   // Form Thông tin cá nhân học viên bổ sung
-  const [dateOfBirth, setDateOfBirth] = useState('2000-01-01');
   const [gender, setGender] = useState('Nam');
 
   // ================= BƯỚC 3 STATE =================
@@ -300,8 +298,6 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
       return showErr(blockedClasses.get(String(selectedClass.id)));
     }
 
-    if (!isValidDob(dateOfBirth)) return showErr(DOB_ERROR);
-
     const isBronze = selectedPackage?.name?.toLowerCase().includes('đồng') || selectedPackage?.code === 'PKG-001';
 
     setLoading(true);
@@ -318,7 +314,6 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
             }),
         fullName: foundMember.fullName,
         phone: foundMember.phone,
-        ...(dateOfBirth ? { dateOfBirth } : {}),
         gender,
       };
 
@@ -800,17 +795,6 @@ export default function ReceptionClassRegistration({ onRegistrationSuccess }) {
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
                   <h3 className="text-base font-black text-slate-900">3. Thông tin bổ sung học viên</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Ngày sinh</label>
-                      <input
-                        type="date"
-                        min={dobBounds().min}
-                        max={dobBounds().max}
-                        value={dateOfBirth}
-                        onChange={(e) => setDateOfBirth(e.target.value)}
-                        className="w-full rounded-xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 outline-none"
-                      />
-                    </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Giới tính</label>
                       <select
