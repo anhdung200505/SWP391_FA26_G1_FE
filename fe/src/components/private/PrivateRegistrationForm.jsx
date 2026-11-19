@@ -463,7 +463,7 @@ export default function PrivateRegistrationForm({ user, onPaymentCreated }) {
                   </div>
                   <div>
                     <dt className="text-gray-500">Số buổi</dt>
-                    <dd className="font-semibold">{course.sessionCount} buổi, mỗi buổi {course.sessionMinutes} phút</dd>
+                    <dd className="font-semibold">{course.sessionCount} buổi</dd>
                   </div>
                   <div>
                     <dt className="text-gray-500">Học phí</dt>

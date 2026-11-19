@@ -19,7 +19,7 @@ const moneyFormat = new Intl.NumberFormat('vi-VN');
 
 function formatLabel(course) {
   if (course.format !== 'private') return 'Lớp nhóm';
-  return `Học 1-1 · ${course.sessionCount ?? '?'} buổi × ${course.sessionMinutes ?? '?'} phút`;
+  return `Học 1-1 · ${course.sessionCount ?? '?'} buổi`;
 }
 
 export default function SportCatalogPage() {

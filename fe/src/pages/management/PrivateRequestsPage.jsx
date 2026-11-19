@@ -250,7 +250,7 @@ export default function PrivateRequestsPage() {
             </div>
 
             <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-xs sm:grid-cols-2">
-              <p><strong>Gói:</strong> {view.courseName} ({view.sessionCount} buổi, {view.sessionMinutes} phút/buổi)</p>
+              <p><strong>Gói:</strong> {view.courseName} ({view.sessionCount} buổi)</p>
               <p><strong>Học phí:</strong> {formatFee(view.price)}</p>
               <p><strong>HLV:</strong> {view.coachName}</p>
               <p><strong>Học viên:</strong> {view.memberName} · {view.memberPhone || 'chưa có SĐT'}</p>
