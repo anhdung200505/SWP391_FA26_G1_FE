@@ -22,7 +22,6 @@ import {
 } from '../api/managementApi';
 import { formatFee } from '../data/accountManagement';
 import PrivateRegistrationForm from '../components/private/PrivateRegistrationForm';
-import { DOB_ERROR, dobBounds, isValidDob } from '../utils/dateOfBirth';
 
 const PAYMENT_TIMEOUT_SECONDS = 180;
 const PAID_REDIRECT_SECONDS = 5;
@@ -146,7 +145,6 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
 
   const [fullName, setFullName] = useState(user?.fullName || user?.userName || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('Nam');
 
   const [registrationResult, setRegistrationResult] = useState(null);
@@ -483,11 +481,6 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
       return;
     }
 
-    if (!isValidDob(dateOfBirth)) {
-      setError(DOB_ERROR);
-      return;
-    }
-
     setSubmitting(true);
     try {
       const payload = {
@@ -504,7 +497,6 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
             }),
         fullName: fullName.trim(),
         phone: phone.trim(),
-        ...(dateOfBirth ? { dateOfBirth } : {}),
         gender,
       };
 
@@ -969,10 +961,6 @@ export default function ClassRegistrationPage({ membershipOnly = false }) {
                     <label className="block text-sm font-bold text-slate-700">
                       Số điện thoại
                       <input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" className={fieldClass} placeholder="0901234567" />
-                    </label>
-                    <label className="block text-sm font-bold text-slate-700">
-                      Ngày sinh
-                      <input type="date" min={dobBounds().min} max={dobBounds().max} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className={fieldClass} />
                     </label>
                     <label className="block text-sm font-bold text-slate-700">
                       Giới tính
